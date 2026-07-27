@@ -35,7 +35,14 @@ export function ProfileMenuItem({ href, icon: Icon, label, tone = "default", onC
   );
 }
 
-export function ProfileDropdownCard({ patient, onClose }) {
+export function ProfileDropdownCard({
+  user,
+  patient,
+  profileHref = "/patient/profile",
+  onClose,
+}) {
+  const profileUser = user || patient;
+
   return (
     <div
       role="menu"
@@ -44,22 +51,22 @@ export function ProfileDropdownCard({ patient, onClose }) {
     >
       <div className="px-4 py-3.5">
         <p className="font-sans text-sm font-semibold text-[#1c1917]">
-          {patient.fullName}
+          {profileUser.fullName}
         </p>
         <p className="mt-0.5 font-sans text-xs font-normal text-[#9aa0a8]">
-          {patient.role}
+          {profileUser.title || profileUser.role}
         </p>
       </div>
 
       <div className="border-t border-[#f0ebe3] py-1.5">
         <ProfileMenuItem
-          href="/patient/profile"
+          href={profileHref}
           icon={UserRound}
           label="Profile"
           onClick={onClose}
         />
         <ProfileMenuItem
-          href="/patient/profile"
+          href={profileHref}
           icon={Settings}
           label="Settings"
           onClick={onClose}

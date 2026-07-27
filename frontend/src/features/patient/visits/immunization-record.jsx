@@ -2,7 +2,7 @@ import {
   DocumentFooter,
   DocumentMetaBox,
   DocumentSection,
-} from "@/features/visits/document-sections";
+} from "@/features/patient/visits/document-sections";
 
 export function ImmunizationRecord({ record }) {
   return (

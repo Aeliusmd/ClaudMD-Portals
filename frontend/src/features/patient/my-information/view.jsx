@@ -13,7 +13,7 @@ const tabs = [
   { id: "employer", label: "Employer" },
 ];
 
-export function MyInformationView() {
+export function PatientMyInformationView() {
   const [tab, setTab] = useState("personal");
   const { insurance, employer } = currentPatient;
 

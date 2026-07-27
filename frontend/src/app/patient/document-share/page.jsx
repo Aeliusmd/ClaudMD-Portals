@@ -1,5 +1,5 @@
-import { DocumentShareView } from "@/features/document-share/document-share-view";
+import { PatientDocumentShareView } from "@/features/patient/document-share/view";
 
-export default function DocumentSharePage() {
-  return <DocumentShareView />;
+export default function Page() {
+  return <PatientDocumentShareView />;
 }

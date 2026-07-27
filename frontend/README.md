@@ -1,6 +1,6 @@
-# ClaudMD Patient Portal
+# ClaudMD Portals
 
-Next.js (JavaScript) frontend for the ClaudMD Patient Portal. Hardcoded demo data — no backend.
+Next.js (JavaScript) frontend for ClaudMD Patient and Employer portals. Hardcoded demo data — no backend.
 
 ## Run
 
@@ -12,12 +12,20 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Demo login: `patient@demo.com` (any password).
+Demo logins (any password):
+
+- `patient@demo.com` → Patient Portal
+- `employer@demo.com` → Employer Portal
 
 ## Structure
 
-- `src/components/ui` — reusable UI primitives
-- `src/components/layout` — sidebar / top bar shell
-- `src/features` — module views (dashboard, visits, appointments, …)
+- `src/app/patient/*` and `src/app/employer/*` — App Router URLs (thin `page.jsx` files only)
+- `src/features/patient/{route}/view.jsx` — patient screen UI (folder name matches URL segment)
+- `src/features/employer/{route}/view.jsx` — employer screen UI
+- `src/features/auth` — shared login / password flows
+- `src/components/ui` — shared UI primitives (`Button`, `Card`, `SearchInput`, `DetailField`, …)
+- `src/components/employer` — employer-only shared UI (`EmployerCategoryFilter`)
+- `src/features/{patient|employer}/{route}/` — screen `view.jsx` plus route-specific components (e.g. `employee-detail-panel.jsx`)
 - `src/data` — mock data
-- `src/app` — thin App Router pages
+
+Example: `/employer/appointments` → `app/employer/appointments/page.jsx` imports `@/features/employer/appointments/view`.

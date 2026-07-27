@@ -17,7 +17,7 @@ import {
   RecipientIcon,
   RecentlySharedHeader,
   ShareDetailPanel,
-} from "@/features/document-share/share-cards";
+} from "@/features/patient/document-share/share-cards";
 import { SAMPLE_DOCUMENT_URL } from "@/lib/documents";
 import { categoryStyles } from "@/lib/category-styles";
 import { cn } from "@/lib/utils";
@@ -30,7 +30,7 @@ function canRevokeShare(share) {
   );
 }
 
-export function DocumentShareView() {
+export function PatientDocumentShareView() {
   const [selectedId, setSelectedId] = useState(null);
   const [page, setPage] = useState(1);
   const [previewFile, setPreviewFile] = useState(null);

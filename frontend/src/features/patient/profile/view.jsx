@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
+import { ToggleRow } from "@/components/ui/toggle-row";
 import { currentPatient } from "@/data/patient";
 
 const tabs = [
@@ -14,7 +15,7 @@ const tabs = [
   { id: "notifications", label: "Notifications" },
 ];
 
-export function ProfileView() {
+export function PatientProfileView() {
   const [tab, setTab] = useState("profile");
   const [profile, setProfile] = useState({
     fullName: currentPatient.fullName,
@@ -195,32 +196,6 @@ export function ProfileView() {
           </Button>
         </Card>
       ) : null}
-    </div>
-  );
-}
-
-function ToggleRow({ title, description, checked, onChange }) {
-  return (
-    <div className="flex items-start justify-between gap-4 rounded-xl border border-border/70 px-4 py-3">
-      <div>
-        <p className="font-semibold text-ink">{title}</p>
-        <p className="mt-1 text-sm text-muted">{description}</p>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={onChange}
-        className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-          checked ? "bg-primary" : "bg-border"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition ${
-            checked ? "translate-x-5" : ""
-          }`}
-        />
-      </button>
     </div>
   );
 }

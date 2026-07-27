@@ -1,5 +1,5 @@
-import { MyInformationView } from "@/features/my-information/my-information-view";
+import { PatientMyInformationView } from "@/features/patient/my-information/view";
 
-export default function MyInformationPage() {
-  return <MyInformationView />;
+export default function Page() {
+  return <PatientMyInformationView />;
 }

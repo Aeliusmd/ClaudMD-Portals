@@ -1,5 +1,5 @@
-import { VisitsView } from "@/features/visits/visits-view";
+import { PatientVisitsView } from "@/features/patient/visits/view";
 
-export default function VisitsPage() {
-  return <VisitsView />;
+export default function Page() {
+  return <PatientVisitsView />;
 }

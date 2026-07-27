@@ -20,7 +20,7 @@ export function Tabs({ items, value, onChange, className, tone = "default" }) {
             type="button"
             onClick={() => onChange(item.id)}
             className={cn(
-              "rounded-full px-4 py-2 text-sm font-semibold transition-colors",
+              "cursor-pointer rounded-full px-4 py-2 text-sm font-semibold transition-colors",
               active ? activeClass : idleClass
             )}
           >

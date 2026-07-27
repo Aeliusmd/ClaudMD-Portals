@@ -1,5 +1,5 @@
-import { AppointmentsView } from "@/features/appointments/appointments-view";
+import { PatientAppointmentsView } from "@/features/patient/appointments/view";
 
-export default function AppointmentsPage() {
-  return <AppointmentsView />;
+export default function Page() {
+  return <PatientAppointmentsView />;
 }

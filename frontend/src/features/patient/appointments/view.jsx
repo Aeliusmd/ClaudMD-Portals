@@ -12,7 +12,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { appointments } from "@/data/appointments";
 import { appointmentStatusStyles } from "@/lib/category-styles";
 
-export function AppointmentsView() {
+export function PatientAppointmentsView() {
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
 

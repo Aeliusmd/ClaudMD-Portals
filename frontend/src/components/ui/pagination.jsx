@@ -49,7 +49,7 @@ export function Pagination({
           type="button"
           onClick={() => onChange(page - 1)}
           disabled={page <= 1}
-          className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-semibold text-ink transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-semibold text-ink transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronLeft className="h-4 w-4" />
           Prev
@@ -63,7 +63,7 @@ export function Pagination({
           type="button"
           onClick={() => onChange(page + 1)}
           disabled={page >= totalPages}
-          className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-semibold text-ink transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-semibold text-ink transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-40"
         >
           Next
           <ChevronRight className="h-4 w-4" />

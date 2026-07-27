@@ -4,13 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  ClipboardCheck,
   ClipboardList,
+  FileText,
   HeartPulse,
   LayoutDashboard,
   LogOut,
   Share2,
   Shield,
   User,
+  Users,
   X,
 } from "lucide-react";
 import { patientNavItems } from "@/data/navigation";
@@ -19,13 +22,16 @@ import { cn } from "@/lib/utils";
 const icons = {
   LayoutDashboard,
   User,
+  Users,
   ClipboardList,
+  ClipboardCheck,
   CalendarDays,
   Share2,
+  FileText,
   Shield,
 };
 
-export function Sidebar({ open = false, onClose }) {
+export function Sidebar({ open = false, onClose, items = patientNavItems }) {
   const pathname = usePathname();
 
   function handleNavClick() {
@@ -68,7 +74,7 @@ export function Sidebar({ open = false, onClose }) {
         </div>
 
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
-          {patientNavItems.map((item) => {
+          {items.map((item) => {
             const Icon = icons[item.icon];
             const active = pathname.startsWith(item.href);
 
@@ -78,7 +84,7 @@ export function Sidebar({ open = false, onClose }) {
                 href={item.href}
                 onClick={handleNavClick}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                  "flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                   active
                     ? "bg-navy-soft text-white"
                     : "text-white/75 hover:bg-white/5 hover:text-white"
@@ -95,7 +101,7 @@ export function Sidebar({ open = false, onClose }) {
           <Link
             href="/login"
             onClick={handleNavClick}
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/5 hover:text-white"
+            className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/5 hover:text-white"
           >
             <LogOut className="h-4 w-4" />
             Log Out

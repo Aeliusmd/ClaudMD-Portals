@@ -10,9 +10,9 @@ import {
 } from "@/components/ui/pagination";
 import { Tabs } from "@/components/ui/tabs";
 import { visitCategories, visits } from "@/data/visits";
-import { VisitCard } from "@/features/visits/visit-card";
-import { VisitDetailPanel } from "@/features/visits/visit-detail-panel";
-import { VisitDocumentPanel } from "@/features/visits/visit-document-panel";
+import { VisitCard } from "@/features/patient/visits/visit-card";
+import { VisitDetailPanel } from "@/features/patient/visits/visit-detail-panel";
+import { VisitDocumentPanel } from "@/features/patient/visits/visit-document-panel";
 
 const VISITS_PAGE_SIZE = 5;
 
@@ -35,7 +35,7 @@ const categoryTabStyles = {
   },
 };
 
-export function VisitsView() {
+export function PatientVisitsView() {
   const [category, setCategory] = useState(visitCategories[0]);
   const [selectedId, setSelectedId] = useState(null);
   const [showDocument, setShowDocument] = useState(false);

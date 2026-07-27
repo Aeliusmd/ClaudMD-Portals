@@ -1,5 +1,5 @@
-import { ProfileView } from "@/features/profile/profile-view";
+import { PatientProfileView } from "@/features/patient/profile/view";
 
-export default function ProfilePage() {
-  return <ProfileView />;
+export default function Page() {
+  return <PatientProfileView />;
 }

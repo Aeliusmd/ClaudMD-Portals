@@ -45,9 +45,13 @@ export function LoginForm() {
       return;
     }
 
-    // Patient Portal frontend: patient account enters the app.
-    // Other listed demo roles are recognized platform emails but not this portal.
-    if (normalizedEmail !== "patient@demo.com") {
+    const portalRoutes = {
+      "patient@demo.com": "/patient/dashboard",
+      "employer@demo.com": "/employer/dashboard",
+    };
+
+    const destination = portalRoutes[normalizedEmail];
+    if (!destination) {
       setError(ERROR_INVALID);
       return;
     }
@@ -56,7 +60,7 @@ export function LoginForm() {
     setIsSigningIn(true);
 
     await new Promise((resolve) => setTimeout(resolve, 900));
-    router.push("/patient/dashboard");
+    router.push(destination);
   }
 
   return (

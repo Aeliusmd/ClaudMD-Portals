@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import { NotificationsCard } from "@/components/layout/notifications-card";
-import { notifications } from "@/data/notifications";
+import { notifications as defaultNotifications } from "@/data/notifications";
 
-export function NotificationsMenu() {
+export function NotificationsMenu({ items }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
-  const hasUnread = notifications.some((item) => item.unread);
+  const list = items ?? defaultNotifications;
+  const hasUnread = list.some((item) => item.unread);
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -38,7 +39,7 @@ export function NotificationsMenu() {
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((prev) => !prev)}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-cream-deep text-[#5b6470] transition hover:bg-[#e8dfd2] hover:text-ink"
+        className="relative flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-cream-deep text-[#5b6470] transition hover:bg-[#e8dfd2] hover:text-ink"
       >
         <Bell className="h-5 w-5" />
         {hasUnread ? (
@@ -46,7 +47,7 @@ export function NotificationsMenu() {
         ) : null}
       </button>
 
-      {open ? <NotificationsCard notifications={notifications} /> : null}
+      {open ? <NotificationsCard notifications={list} /> : null}
     </div>
   );
 }

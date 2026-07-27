@@ -1,38 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { CalendarDays, Clock3, Download, Eye, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
+import { PanelHeader } from "@/components/ui/panel-header";
+import { SummaryCard } from "@/components/ui/summary-card";
 import { currentPatient, dashboardSummary } from "@/data/patient";
 import { newlySharedDocuments } from "@/data/documents";
 import { recentVisits } from "@/data/visits";
 import { openDocumentInNewTab } from "@/lib/documents";
 import { visitStatusStyles } from "@/lib/category-styles";
 
-function SummaryCard({ title, value, detail, icon: Icon }) {
-  return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-muted">{title}</p>
-          <p className="mt-3 font-display text-2xl font-semibold text-ink">
-            {value}
-          </p>
-          <p className="mt-1 text-sm text-muted">{detail}</p>
-        </div>
-        <div className="rounded-xl bg-cream-deep p-2.5 text-amber-800">
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-export function DashboardView() {
+export function PatientDashboardView() {
   const { upcomingAppointment, latestVisit, newDocuments } = dashboardSummary;
   const [previewDocument, setPreviewDocument] = useState(null);
 
@@ -70,20 +52,11 @@ export function DashboardView() {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_1fr]">
         <Card className="p-5">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-ink">Recent Visits</h2>
-              <p className="text-sm text-muted">
-                Your check-in history from the last 6 months.
-              </p>
-            </div>
-            <Link
-              href="/patient/visits"
-              className="text-sm font-semibold text-primary hover:text-primary-dark"
-            >
-              View All
-            </Link>
-          </div>
+          <PanelHeader
+            title="Recent Visits"
+            description="Your check-in history from the last 6 months."
+            viewAllHref="/patient/visits"
+          />
 
           <div className="divide-y divide-border/70">
             {recentVisits.map((visit) => (
@@ -108,22 +81,11 @@ export function DashboardView() {
         </Card>
 
         <Card className="p-5">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-ink">
-                Newly Shared Documents
-              </h2>
-              <p className="text-sm text-muted">
-                Reports explicitly shared with you by the clinic.
-              </p>
-            </div>
-            <Link
-              href="/patient/document-share"
-              className="text-sm font-semibold text-primary hover:text-primary-dark"
-            >
-              View All
-            </Link>
-          </div>
+          <PanelHeader
+            title="Newly Shared Documents"
+            description="Reports explicitly shared with you by the clinic."
+            viewAllHref="/patient/document-share"
+          />
 
           <div className="space-y-4">
             {newlySharedDocuments.map((doc) => (
@@ -132,7 +94,7 @@ export function DashboardView() {
                 className="rounded-xl border border-border/70 p-4"
               >
                 <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-sky-50 p-2 text-sky-700">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e8f1fb] text-primary">
                     <FileText className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">

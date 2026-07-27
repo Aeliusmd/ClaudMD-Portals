@@ -1,7 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { immunizationRecordDoc } from "@/data/visit-documents";
-import { ImmunizationRecord } from "@/features/visits/immunization-record";
+import { ImmunizationRecord } from "@/features/patient/visits/immunization-record";
 
 export function VisitDocumentPanel({ onBack }) {
   return (

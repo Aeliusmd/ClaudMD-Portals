@@ -77,6 +77,20 @@
   textarea {
     font: inherit;
   }
+
+  a[href],
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  select:not(:disabled),
+  label:has(input[type="checkbox"]:not(:disabled)),
+  label:has(input[type="radio"]:not(:disabled)) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled {
+    cursor: not-allowed;
+  }
 }
 
 .font-display {
@@ -85,4 +99,17 @@
 
 .font-sans {
   font-family: var(--font-source), "Segoe UI", sans-serif;
+}
+
+@layer components {
+  .date-range-input::-webkit-calendar-picker-indicator {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  .date-range-input--empty::-webkit-datetime-edit {
+    opacity: 0;
+  }
 }

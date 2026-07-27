@@ -63,54 +63,61 @@ export function LoginForm() {
     router.push(destination);
   }
 
+  const inputClassName =
+    "w-full rounded-lg border border-[#d8dce3] bg-white px-3.5 py-3 font-sans text-[0.9375rem] text-ink outline-none transition placeholder:text-[#b0b6bf] focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:opacity-70";
+
   return (
-    <div className="fixed inset-0 grid w-full grid-cols-1 overflow-hidden lg:grid-cols-2">
-      <section className="hidden h-full flex-col justify-between bg-[#1d78d6] px-12 py-10 text-white lg:flex xl:px-16">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-white/20">
-            <HeartPulse className="h-5 w-5 text-white" strokeWidth={2.25} />
-          </div>
-          <span className="font-sans text-[1.25rem] font-semibold tracking-[-0.01em] text-white">
-            ClaudMD
-          </span>
-        </div>
-
-        <div className="max-w-[28rem]">
-          <h1 className="font-display text-[3.1rem] leading-[1.12] font-bold text-white">
-            Unified Healthcare Portal
-          </h1>
-          <p className="mt-5 font-sans text-[1.05rem] leading-[1.65] font-normal text-white/90">
-            Securely access your healthcare information, manage appointments,
-            and review documents all in one place.
-          </p>
-        </div>
-
-        <p className="font-sans text-[0.85rem] font-normal text-white/70">
-          © 2026 ClaudMD Healthcare Systems
-        </p>
-      </section>
-
-      <section className="flex h-full items-center justify-center overflow-y-auto bg-white px-6 py-10 sm:px-10">
-        <div className="w-full max-w-[24.5rem]">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#1d78d6] text-white">
-              <HeartPulse className="h-4 w-4" strokeWidth={2.25} />
+    <div className="grid min-h-dvh w-full grid-cols-1 lg:grid-cols-2">
+      <section className="relative hidden min-h-dvh flex-col bg-primary text-white lg:flex">
+        <div className="flex flex-1 flex-col px-12 py-10 xl:px-16 xl:py-12">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-white/20">
+              <HeartPulse className="h-5 w-5 text-white" strokeWidth={2.25} />
             </div>
-            <span className="font-sans text-lg font-semibold text-[#1c1917]">
+            <span className="font-display text-[1.35rem] font-bold tracking-tight text-white">
               ClaudMD
             </span>
           </div>
 
-          <h2 className="font-display text-[2.4rem] leading-[1.15] font-bold text-[#1c1917]">
+          <div className="flex flex-1 flex-col justify-center pb-16">
+            <div className="max-w-md">
+              <h1 className="font-display text-[2.75rem] leading-[1.12] font-bold text-white xl:text-[3.1rem]">
+                Unified Healthcare Portal
+              </h1>
+              <p className="mt-5 max-w-[26rem] font-sans text-[1.05rem] leading-[1.65] font-normal text-white/90">
+                Securely access your healthcare information, manage appointments,
+                and review documents all in one place.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <p className="absolute bottom-10 left-12 font-sans text-[0.85rem] font-normal text-white/70 xl:left-16">
+          © 2026 ClaudMD Healthcare Systems
+        </p>
+      </section>
+
+      <section className="flex min-h-dvh items-center justify-center overflow-y-auto bg-white px-6 py-12 sm:px-10">
+        <div className="w-full max-w-[392px]">
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary text-white">
+              <HeartPulse className="h-4 w-4" strokeWidth={2.25} />
+            </div>
+            <span className="font-display text-lg font-bold text-ink">
+              ClaudMD
+            </span>
+          </div>
+
+          <h2 className="font-display text-[2.35rem] leading-[1.15] font-bold text-ink sm:text-[2.5rem]">
             Welcome back
           </h2>
-          <p className="mt-2.5 font-sans text-[0.95rem] font-normal text-[#8a8f98]">
+          <p className="mt-2.5 font-sans text-[0.9375rem] font-normal text-muted">
             Enter your credentials to access your secure portal.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             <label className="block space-y-2" htmlFor="email">
-              <span className="font-sans text-[0.875rem] font-semibold text-[#2f2a26]">
+              <span className="font-sans text-sm font-semibold text-[#2f2a26]">
                 Email or Username
               </span>
               <input
@@ -124,7 +131,7 @@ export function LoginForm() {
                 }}
                 autoComplete="username"
                 disabled={isSigningIn}
-                className="w-full rounded-lg border border-[#d8dce3] bg-white px-3.5 py-[0.85rem] font-sans text-[0.95rem] text-[#1c1917] outline-none transition placeholder:font-normal placeholder:text-[#b0b6bf] focus:border-[#1d78d6] focus:ring-2 focus:ring-[#1d78d6]/15 disabled:opacity-70"
+                className={inputClassName}
               />
             </label>
 
@@ -132,13 +139,13 @@ export function LoginForm() {
               <div className="flex items-center justify-between gap-3">
                 <label
                   htmlFor="password"
-                  className="font-sans text-[0.875rem] font-semibold text-[#2f2a26]"
+                  className="font-sans text-sm font-semibold text-[#2f2a26]"
                 >
                   Password
                 </label>
                 <Link
                   href="/forgot-password"
-                  className="font-sans text-[0.875rem] font-semibold text-[#1d78d6] hover:text-[#1666b5]"
+                  className="font-sans text-sm font-semibold text-primary hover:text-primary-dark"
                 >
                   Forgot password?
                 </Link>
@@ -154,17 +161,19 @@ export function LoginForm() {
                 }}
                 autoComplete="current-password"
                 disabled={isSigningIn}
-                className="w-full rounded-lg border border-[#d8dce3] bg-white px-3.5 py-[0.85rem] font-sans text-[0.95rem] text-[#1c1917] outline-none transition placeholder:font-normal placeholder:text-[#b0b6bf] focus:border-[#1d78d6] focus:ring-2 focus:ring-[#1d78d6]/15 disabled:opacity-70"
+                className={inputClassName}
               />
             </div>
 
             <div className="rounded-xl bg-[#faf5f0] px-4 py-3.5">
-              <p className="mb-2 font-sans text-[0.875rem] font-medium text-[#4a4540]">
+              <p className="mb-2 font-sans text-sm font-medium text-[#4a4540]">
                 Demo accounts (use any password):
               </p>
-              <ul className="space-y-1.5 font-sans text-[0.875rem] font-normal text-[#5c5650]">
+              <ul className="space-y-1 font-sans text-sm font-normal text-[#5c5650]">
                 {DEMO_ACCOUNTS.map((account) => (
-                  <li key={account}>• {account}</li>
+                  <li key={account} className="leading-relaxed">
+                    • {account}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -178,7 +187,7 @@ export function LoginForm() {
                   className="mt-0.5 h-4 w-4 shrink-0 text-[#c23b3b]"
                   strokeWidth={2.25}
                 />
-                <p className="font-sans text-[0.875rem] font-medium text-[#c23b3b]">
+                <p className="font-sans text-sm font-medium text-[#c23b3b]">
                   {error}
                 </p>
               </div>
@@ -187,10 +196,10 @@ export function LoginForm() {
             <button
               type="submit"
               disabled={isSigningIn}
-              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-[0.9rem] font-sans text-[0.95rem] font-semibold text-white transition ${
+              className={`inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-3.5 font-sans text-[0.9375rem] font-semibold text-white transition ${
                 isSigningIn
                   ? "cursor-wait bg-[#5ba3e8]"
-                  : "bg-[#1d78d6] hover:bg-[#1666b5]"
+                  : "bg-primary hover:bg-primary-dark"
               }`}
             >
               {isSigningIn ? (
@@ -204,19 +213,19 @@ export function LoginForm() {
               ) : (
                 <>
                   Sign In
-                  <ArrowRight className="h-4 w-4" />
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.25} />
                 </>
               )}
             </button>
           </form>
 
-          <p className="mt-7 text-center font-sans text-[0.75rem] font-normal text-[#9aa0a8]">
+          <p className="mt-8 text-center font-sans text-xs font-normal text-[#9aa0a8]">
             By logging in, you agree to our{" "}
-            <a href="#" className="font-medium text-[#1d78d6]">
+            <a href="#" className="font-medium text-primary hover:text-primary-dark">
               Terms of Service
             </a>{" "}
             and{" "}
-            <a href="#" className="font-medium text-[#1d78d6]">
+            <a href="#" className="font-medium text-primary hover:text-primary-dark">
               Privacy Notice
             </a>
             .

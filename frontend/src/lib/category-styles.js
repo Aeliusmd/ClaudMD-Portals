@@ -7,8 +7,8 @@ export const categoryStyles = {
 
 export const appointmentStatusStyles = {
   Confirmed: "bg-emerald-50 text-emerald-700",
-  Pending: "bg-amber-50 text-amber-700",
-  Completed: "bg-stone-100 text-stone-600",
+  Pending: "bg-rose-50 text-rose-700",
+  Completed: "bg-[#f3ebe1] text-[#6b5344]",
 };
 
 export const visitStatusStyles = {
@@ -29,4 +29,5 @@ export const workStatusStyles = {
   "Off work — 5 days": "bg-rose-50 text-rose-700",
   "Off work — 10 days": "bg-rose-50 text-rose-700",
   "Off work — pending MRI": "bg-rose-50 text-rose-700",
+  "Off work — 2 weeks": "bg-rose-50 text-rose-700",
 };

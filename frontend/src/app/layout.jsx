@@ -14,8 +14,14 @@ const body = Source_Sans_3({
 });
 
 export const metadata = {
-  title: "ClaudMD — Patient Portal",
-  description: "ClaudMD Unified Healthcare Patient Portal",
+  title: "ClaudMD — Unified Healthcare Portal",
+  description: "ClaudMD Unified Healthcare Portal",
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }) {
@@ -23,13 +29,41 @@ export default function RootLayout({ children }) {
     <html
       lang="en"
       className={`${display.variable} ${body.variable}`}
-      style={{ margin: 0, padding: 0, height: "100%" }}
+      style={{
+        margin: 0,
+        padding: 0,
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        background: "#0b2a4a",
+      }}
     >
       <body
         className="font-sans antialiased"
-        style={{ margin: 0, padding: 0, minHeight: "100dvh" }}
+        style={{
+          margin: 0,
+          padding: 0,
+          width: "100%",
+          height: "100%",
+          overflow: "hidden",
+          background: "#0b2a4a",
+        }}
       >
-        {children}
+        <div
+          id="app-root"
+          style={{
+            position: "fixed",
+            inset: 0,
+            margin: 0,
+            padding: 0,
+            width: "100%",
+            height: "100%",
+            overflow: "hidden",
+            background: "#f7f3ea",
+          }}
+        >
+          {children}
+        </div>
       </body>
     </html>
   );

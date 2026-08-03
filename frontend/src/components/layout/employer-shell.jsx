@@ -31,7 +31,10 @@ export function EmployerShell({ children }) {
   }, [navOpen]);
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-cream">
+    <div
+      className="flex h-full w-full overflow-hidden bg-cream"
+      style={{ position: "absolute", inset: 0, margin: 0, padding: 0 }}
+    >
       <Sidebar
         open={navOpen}
         onClose={() => setNavOpen(false)}
@@ -42,6 +45,7 @@ export function EmployerShell({ children }) {
         <TopBar
           onMenuClick={() => setNavOpen(true)}
           portalLabel="Employer Portal"
+          organizationLabel={currentEmployer.organization}
           profileUser={currentEmployer}
           profileHref="/employer/profile"
           notifications={employerNotifications}

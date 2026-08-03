@@ -67,8 +67,11 @@ export function LoginForm() {
     "w-full rounded-lg border border-[#d8dce3] bg-white px-3.5 py-3 font-sans text-[0.9375rem] text-ink outline-none transition placeholder:text-[#b0b6bf] focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:opacity-70";
 
   return (
-    <div className="grid min-h-dvh w-full grid-cols-1 lg:grid-cols-2">
-      <section className="relative hidden min-h-dvh flex-col bg-primary text-white lg:flex">
+    <div
+      className="grid h-full w-full grid-cols-1 lg:grid-cols-2"
+      style={{ position: "absolute", inset: 0, margin: 0, padding: 0 }}
+    >
+      <section className="relative hidden h-full min-h-0 flex-col bg-primary text-white lg:flex">
         <div className="flex flex-1 flex-col px-12 py-10 xl:px-16 xl:py-12">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-white/20">
@@ -97,7 +100,7 @@ export function LoginForm() {
         </p>
       </section>
 
-      <section className="flex min-h-dvh items-center justify-center overflow-y-auto bg-white px-6 py-12 sm:px-10">
+      <section className="flex h-full min-h-0 items-center justify-center overflow-y-auto bg-white px-6 py-12 sm:px-10">
         <div className="w-full max-w-[392px]">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary text-white">

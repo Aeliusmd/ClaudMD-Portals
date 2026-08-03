@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -9,49 +11,72 @@ import {
   paginateItems,
 } from "@/components/ui/pagination";
 import { Tabs } from "@/components/ui/tabs";
-import { appointments } from "@/data/appointments";
+import { CreatePatientAppointmentModal } from "@/features/patient/appointments/create-appointment-modal";
+import { appointments as initialAppointments } from "@/data/appointments";
 import { appointmentStatusStyles } from "@/lib/category-styles";
+import { cn } from "@/lib/utils";
+
+const filterTabs = [
+  { id: "all", label: "All" },
+  { id: "upcoming", label: "Upcoming" },
+  { id: "completed", label: "Completed" },
+];
 
 export function PatientAppointmentsView() {
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
+  const [rows, setRows] = useState(initialAppointments);
+  const [showCreate, setShowCreate] = useState(false);
 
-  const rows = useMemo(() => {
+  const filtered = useMemo(() => {
     if (filter === "upcoming") {
-      return appointments.filter((a) => a.status !== "Completed");
+      return rows.filter((item) => item.status !== "Completed");
     }
     if (filter === "completed") {
-      return appointments.filter((a) => a.status === "Completed");
+      return rows.filter((item) => item.status === "Completed");
     }
-    return appointments;
-  }, [filter]);
+    return rows;
+  }, [filter, rows]);
 
   useEffect(() => {
     setPage(1);
   }, [filter]);
 
-  const paged = paginateItems(rows, page);
+  const paged = paginateItems(filtered, page);
+
+  function handleCreate(appointment) {
+    setRows((prev) => [appointment, ...prev]);
+    setFilter("upcoming");
+    setPage(1);
+  }
 
   return (
     <div>
       <PageHeader
         title="Appointments"
+        className="mb-5"
         actions={
-          <Tabs
-            value={filter}
-            onChange={setFilter}
-            items={[
-              { id: "all", label: "All" },
-              { id: "upcoming", label: "Upcoming" },
-              { id: "completed", label: "Completed" },
-            ]}
-          />
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+            <Tabs
+              value={filter}
+              onChange={setFilter}
+              items={filterTabs}
+              className="flex-wrap"
+            />
+            <Button
+              onClick={() => setShowCreate(true)}
+              className="shrink-0 self-start sm:self-auto"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.5} />
+              Create Appointment
+            </Button>
+          </div>
         }
       />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-      <table className="min-w-[48rem] w-full text-left text-sm">
+          <table className="min-w-[48rem] w-full text-left text-sm">
             <thead className="border-b border-border/80 bg-cream/40 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
               <tr>
                 <th className="px-5 py-3">Doctor</th>
@@ -61,18 +86,24 @@ export function PatientAppointmentsView() {
                 <th className="px-5 py-3">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/70">
-              {paged.items.map((row) => (
-                <tr key={row.id} className="bg-white">
+            <tbody>
+              {paged.items.map((row, index) => (
+                <tr
+                  key={row.id}
+                  className={cn(
+                    "border-b border-border/60 last:border-b-0",
+                    index === 0 ? "bg-cream/35" : "bg-white"
+                  )}
+                >
                   <td className="px-5 py-4">
                     <p className="font-semibold text-ink">{row.doctor}</p>
-                    <p className="text-xs text-muted">{row.specialty}</p>
+                    <p className="mt-0.5 text-xs text-muted">{row.specialty}</p>
                   </td>
                   <td className="px-5 py-4 text-ink">{row.type}</td>
                   <td className="px-5 py-4 text-ink">{row.location}</td>
                   <td className="px-5 py-4">
-                    <p className="font-medium text-ink">{row.date}</p>
-                    <p className="text-xs text-muted">{row.time}</p>
+                    <p className="font-semibold text-ink">{row.date}</p>
+                    <p className="mt-0.5 text-xs text-muted">{row.time}</p>
                   </td>
                   <td className="px-5 py-4">
                     <Badge className={appointmentStatusStyles[row.status]}>
@@ -94,6 +125,12 @@ export function PatientAppointmentsView() {
           onChange={setPage}
         />
       </Card>
+
+      <CreatePatientAppointmentModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreate={handleCreate}
+      />
     </div>
   );
 }

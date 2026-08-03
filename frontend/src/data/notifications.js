@@ -1,7 +1,7 @@
 export const notifications = [
   {
     id: "n-001",
-    message: "New claim submitted for review",
+    message: "New visit summary shared from Urgent Care West",
     timeAgo: "2 min ago",
     unread: true,
   },
@@ -13,7 +13,7 @@ export const notifications = [
   },
   {
     id: "n-003",
-    message: "Monthly report is ready",
+    message: "Annual physical report is ready to view",
     timeAgo: "3 hrs ago",
     unread: false,
   },

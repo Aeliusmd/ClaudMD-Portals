@@ -13,6 +13,7 @@ import { visitCategories, visits } from "@/data/visits";
 import { VisitCard } from "@/features/patient/visits/visit-card";
 import { VisitDetailPanel } from "@/features/patient/visits/visit-detail-panel";
 import { VisitDocumentPanel } from "@/features/patient/visits/visit-document-panel";
+import { SAMPLE_DOCUMENT_URL, openDocumentInNewTab } from "@/lib/documents";
 
 const VISITS_PAGE_SIZE = 5;
 
@@ -68,6 +69,15 @@ export function PatientVisitsView() {
     setShowDocument(false);
   }
 
+  function handleSelectDocument(doc) {
+    if (doc?.recordKey === "immunization") {
+      setShowDocument(true);
+      return;
+    }
+
+    openDocumentInNewTab(doc.url || SAMPLE_DOCUMENT_URL);
+  }
+
   return (
     <div>
       <PageHeader title="Visit / Check-in History" />
@@ -121,7 +131,7 @@ export function PatientVisitsView() {
           <VisitDetailPanel
             visit={selectedVisit}
             onClose={handleCloseDetails}
-            onSelectDocument={() => setShowDocument(true)}
+            onSelectDocument={handleSelectDocument}
           />
         )}
       </div>

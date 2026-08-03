@@ -1,10 +1,15 @@
 export const metadata = {
-  title: "Sign in — ClaudMD",
+  title: "ClaudMD — Unified Healthcare Portal",
   description: "ClaudMD Unified Healthcare Portal",
 };
 
 export default function LoginLayout({ children }) {
   return (
-    <div className="min-h-dvh w-full overflow-hidden bg-white">{children}</div>
+    <div
+      className="h-full w-full overflow-hidden bg-white"
+      style={{ position: "absolute", inset: 0, margin: 0, padding: 0 }}
+    >
+      {children}
+    </div>
   );
 }

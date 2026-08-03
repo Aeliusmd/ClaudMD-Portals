@@ -14,7 +14,7 @@ import { categoryStyles } from "@/lib/category-styles";
 import { cn } from "@/lib/utils";
 
 const employerAppointmentStatusStyles = {
-  Confirmed: "bg-sky-100 text-sky-800",
+  Confirmed: "bg-emerald-50 text-emerald-700",
   Pending: "bg-amber-50 text-amber-700",
   Completed: "bg-stone-100 text-stone-600",
 };

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 export function TopBar({
   onMenuClick,
   portalLabel = "Patient Portal",
+  organizationLabel,
   profileUser,
   profileHref = "/patient/profile",
   notifications,
@@ -17,12 +18,12 @@ export function TopBar({
   return (
     <header
       className={cn(
-        "flex shrink-0 items-center justify-between gap-3 border-b border-border/70 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4",
+        "flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#ece7df] px-3 sm:gap-4 sm:px-5 lg:px-6",
         showSearch ? "bg-cream" : "bg-white",
         className
       )}
     >
-      <div className="flex min-w-0 items-center gap-2.5">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
         <button
           type="button"
           aria-label="Open navigation"
@@ -31,7 +32,17 @@ export function TopBar({
         >
           <Menu className="h-5 w-5" />
         </button>
-        <p className="truncate text-sm font-medium text-muted">{portalLabel}</p>
+        <p className="truncate text-sm text-[#6b7280]">
+          {portalLabel}
+          {organizationLabel ? (
+            <>
+              {" "}
+              <span className="font-bold tracking-wide text-ink uppercase">
+                {organizationLabel}
+              </span>
+            </>
+          ) : null}
+        </p>
       </div>
 
       {showSearch ? (
@@ -46,11 +57,12 @@ export function TopBar({
           </label>
         </div>
       ) : (
-        <div className="flex-1" />
+        <div className="min-w-0 flex-1" />
       )}
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-        <NotificationsMenu items={notifications} />
+        <NotificationsMenu items={notifications} variant={showSearch ? "soft" : "ghost"} />
+        <span className="hidden text-sm text-[#9ca3af] sm:inline">Welcome</span>
         <ProfileMenu user={profileUser} profileHref={profileHref} />
       </div>
     </header>

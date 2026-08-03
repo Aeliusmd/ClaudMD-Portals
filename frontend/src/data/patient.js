@@ -21,7 +21,7 @@ export const currentPatient = {
   notifications: {
     appointmentReminders: true,
     newDocumentShared: true,
-    visitUpdates: true,
+    visitUpdates: false,
     marketing: false,
   },
 };

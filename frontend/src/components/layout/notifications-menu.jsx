@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import { NotificationsCard } from "@/components/layout/notifications-card";
 import { notifications as defaultNotifications } from "@/data/notifications";
+import { cn } from "@/lib/utils";
 
-export function NotificationsMenu({ items }) {
+export function NotificationsMenu({ items, variant = "soft" }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const list = items ?? defaultNotifications;
-  const hasUnread = list.some((item) => item.unread);
+  const unreadCount = list.filter((item) => item.unread).length;
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -39,11 +40,18 @@ export function NotificationsMenu({ items }) {
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((prev) => !prev)}
-        className="relative flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-cream-deep text-[#5b6470] transition hover:bg-[#e8dfd2] hover:text-ink"
+        className={cn(
+          "relative flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-[#6b7280] transition hover:text-ink",
+          variant === "soft"
+            ? "bg-cream-deep hover:bg-[#e8dfd2]"
+            : "hover:bg-cream-deep"
+        )}
       >
-        <Bell className="h-5 w-5" />
-        {hasUnread ? (
-          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[#e11d48] ring-2 ring-cream-deep" />
+        <Bell className="h-5 w-5" strokeWidth={1.75} />
+        {unreadCount > 0 ? (
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#e11d48] px-1 text-[10px] font-bold text-white ring-2 ring-white">
+            {unreadCount}
+          </span>
         ) : null}
       </button>
 

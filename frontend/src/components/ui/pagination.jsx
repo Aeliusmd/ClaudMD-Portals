@@ -30,8 +30,10 @@ export function Pagination({
   end,
   onChange,
   className,
+  alwaysShow = false,
 }) {
-  if (totalPages <= 1) return null;
+  if (!alwaysShow && totalPages <= 1) return null;
+  if (total === 0) return null;
 
   return (
     <div

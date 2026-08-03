@@ -22,7 +22,7 @@ export function ResetPasswordForm() {
   }
 
   return (
-    <div className="fixed inset-0 flex w-full items-center justify-center overflow-y-auto bg-[#fcf8f1] px-6 py-10">
+    <div className="flex h-full w-full items-center justify-center overflow-y-auto bg-[#fcf8f1] px-6 py-10">
       <div className="w-full max-w-[24.5rem] text-center">
         <div className="mb-9 flex items-center justify-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#1d78d6] text-white">

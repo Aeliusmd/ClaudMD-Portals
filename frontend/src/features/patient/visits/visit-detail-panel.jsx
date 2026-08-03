@@ -1,6 +1,9 @@
-import { ChevronRight, FileText, Info, X } from "lucide-react";
+"use client";
+
+import { FileText, Info, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { VisitDocumentCard } from "@/features/patient/visits/visit-document-card";
 import { categoryStyles } from "@/lib/category-styles";
 
 export function VisitDetailPanel({ visit, onClose, onSelectDocument }) {
@@ -65,25 +68,13 @@ export function VisitDetailPanel({ visit, onClose, onSelectDocument }) {
             Documents ({visit.documents.length})
           </p>
         </div>
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 space-y-2.5">
           {visit.documents.map((doc) => (
-            <button
+            <VisitDocumentCard
               key={doc.id || doc.title}
-              type="button"
-              onClick={() => onSelectDocument?.(doc)}
-              className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-border/70 bg-white px-4 py-3 text-left transition hover:border-primary/30 hover:bg-cream"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e8f1fb] text-primary">
-                <FileText className="h-4 w-4" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-semibold text-ink">{doc.title}</span>
-                <span className="mt-0.5 block text-sm text-muted">
-                  {doc.type} • {doc.date}
-                </span>
-              </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted" />
-            </button>
+              doc={doc}
+              onPreview={onSelectDocument}
+            />
           ))}
         </div>
       </div>

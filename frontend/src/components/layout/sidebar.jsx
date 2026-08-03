@@ -52,16 +52,18 @@ export function Sidebar({ open = false, onClose, items = patientNavItems }) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-dvh w-[min(20rem,88vw)] flex-col bg-navy text-white transition-transform duration-300 lg:static lg:z-auto lg:h-full lg:w-64 lg:shrink-0 lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex h-full w-[min(20rem,88vw)] flex-col bg-navy text-white transition-transform duration-300 lg:static lg:z-auto lg:h-full lg:w-64 lg:shrink-0 lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        <div className="flex items-center justify-between gap-3 px-5 py-6">
+        <div className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10">
-              <HeartPulse className="h-5 w-5" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/75">
+              <HeartPulse className="h-4 w-4" strokeWidth={2} />
             </div>
-            <span className="font-display text-xl tracking-tight">ClaudMD</span>
+            <span className="font-display text-xl tracking-tight text-white">
+              ClaudMD
+            </span>
           </div>
           <button
             type="button"

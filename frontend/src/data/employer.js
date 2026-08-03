@@ -11,6 +11,7 @@ export const currentEmployer = {
   organization: "TechFlow Inc.",
   address: "450 Innovation Drive, Springfield, IL 62704",
   accessLevel: "Organization Admin",
+  avatarUrl: "/avatars/michelle-brooks.png",
 };
 
 export const employerAccountPermissions = [
@@ -21,6 +22,70 @@ export const employerAccountPermissions = [
   "View Reports",
   "Download Reports",
   "View Employer Documents",
+];
+
+export const employerAccessLevels = [
+  "Organization Admin",
+  "HR Editor",
+  "HR Viewer",
+  "Appointments Only",
+  "No Access",
+];
+
+export const employerOrgUsers = [
+  {
+    id: "ou-001",
+    fullName: "Michelle Brooks",
+    title: "HR Director",
+    email: "michelle.brooks@techflow.com",
+    role: "Organization Admin",
+    accessLevel: "Organization Admin",
+    active: true,
+  },
+  {
+    id: "ou-002",
+    fullName: "James Porter",
+    title: "HR Coordinator",
+    email: "james.porter@techflow.com",
+    role: "HR Editor",
+    accessLevel: "HR Editor",
+    active: true,
+  },
+  {
+    id: "ou-003",
+    fullName: "Priya Nair",
+    title: "Safety Lead",
+    email: "priya.nair@techflow.com",
+    role: "HR Viewer",
+    accessLevel: "HR Viewer",
+    active: true,
+  },
+  {
+    id: "ou-004",
+    fullName: "Chris Alvarez",
+    title: "Clinic Liaison",
+    email: "chris.alvarez@techflow.com",
+    role: "Appointments Only",
+    accessLevel: "Appointments Only",
+    active: true,
+  },
+];
+
+export const employerPermissionAuditSeed = [
+  {
+    id: "pal-001",
+    at: "Jul 28, 2026 · 10:12 AM",
+    actor: "Michelle Brooks",
+    action: "Updated access level",
+    detail: "Priya Nair → HR Viewer",
+  },
+  {
+    id: "pal-002",
+    at: "Jul 12, 2026 · 3:45 PM",
+    actor: "Michelle Brooks",
+    action: "Granted access",
+    detail: "Chris Alvarez → Appointments Only",
+  },
 ];
 
 export const employerNotifications = [
@@ -45,13 +110,12 @@ export const employerNotifications = [
 ];
 
 export const employerDashboardSummary = {
-  upcomingAppointments: {
-    count: 26,
-    detail: "Next 30 days across all employees",
-  },
-  newReports: {
-    count: 7,
-    detail: "Recently shared reports requiring review",
+  last30Days: {
+    injury: 2,
+    physicals: 0,
+    drugScreens: 1,
+    appointments: 9,
+    unreadReports: 4,
   },
 };
 
@@ -59,51 +123,131 @@ export const recentActivity = [
   {
     id: "ra-001",
     employee: "Alex Johnson",
+    employeeId: "ee-001",
     incidentNumber: "INC-2026-0041",
     category: "Injury",
     lastVisit: "Jul 18, 2026",
+    lastVisitValue: "2026-07-18",
     workStatus: "Off work — 5 days",
+    unreadReportCount: 4,
+    isDrugScreen: false,
   },
   {
     id: "ra-002",
     employee: "Maria Garcia",
+    employeeId: "ee-005",
     incidentNumber: "N/A",
     category: "Physical",
     lastVisit: "Mar 20, 2026",
+    lastVisitValue: "2026-03-20",
     workStatus: "Full duty",
+    unreadReportCount: 1,
+    isDrugScreen: false,
   },
   {
     id: "ra-003",
     employee: "David Kim",
+    employeeId: "ee-002",
     incidentNumber: "INC-2026-0038",
     category: "Injury",
     lastVisit: "Jul 3, 2026",
+    lastVisitValue: "2026-07-03",
     workStatus: "Light duty — 4 weeks",
+    unreadReportCount: 3,
+    isDrugScreen: false,
   },
   {
     id: "ra-004",
     employee: "Jennifer Lee",
+    employeeId: "ee-006",
     incidentNumber: "N/A",
     category: "Physical",
     lastVisit: "Jun 15, 2026",
+    lastVisitValue: "2026-06-15",
     workStatus: "Full duty",
+    unreadReportCount: 1,
+    isDrugScreen: false,
   },
   {
     id: "ra-005",
     employee: "Robert Brown",
+    employeeId: "ee-003",
     incidentNumber: "INC-2026-0025",
     category: "Injury",
     lastVisit: "May 22, 2026",
+    lastVisitValue: "2026-05-22",
     workStatus: "Modified schedule",
+    unreadReportCount: 2,
+    isDrugScreen: true,
   },
   {
     id: "ra-006",
     employee: "Amanda White",
+    employeeId: "ee-007",
     incidentNumber: "N/A",
     category: "Physical",
     lastVisit: "May 8, 2026",
+    lastVisitValue: "2026-05-08",
     workStatus: "Full duty",
+    unreadReportCount: 1,
+    isDrugScreen: false,
   },
+  {
+    id: "ra-007",
+    employee: "Michael Torres",
+    employeeId: "ee-004",
+    incidentNumber: "INC-2026-0055",
+    category: "Injury",
+    lastVisit: "Jul 15, 2026",
+    lastVisitValue: "2026-07-15",
+    workStatus: "Off work — 2 weeks",
+    unreadReportCount: 2,
+    isDrugScreen: false,
+  },
+  {
+    id: "ra-008",
+    employee: "Sarah Chen",
+    employeeId: "ee-008",
+    incidentNumber: "N/A",
+    category: "Physical",
+    lastVisit: "Jun 8, 2026",
+    lastVisitValue: "2026-06-08",
+    workStatus: "Full duty",
+    unreadReportCount: 1,
+    isDrugScreen: false,
+  },
+];
+
+/** Fixed “today” so Last 30 Days filters stay stable with mock dates. */
+export const EMPLOYER_DEMO_TODAY = "2026-08-03";
+
+export const appointmentTypes = [
+  "Follow-up",
+  "Initial Evaluation",
+  "Physical Therapy",
+  "Specialist Follow-up",
+  "Return-to-Work Eval",
+  "Annual Physical",
+  "Re-evaluation",
+  "Cardiology Review",
+  "Ortho Re-evaluation",
+];
+
+export const appointmentProviders = [
+  "Dr. Sarah Williams",
+  "Dr. Emily Carter",
+  "Dr. James Rivera",
+  "Dr. Michael Park",
+  "Dr. Lisa Thompson",
+  "PT Lisa Adams",
+];
+
+export const appointmentClinics = [
+  "Downtown Clinic",
+  "Westside Rehab",
+  "City Orthopedics",
+  "Urgent Care West",
+  "Cardiac Center",
 ];
 
 export const upcomingEmployerAppointments = [
@@ -162,6 +306,50 @@ export const upcomingEmployerAppointments = [
     time: "3:30 PM",
     status: "Pending",
   },
+  {
+    id: "eap-006",
+    employee: "Amanda White",
+    category: "Physical",
+    visitType: "Cardiology Review",
+    provider: "Dr. Michael Park",
+    clinic: "Cardiac Center",
+    date: "Aug 10, 2026",
+    time: "1:00 PM",
+    status: "Confirmed",
+  },
+  {
+    id: "eap-007",
+    employee: "Alex Johnson",
+    category: "Injury",
+    visitType: "Ortho Re-evaluation",
+    provider: "Dr. James Rivera",
+    clinic: "City Orthopedics",
+    date: "Aug 5, 2026",
+    time: "10:00 AM",
+    status: "Confirmed",
+  },
+  {
+    id: "eap-008",
+    employee: "David Kim",
+    category: "Injury",
+    visitType: "Return-to-Work Eval",
+    provider: "Dr. James Rivera",
+    clinic: "City Orthopedics",
+    date: "Jul 31, 2026",
+    time: "2:30 PM",
+    status: "Confirmed",
+  },
+  {
+    id: "eap-009",
+    employee: "Sarah Chen",
+    category: "Physical",
+    visitType: "Annual Physical",
+    provider: "Dr. Lisa Thompson",
+    clinic: "Downtown Clinic",
+    date: "Sep 5, 2026",
+    time: "9:00 AM",
+    status: "Pending",
+  },
 ];
 
 export const newEmployerReports = [
@@ -210,26 +398,29 @@ export const employees = [
     department: "Warehouse",
     jobTitle: "Forklift Operator",
     employeeId: "TF-1042",
-    patientId: "P-10041",
-    accountNo: "ACC-88101",
+    patientId: "P-10042",
+    accountNo: "ACC-77291",
     ssn: "442-18-4421",
     ssnLast4: "4421",
     employerName: "TechFlow Inc.",
     insuranceCompany: "MedSure Health — PPO Gold",
-    dateOfBirth: "Apr 12, 1990",
+    dateOfBirth: "Dec 1, 1986",
     hireDate: "Jan 8, 2019",
+    phone: "(555) 321-9901",
+    gender: "M",
+    address: "1725 Main Street, Covina, CA 91723",
     incidents: [
       {
         id: "inc-0041",
         incidentNumber: "INC-2026-0041",
         category: "Injury",
-        dateOfInjury: "Jun 2, 2026",
+        dateOfInjury: "Jun 5, 2026",
         timeOfInjury: "2:15 PM",
         claimReference: "WC-2026-8812",
         checkInDate: "Jul 18, 2026",
         reportType: "Doctor First Report",
         workStatus: "Off work — 5 days",
-        disabilityStatus: "Temporary total",
+        disabilityStatus: "Temporary Total Disability",
         disabilityLabel: "Off work — Temporary Total",
         restrictions: "No lifting; no standing > 15 minutes",
         returnToWork: "Pending re-evaluation Jul 22, 2026",
@@ -239,6 +430,7 @@ export const employees = [
           {
             id: "ev-001",
             date: "Jul 18, 2026",
+            label: "Follow-up",
             category: "Injury",
             workStatus: "Off work — 5 days",
             disabilityStatus: "Temporary total",
@@ -249,6 +441,7 @@ export const employees = [
           {
             id: "ev-002",
             date: "Jul 10, 2026",
+            label: "Initial Evaluation",
             category: "Injury",
             workStatus: "Off work — 10 days",
             disabilityStatus: "Temporary total",
@@ -259,6 +452,7 @@ export const employees = [
           {
             id: "ev-003",
             date: "Jun 5, 2026",
+            label: "Initial Injury Visit",
             category: "Injury",
             workStatus: "Off work",
             disabilityStatus: "Temporary total",
@@ -284,6 +478,9 @@ export const employees = [
     insuranceCompany: "MedSure Health — PPO Gold",
     dateOfBirth: "Sep 3, 1987",
     hireDate: "Mar 14, 2016",
+    phone: "(555) 321-9902",
+    gender: "M",
+    address: "441 Oak St, Covina, CA 91723",
     incidents: [
       {
         id: "inc-0038",
@@ -335,24 +532,28 @@ export const employees = [
     department: "Maintenance",
     jobTitle: "Technician",
     employeeId: "TF-0761",
-    accountNo: "ACC-66120",
+    patientId: "P-10033",
+    accountNo: "ACC-77140",
     ssnLast4: "3340",
     employerName: "TechFlow Inc.",
-    insuranceCompany: "MedSure Health — PPO",
+    insuranceCompany: "MedSure Health — Bronze HDHP",
     dateOfBirth: "Jan 22, 1982",
     hireDate: "Aug 2, 2012",
+    phone: "(555) 321-9903",
+    gender: "M",
+    address: "19 Ridge Rd, Covina, CA 91723",
     incidents: [
       {
         id: "inc-0025",
         incidentNumber: "INC-2026-0025",
         category: "Injury",
-        dateOfInjury: "Mar 9, 2026",
+        dateOfInjury: "Apr 1, 2026",
         timeOfInjury: "8:45 AM",
         claimReference: "WC-2026-5520",
         checkInDate: "May 22, 2026",
-        reportType: "PR2 Form",
+        reportType: "Status Report",
         workStatus: "Modified schedule",
-        disabilityStatus: "Temporary partial",
+        disabilityStatus: "Temporary Partial Disability",
         disabilityLabel: "Modified schedule — Temporary Partial",
         restrictions: "No climbing; desk-compatible duties preferred",
         returnToWork: "Modified schedule through Jun 30, 2026",
@@ -389,24 +590,28 @@ export const employees = [
     department: "Logistics",
     jobTitle: "Driver",
     employeeId: "TF-1120",
-    accountNo: "ACC-90311",
+    patientId: "P-10041",
+    accountNo: "ACC-77302",
     ssnLast4: "5512",
     employerName: "TechFlow Inc.",
-    insuranceCompany: "MedSure Health — PPO",
+    insuranceCompany: "MedSure Health — PPO Gold",
     dateOfBirth: "Nov 14, 1993",
     hireDate: "Feb 20, 2021",
+    phone: "(555) 321-9904",
+    gender: "M",
+    address: "210 Harbor Blvd, Covina, CA 91723",
     incidents: [
       {
         id: "inc-0055",
         incidentNumber: "INC-2026-0055",
         category: "Injury",
-        dateOfInjury: "Jul 12, 2026",
-        timeOfInjury: "4:05 PM",
+        dateOfInjury: "Jul 5, 2026",
+        timeOfInjury: "3:20 PM",
         claimReference: "WC-2026-9104",
         checkInDate: "Jul 15, 2026",
         reportType: "Doctor First Report",
-        workStatus: "Off work — pending MRI",
-        disabilityStatus: "Temporary total",
+        workStatus: "Off work — 2 weeks",
+        disabilityStatus: "Temporary Total Disability",
         disabilityLabel: "Off work — Temporary Total",
         restrictions: "No driving; no lifting",
         returnToWork: "Pending specialist clearance",
@@ -417,7 +622,7 @@ export const employees = [
             id: "ev-008",
             date: "Jul 15, 2026",
             category: "Injury",
-            workStatus: "Off work — pending MRI",
+            workStatus: "Off work — 2 weeks",
             disabilityStatus: "Temporary total",
             restrictions: "No driving; no lifting",
             returnToWork: "Not cleared",
@@ -433,12 +638,16 @@ export const employees = [
     department: "Administration",
     jobTitle: "Office Coordinator",
     employeeId: "TF-0844",
-    accountNo: "ACC-51044",
+    patientId: "P-10036",
+    accountNo: "ACC-77288",
     ssnLast4: "7721",
     employerName: "TechFlow Inc.",
-    insuranceCompany: "MedSure Health — PPO",
+    insuranceCompany: "MedSure Health — Silver HMO",
     dateOfBirth: "Jun 7, 1991",
     hireDate: "May 11, 2018",
+    phone: "(555) 321-9905",
+    gender: "F",
+    address: "55 Aspen Ct, Covina, CA 91723",
     incidents: [
       {
         id: "inc-phys-001",
@@ -477,12 +686,16 @@ export const employees = [
     department: "Finance",
     jobTitle: "Analyst",
     employeeId: "TF-0912",
-    accountNo: "ACC-42912",
+    patientId: "P-10037",
+    accountNo: "ACC-77192",
     ssnLast4: "8810",
     employerName: "TechFlow Inc.",
-    insuranceCompany: "MedSure Health — PPO",
+    insuranceCompany: "MedSure Health — Silver HMO",
     dateOfBirth: "Dec 1, 1995",
     hireDate: "Oct 3, 2022",
+    phone: "(555) 321-9906",
+    gender: "F",
+    address: "9 Crescent Way, Covina, CA 91723",
     incidents: [
       {
         id: "inc-phys-002",
@@ -521,12 +734,16 @@ export const employees = [
     department: "Engineering",
     jobTitle: "QA Specialist",
     employeeId: "TF-1203",
-    accountNo: "ACC-33801",
+    patientId: "P-10038",
+    accountNo: "ACC-77091",
     ssnLast4: "2204",
     employerName: "TechFlow Inc.",
-    insuranceCompany: "MedSure Health — PPO",
-    dateOfBirth: "Aug 19, 1989",
+    insuranceCompany: "MedSure Health — PPO Gold",
+    dateOfBirth: "Dec 1, 1988",
     hireDate: "Jul 1, 2020",
+    phone: "(555) 321-9908",
+    gender: "F",
+    address: "1025 Main Street, Covina, CA 91723",
     incidents: [
       {
         id: "inc-phys-003",
@@ -548,6 +765,7 @@ export const employees = [
           {
             id: "ev-011",
             date: "May 8, 2026",
+            label: "Annual Physical",
             category: "Physical",
             workStatus: "Full duty",
             disabilityStatus: "None",
@@ -565,12 +783,16 @@ export const employees = [
     department: "HR",
     jobTitle: "Recruiter",
     employeeId: "TF-1301",
-    accountNo: "ACC-22910",
+    patientId: "P-10045",
+    accountNo: "ACC-77311",
     ssnLast4: "6643",
     employerName: "TechFlow Inc.",
-    insuranceCompany: "MedSure Health — PPO",
+    insuranceCompany: "MedSure Health — Silver HMO",
     dateOfBirth: "Feb 28, 1994",
     hireDate: "Jan 15, 2024",
+    phone: "(555) 321-9911",
+    gender: "F",
+    address: "88 Palm Ave, Covina, CA 91723",
     incidents: [
       {
         id: "inc-phys-004",
@@ -579,70 +801,88 @@ export const employees = [
         dateOfInjury: null,
         timeOfInjury: null,
         claimReference: "N/A",
-        checkInDate: "Sep 5, 2026",
+        checkInDate: "Jun 8, 2026",
         reportType: "Physical Results",
         workStatus: "Full duty",
         disabilityStatus: "None",
         disabilityLabel: "None",
         restrictions: "None",
-        returnToWork: "Scheduled physical",
+        returnToWork: "Cleared for full duty",
         followUpDate: "Sep 5, 2026",
         employmentRelationship: "Full-time · HR",
-        visits: [],
+        visits: [
+          {
+            id: "ev-012",
+            date: "Jun 8, 2026",
+            label: "Annual Physical",
+            category: "Physical",
+            workStatus: "Full duty",
+            disabilityStatus: "None",
+            restrictions: "None",
+            returnToWork: "Cleared",
+            followUpDate: "Sep 5, 2026",
+          },
+        ],
       },
     ],
   },
 ];
 
-/** Flat list of incident/check-in entries for employee search. */
-function buildEmployeeSearchEntries(reportDocs, appointments) {
-  return employees.flatMap((employee) =>
-    employee.incidents.flatMap((incident) =>
-      (incident.visits.length
-        ? incident.visits
-        : [{ id: `${incident.id}-base`, date: incident.checkInDate }]
-      ).map((visit) => {
-        const reportCount = reportDocs.filter(
-          (doc) => doc.employeeId === employee.id
-        ).length;
-        const appointmentCount = appointments.filter(
-          (appt) =>
-            appt.employee === employee.name && appt.status !== "Completed"
-        ).length;
+/** Flat latest-incident rows for employee search (one row per employee). */
+const unreadReportByEmployee = {
+  "ee-001": 4,
+  "ee-002": 3,
+  "ee-003": 2,
+  "ee-004": 2,
+  "ee-005": 1,
+  "ee-006": 1,
+  "ee-007": 1,
+  "ee-008": 1,
+};
 
-        return {
-          id: `${employee.id}-${incident.id}-${visit.id}`,
-          employeeId: employee.id,
-          employeeName: employee.name,
-          accountNo: employee.accountNo,
-          ssnLast4: employee.ssnLast4,
-          ssn: employee.ssn,
-          employerName: employee.employerName,
-          insuranceCompany: employee.insuranceCompany,
-          incidentId: incident.id,
-          incidentNumber: incident.incidentNumber,
-          category: incident.category,
-          date: visit.date || incident.checkInDate,
-          dateOfInjury: incident.dateOfInjury,
-          timeOfInjury: incident.timeOfInjury || null,
-          reportType: incident.reportType || "Status Report",
-          disabilityLabel:
-            incident.disabilityLabel ||
-            `${visit.workStatus || incident.workStatus} — ${visit.disabilityStatus || incident.disabilityStatus}`,
-          workStatus: visit.workStatus || incident.workStatus,
-          disabilityStatus: visit.disabilityStatus || incident.disabilityStatus,
-          restrictions: visit.restrictions || incident.restrictions || "None",
-          fromDate:
-            incident.fromDate || incident.dateOfInjury || visit.date || "N/A",
-          toDate: incident.toDate || incident.followUpDate || "N/A",
-          returnToWork: visit.returnToWork || incident.returnToWork,
-          followUpDate: visit.followUpDate || incident.followUpDate,
-          reportCount,
-          appointmentCount,
-        };
-      })
-    )
-  );
+function buildEmployeeSearchEntries(reportDocs, appointments) {
+  return employees.map((employee) => {
+    const incident = employee.incidents[0];
+    const reportCount = reportDocs.filter(
+      (doc) => doc.employeeId === employee.id
+    ).length;
+    const appointmentCount = appointments.filter(
+      (appt) =>
+        (appt.employee === employee.name || appt.employeeId === employee.id) &&
+        appt.status !== "Completed"
+    ).length;
+
+    return {
+      id: `${employee.id}-${incident.id}`,
+      employeeId: employee.id,
+      employeeName: employee.name,
+      accountNo: employee.accountNo,
+      ssnLast4: employee.ssnLast4,
+      ssn: employee.ssn,
+      employerName: employee.employerName,
+      insuranceCompany: employee.insuranceCompany,
+      incidentId: incident.id,
+      incidentNumber: incident.incidentNumber,
+      category: incident.category,
+      date: incident.checkInDate,
+      dateOfInjury: incident.dateOfInjury,
+      timeOfInjury: incident.timeOfInjury || null,
+      reportType: incident.reportType || "Status Report",
+      disabilityLabel:
+        incident.disabilityLabel ||
+        `${incident.workStatus} — ${incident.disabilityStatus}`,
+      workStatus: incident.workStatus,
+      disabilityStatus: incident.disabilityStatus,
+      restrictions: incident.restrictions || "None",
+      fromDate: incident.fromDate || incident.dateOfInjury || "N/A",
+      toDate: incident.toDate || incident.followUpDate || "N/A",
+      returnToWork: incident.returnToWork,
+      followUpDate: incident.followUpDate,
+      unreadReportCount: unreadReportByEmployee[employee.id] ?? reportCount,
+      reportCount,
+      appointmentCount,
+    };
+  });
 }
 
 export const employerAppointments = [
@@ -771,7 +1011,7 @@ export const employerAppointments = [
 export const sharedDocuments = [
   {
     id: "sd-001",
-    title: "Doctor First Report — Johnson",
+    title: "DFR — Chemical Exposure",
     documentType: "Doctor First Report",
     employee: "Alex Johnson",
     employeeId: "ee-001",
@@ -784,12 +1024,12 @@ export const sharedDocuments = [
     shareDate: "Jul 19, 2026",
     dateValue: "2026-07-19",
     isNew: true,
-    documentId: "DFR-2026-0041",
+    documentId: "RPT-2026-0041-A",
     url: SAMPLE_DOCUMENT_URL,
   },
   {
     id: "sd-002",
-    title: "Work Status Report — Johnson",
+    title: "WSR — Chemical Exposure",
     documentType: "Work Status Report",
     badgeLabel: "Work Status",
     employee: "Alex Johnson",
@@ -803,7 +1043,7 @@ export const sharedDocuments = [
     shareDate: "Jul 19, 2026",
     dateValue: "2026-07-19",
     isNew: true,
-    documentId: "WSR-2026-0041",
+    documentId: "RPT-2026-0041-B",
     url: SAMPLE_DOCUMENT_URL,
   },
   {
@@ -944,8 +1184,9 @@ export const sharedDocuments = [
   },
   {
     id: "sd-010",
-    title: "Physical Results — White",
+    title: "PT Report — White",
     documentType: "Physical Results",
+    previewLabel: "PT report",
     employee: "Amanda White",
     employeeId: "ee-007",
     category: "Physical",

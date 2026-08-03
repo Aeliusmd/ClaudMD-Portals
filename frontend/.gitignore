@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local wireframe capture artifacts
+.wireframe-shots
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

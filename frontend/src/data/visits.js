@@ -55,11 +55,24 @@ export const visits = [
     restrictions: "No heavy lifting over 10 lbs",
     followUp: "Aug 3, 2026",
     specialInstructions:
-      "Orthopedic consultation for workplace injury. Imaging reviewed. Physical therapy recommended twice weekly.",
+      "Patient presents with repetitive strain injury (RSI) to the right wrist after prolonged computer work. X-ray negative for fracture. Clinical exam consistent with mild carpal tunnel syndrome. Recommended wrist splint for night use and occupational therapy referral for ergonomic assessment and nerve-glide exercises.",
     documents: [
       {
+        id: "doc-ortho-001",
         title: "Orthopedic Consultation Report",
         type: "Clinical Report",
+        date: "Jul 3, 2026",
+      },
+      {
+        id: "doc-xray-001",
+        title: "Right Wrist X-Ray",
+        type: "Imaging Report",
+        date: "Jul 3, 2026",
+      },
+      {
+        id: "doc-ot-001",
+        title: "OT Referral Form",
+        type: "Referral",
         date: "Jul 3, 2026",
       },
     ],

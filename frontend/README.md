@@ -17,6 +17,16 @@ Demo logins (any password):
 - `patient@demo.com` → Patient Portal
 - `employer@demo.com` → Employer Portal
 
+### Secure shared-document email (Epic 4)
+
+Mock ClaudMD share email (not real email):
+
+1. Open [http://localhost:3000/demo/secure-email](http://localhost:3000/demo/secure-email)
+2. Click **View secure report** → login screen (report is not shown yet)
+3. Sign in as `employer@demo.com` → scoped **Shared Documents** (Maria Garcia · Annual Physical only)
+
+Also on that page: an **expired link** demo. Normal employer login (no share link) still opens the full portal.
+
 ## Structure
 
 - `src/app/patient/*` and `src/app/employer/*` — App Router URLs (thin `page.jsx` files only)

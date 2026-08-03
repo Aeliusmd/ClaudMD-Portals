@@ -1,16 +1,56 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 import {
   currentEmployer,
   employerNotifications,
 } from "@/data/employer";
-import { employerNavItems } from "@/data/navigation";
+import {
+  employerNavItems,
+  employerScopedShareNavItems,
+} from "@/data/navigation";
+import {
+  findSecureShare,
+  isSecureShareExpired,
+} from "@/data/secure-shares";
+import {
+  clearSecureShareSession,
+  getSecureShareSession,
+} from "@/lib/secure-share-session";
+
+function hasActiveSecureShareSession() {
+  const session = getSecureShareSession();
+  if (!session?.token) return false;
+  const share = findSecureShare(session.token);
+  if (!share || isSecureShareExpired(share)) {
+    clearSecureShareSession();
+    return false;
+  }
+  return true;
+}
 
 export function EmployerShell({ children }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
+  const [scopedSession, setScopedSession] = useState(false);
+
+  useEffect(() => {
+    const active = hasActiveSecureShareSession();
+    setScopedSession(active);
+
+    // Keep secure-link sessions in the scoped Shared Documents view only.
+    if (
+      active &&
+      pathname &&
+      !pathname.startsWith("/employer/shared-documents/scoped")
+    ) {
+      router.replace("/employer/shared-documents/scoped");
+    }
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!navOpen) return undefined;
@@ -30,6 +70,11 @@ export function EmployerShell({ children }) {
     };
   }, [navOpen]);
 
+  const navItems = useMemo(
+    () => (scopedSession ? employerScopedShareNavItems : employerNavItems),
+    [scopedSession]
+  );
+
   return (
     <div
       className="flex h-full w-full overflow-hidden bg-cream"
@@ -38,7 +83,8 @@ export function EmployerShell({ children }) {
       <Sidebar
         open={navOpen}
         onClose={() => setNavOpen(false)}
-        items={employerNavItems}
+        items={navItems}
+        onLogout={clearSecureShareSession}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -47,8 +93,12 @@ export function EmployerShell({ children }) {
           portalLabel="Employer Portal"
           organizationLabel={currentEmployer.organization}
           profileUser={currentEmployer}
-          profileHref="/employer/profile"
-          notifications={employerNotifications}
+          profileHref={
+            scopedSession
+              ? "/employer/shared-documents/scoped"
+              : "/employer/profile"
+          }
+          notifications={scopedSession ? [] : employerNotifications}
           showSearch={false}
         />
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6">

@@ -1,9 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { ArrowRight, HeartPulse, Info } from "lucide-react";
+import {
+  findSecureShare,
+  isSecureShareExpired,
+} from "@/data/secure-shares";
+import {
+  clearSecureShareSession,
+  getSecureShareSession,
+  resolvePostLoginDestination,
+  saveSecureShareSession,
+} from "@/lib/secure-share-session";
 
 const DEMO_ACCOUNTS = [
   "patient@demo.com",
@@ -16,12 +26,50 @@ const ERROR_MISSING = "Please enter both email and password.";
 const ERROR_INVALID =
   "Invalid credentials. Please use a recognized email address.";
 
-export function LoginForm() {
+function LoginFormInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const shareToken = searchParams.get("share") || "";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [shareBanner, setShareBanner] = useState(null);
+
+  useEffect(() => {
+    if (!shareToken) {
+      setShareBanner(null);
+      return;
+    }
+
+    const share = findSecureShare(shareToken);
+    if (!share) {
+      clearSecureShareSession();
+      setShareBanner({
+        tone: "error",
+        message: "This secure report link is invalid or no longer available.",
+      });
+      return;
+    }
+
+    if (isSecureShareExpired(share)) {
+      clearSecureShareSession();
+      setShareBanner({
+        tone: "error",
+        message:
+          "This secure report link has expired. Sign in normally or request a new share.",
+      });
+      return;
+    }
+
+    // Retain report context through authentication (US-4.2).
+    saveSecureShareSession(share);
+    setShareBanner({
+      tone: "info",
+      message: `Secure report ready for ${share.patientName} — ${share.reportType}. Sign in to continue.`,
+    });
+  }, [shareToken]);
 
   function clearError() {
     if (error) setError("");
@@ -50,14 +98,35 @@ export function LoginForm() {
       "employer@demo.com": "/employer/dashboard",
     };
 
-    const destination = portalRoutes[normalizedEmail];
-    if (!destination) {
+    const defaultDestination = portalRoutes[normalizedEmail];
+    if (!defaultDestination) {
       setError(ERROR_INVALID);
       return;
     }
 
     setError("");
     setIsSigningIn(true);
+
+    const shareSession = getSecureShareSession();
+    const share =
+      shareSession && findSecureShare(shareSession.token)
+        ? findSecureShare(shareSession.token)
+        : null;
+    const shareValid = Boolean(share && !isSecureShareExpired(share));
+
+    const destination = resolvePostLoginDestination({
+      email: normalizedEmail,
+      defaultDestination,
+      shareSession: shareValid ? shareSession : null,
+      isShareExpired: !shareValid,
+    });
+
+    // Normal login must not keep scoped session (US-4.3).
+    if (destination === defaultDestination) {
+      clearSecureShareSession();
+    } else if (share) {
+      saveSecureShareSession(share);
+    }
 
     await new Promise((resolve) => setTimeout(resolve, 900));
     router.push(destination);
@@ -68,7 +137,6 @@ export function LoginForm() {
 
   return (
     <div className="grid h-full min-h-0 w-full grid-cols-1 overflow-hidden lg:grid-cols-2">
-      {/* Desktop brand panel only */}
       <section className="relative hidden min-h-0 flex-col bg-primary text-white lg:flex">
         <div className="flex min-h-0 flex-1 flex-col px-10 py-8 xl:px-16 xl:py-12">
           <div className="flex items-center gap-3">
@@ -98,7 +166,6 @@ export function LoginForm() {
         </div>
       </section>
 
-      {/* Form — this is all that shows on small screens */}
       <section className="flex min-h-0 flex-col overflow-y-auto overscroll-contain bg-white">
         <div className="flex flex-1 items-start justify-center px-4 py-8 sm:items-center sm:px-8 sm:py-10 md:px-10">
           <div className="w-full max-w-[392px]">
@@ -117,6 +184,19 @@ export function LoginForm() {
             <p className="mt-2 font-sans text-sm text-muted sm:mt-2.5 sm:text-[0.9375rem]">
               Enter your credentials to access your secure portal.
             </p>
+
+            {shareBanner ? (
+              <div
+                role="status"
+                className={`mt-4 rounded-lg border px-3.5 py-3 text-sm ${
+                  shareBanner.tone === "error"
+                    ? "border-rose-200 bg-rose-50 text-rose-800"
+                    : "border-sky-200 bg-sky-50 text-sky-900"
+                }`}
+              >
+                {shareBanner.message}
+              </div>
+            ) : null}
 
             <form
               onSubmit={handleSubmit}
@@ -246,5 +326,19 @@ export function LoginForm() {
         </div>
       </section>
     </div>
+  );
+}
+
+export function LoginForm() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full min-h-dvh items-center justify-center bg-white text-sm text-muted">
+          Loading…
+        </div>
+      }
+    >
+      <LoginFormInner />
+    </Suspense>
   );
 }

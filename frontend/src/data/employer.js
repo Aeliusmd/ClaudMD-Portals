@@ -669,6 +669,7 @@ export const employees = [
           {
             id: "ev-009",
             date: "Mar 20, 2026",
+            label: "Annual Physical",
             category: "Physical",
             workStatus: "Full duty",
             disabilityStatus: "None",
@@ -1235,6 +1236,8 @@ export const sharedDocuments = [
     dateValue: "2026-03-21",
     isNew: false,
     documentId: "PHYS-2026-0845",
+    previewLabel: "PT report",
+    previewBadge: "PR",
     url: SAMPLE_DOCUMENT_URL,
   },
   {

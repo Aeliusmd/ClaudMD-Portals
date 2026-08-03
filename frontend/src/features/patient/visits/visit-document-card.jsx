@@ -123,33 +123,35 @@ export function VisitDocumentCard({ doc, onPreview }) {
         }
       }}
       className={cn(
-        "group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-[#e8eaee] bg-white px-3 py-2.5 text-left transition",
+        "group flex w-full cursor-pointer flex-col gap-3 rounded-xl border border-[#e8eaee] bg-white px-3 py-2.5 text-left transition sm:flex-row sm:items-center",
         "hover:border-primary/50 hover:shadow-[0_0_0_1px_rgba(29,120,214,0.12)]",
         "focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
       )}
     >
-      <span className="relative shrink-0 cursor-pointer">
-        <DocumentThumb />
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition duration-150 group-hover:opacity-100">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#374151] shadow-[0_2px_10px_rgba(15,23,42,0.22)] ring-1 ring-black/5">
-            <ZoomIn className="h-4 w-4" strokeWidth={2.25} />
+      <span className="flex min-w-0 items-center gap-3">
+        <span className="relative shrink-0 cursor-pointer">
+          <DocumentThumb />
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition duration-150 group-hover:opacity-100">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#374151] shadow-[0_2px_10px_rgba(15,23,42,0.22)] ring-1 ring-black/5">
+              <ZoomIn className="h-4 w-4" strokeWidth={2.25} />
+            </span>
+          </span>
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-ink transition group-hover:text-primary">
+            {doc.title}
+          </span>
+          <span className="mt-1.5 flex flex-wrap items-center gap-2">
+            <span className="inline-flex rounded-full bg-[#e8f1fb] px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+              {doc.type}
+            </span>
+            <span className="text-xs tabular-nums text-muted">{doc.date}</span>
           </span>
         </span>
       </span>
 
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-ink transition group-hover:text-primary">
-          {doc.title}
-        </span>
-        <span className="mt-1.5 flex flex-wrap items-center gap-2">
-          <span className="inline-flex rounded-full bg-[#e8f1fb] px-2.5 py-0.5 text-[11px] font-semibold text-primary">
-            {doc.type}
-          </span>
-          <span className="text-xs tabular-nums text-muted">{doc.date}</span>
-        </span>
-      </span>
-
-      <span className="flex shrink-0 items-center gap-0.5">
+      <span className="flex shrink-0 items-center gap-0.5 self-end sm:self-auto">
         <ActionButton label="Download" onClick={handleDownload}>
           <Download className="h-4 w-4" />
         </ActionButton>

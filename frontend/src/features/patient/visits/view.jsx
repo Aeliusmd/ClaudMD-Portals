@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
@@ -19,7 +19,7 @@ const VISITS_PAGE_SIZE = 5;
 
 const categoryTabStyles = {
   "Urgent Care": {
-    activeClass: "bg-amber-500 text-white",
+    activeClass: "bg-[#e6912b] text-white",
     idleClass: "bg-amber-100 text-amber-800",
   },
   "Personal Injury": {
@@ -28,7 +28,7 @@ const categoryTabStyles = {
   },
   Injury: {
     activeClass: "bg-orange-500 text-white",
-    idleClass: "bg-orange-100 text-orange-800",
+    idleClass: "bg-[#f3e4dc] text-[#9a3412]",
   },
   Physical: {
     activeClass: "bg-emerald-600 text-white",
@@ -41,6 +41,7 @@ export function PatientVisitsView() {
   const [selectedId, setSelectedId] = useState(null);
   const [showDocument, setShowDocument] = useState(false);
   const [page, setPage] = useState(1);
+  const detailsRef = useRef(null);
 
   const filtered = useMemo(
     () => visits.filter((visit) => visit.category === category),
@@ -62,6 +63,10 @@ export function PatientVisitsView() {
   function handleSelectVisit(id) {
     setSelectedId(id);
     setShowDocument(false);
+    // On small screens the details stack below the list — bring them into view.
+    requestAnimationFrame(() => {
+      detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function handleCloseDetails() {
@@ -80,13 +85,13 @@ export function PatientVisitsView() {
 
   return (
     <div>
-      <PageHeader title="Visit / Check-in History" />
+      <PageHeader title="Visit / Check-in History" className="mb-4 sm:mb-5" />
 
       <Tabs
         tone="category"
         value={category}
         onChange={setCategory}
-        className="mb-5"
+        className="mb-4 sm:mb-5"
         items={visitCategories.map((item) => ({
           id: item,
           label: item,
@@ -94,7 +99,8 @@ export function PatientVisitsView() {
         }))}
       />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:items-start">
+      {/* Mobile: stack list then details; Desktop: side-by-side */}
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_1.1fr] lg:items-start">
         <div>
           <div className="space-y-3">
             {paged.items.map((visit) => (
@@ -118,22 +124,23 @@ export function PatientVisitsView() {
           />
         </div>
 
-        {!selectedVisit ? (
-          <div className="hidden lg:block">
+        <div ref={detailsRef} className="scroll-mt-4">
+          {!selectedVisit ? (
             <EmptyState
               icon={ArrowLeft}
               title="Select a visit to view details"
+              className="min-h-48 border-solid lg:min-h-72"
             />
-          </div>
-        ) : showDocument ? (
-          <VisitDocumentPanel onBack={() => setShowDocument(false)} />
-        ) : (
-          <VisitDetailPanel
-            visit={selectedVisit}
-            onClose={handleCloseDetails}
-            onSelectDocument={handleSelectDocument}
-          />
-        )}
+          ) : showDocument ? (
+            <VisitDocumentPanel onBack={() => setShowDocument(false)} />
+          ) : (
+            <VisitDetailPanel
+              visit={selectedVisit}
+              onClose={handleCloseDetails}
+              onSelectDocument={handleSelectDocument}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

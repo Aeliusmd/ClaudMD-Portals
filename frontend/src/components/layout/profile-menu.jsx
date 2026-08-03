@@ -53,7 +53,7 @@ export function ProfileMenu({
             <UserRound className="h-4 w-4" />
           </span>
         )}
-        <span className="hidden min-w-0 text-left md:block">
+        <span className="hidden min-w-0 text-left sm:block">
           <span className="block truncate text-sm font-semibold text-ink">
             {user.fullName}
           </span>
@@ -62,7 +62,7 @@ export function ProfileMenu({
           </span>
         </span>
         <ChevronDown
-          className={`hidden h-4 w-4 shrink-0 text-[#9ca3af] transition md:block ${
+          className={`hidden h-4 w-4 shrink-0 text-[#9ca3af] transition sm:block ${
             open ? "rotate-180" : ""
           }`}
         />

@@ -22,18 +22,18 @@ export function ResetPasswordForm() {
   }
 
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-y-auto bg-[#fcf8f1] px-6 py-10">
+    <div className="flex h-full w-full items-center justify-center overflow-y-auto overscroll-contain bg-[#fcf8f1] px-4 py-8 sm:px-6 sm:py-10">
       <div className="w-full max-w-[24.5rem] text-center">
-        <div className="mb-9 flex items-center justify-center gap-3">
+        <div className="mb-7 flex items-center justify-center gap-3 sm:mb-9">
           <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#1d78d6] text-white">
             <HeartPulse className="h-5 w-5" strokeWidth={2.25} />
           </div>
-          <span className="font-display text-[1.7rem] font-bold tracking-[-0.02em] text-[#111]">
+          <span className="font-display text-2xl font-bold tracking-[-0.02em] text-[#111] sm:text-[1.7rem]">
             ClaudMD
           </span>
         </div>
 
-        <h1 className="font-display text-[2.45rem] leading-[1.15] font-bold text-[#111]">
+        <h1 className="font-display text-[2rem] leading-[1.15] font-bold text-[#111] sm:text-[2.45rem]">
           Reset Password
         </h1>
         <p className="mt-3 font-sans text-[0.95rem] font-normal text-[#8a8f98]">

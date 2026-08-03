@@ -11,16 +11,16 @@ import { cn } from "@/lib/utils";
 
 function SummaryTile({ title, value, detail, icon: Icon }) {
   return (
-    <Card className="p-5 sm:p-6">
+    <Card className="p-4 sm:p-5 md:p-6">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-ink">{title}</p>
-          <p className="mt-2 font-sans text-3xl font-semibold tracking-tight text-ink tabular-nums sm:text-[2rem]">
+          <p className="mt-2 font-sans text-2xl font-semibold tracking-tight text-ink tabular-nums sm:text-3xl md:text-[2rem]">
             {value}
           </p>
-          <p className="mt-1.5 text-sm text-muted">{detail}</p>
+          <p className="mt-1.5 text-xs text-muted sm:text-sm">{detail}</p>
         </div>
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f3ebe1] text-[#8B6D4F]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f3ebe1] text-[#8B6D4F] sm:h-11 sm:w-11">
           <Icon className="h-5 w-5" strokeWidth={1.75} />
         </div>
       </div>
@@ -33,8 +33,8 @@ export function PatientDashboardView() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+      <div className="mb-5 sm:mb-6">
+        <h1 className="font-display text-[1.75rem] font-semibold tracking-tight text-ink sm:text-3xl md:text-4xl">
           Welcome, {currentPatient.fullName}
         </h1>
         <p className="mt-1.5 text-sm text-muted sm:text-[0.95rem]">
@@ -42,7 +42,8 @@ export function PatientDashboardView() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {/* Mobile: 2-col (third wraps under first); xl: 3-col */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
         <SummaryTile
           title="Upcoming Appointment"
           value={upcomingAppointment.date}
@@ -63,7 +64,7 @@ export function PatientDashboardView() {
         />
       </div>
 
-      <section className="mt-8">
+      <Card className="mt-6 p-4 sm:mt-8 sm:p-5 md:p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-ink sm:text-xl">
@@ -81,19 +82,14 @@ export function PatientDashboardView() {
           </Link>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
           {recentVisits.map((visit) => (
-            <Card key={visit.id} className="p-5">
+            <div
+              key={visit.id}
+              className="rounded-2xl bg-[#f2ede4] px-4 py-4"
+            >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm text-muted">{visit.date}</p>
-                  <p className="mt-1.5 text-base font-semibold text-ink">
-                    {visit.location}
-                  </p>
-                  <p className="mt-1 text-sm text-muted">
-                    {visit.category} · {visit.provider}
-                  </p>
-                </div>
+                <p className="text-sm text-muted">{visit.date}</p>
                 <Badge
                   className={cn(
                     "shrink-0",
@@ -104,10 +100,16 @@ export function PatientDashboardView() {
                   {visit.status}
                 </Badge>
               </div>
-            </Card>
+              <p className="mt-2 text-base font-semibold text-ink">
+                {visit.location}
+              </p>
+              <p className="mt-1 text-sm text-muted">
+                {visit.category} · {visit.provider}
+              </p>
+            </div>
           ))}
         </div>
-      </section>
+      </Card>
     </div>
   );
 }

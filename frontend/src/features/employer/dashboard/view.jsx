@@ -7,12 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { DateRangeInput } from "@/components/ui/date-range-input";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Pagination, paginateItems } from "@/components/ui/pagination";
+import { PAGE_SIZE, Pagination, paginateItems } from "@/components/ui/pagination";
 import { CreateAppointmentModal } from "@/features/employer/dashboard/create-appointment-modal";
 import {
   EMPLOYER_DEMO_TODAY,
   employerDashboardSummary,
-  employees,
+  employees as employeeRecords,
   recentActivity,
   upcomingEmployerAppointments,
 } from "@/data/employer";
@@ -22,8 +22,6 @@ import {
   workStatusStyles,
 } from "@/lib/category-styles";
 import { cn } from "@/lib/utils";
-
-const EMPLOYEES_PAGE_SIZE = 5;
 
 function daysAgoIso(todayIso, days) {
   const date = new Date(`${todayIso}T12:00:00`);
@@ -56,7 +54,8 @@ export function EmployerDashboardView() {
   const [query, setQuery] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [page, setPage] = useState(1);
+  const [employeePage, setEmployeePage] = useState(1);
+  const [appointmentPage, setAppointmentPage] = useState(1);
   const [appointments, setAppointments] = useState(
     upcomingEmployerAppointments
   );
@@ -79,7 +78,6 @@ export function EmployerDashboardView() {
     setActiveFilter((prev) => {
       const next = prev === filter ? null : filter;
       if (next === "drugScreens") {
-        // Keep drug-screen demo row (Robert, May) visible; not in the Jul window.
         setFromDate("");
         setToDate("");
       } else if (next) {
@@ -88,10 +86,10 @@ export function EmployerDashboardView() {
       }
       return next;
     });
-    setPage(1);
+    setEmployeePage(1);
   }
 
-  const employees = useMemo(() => {
+  const filteredEmployees = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     const effectiveFrom = fromDate || null;
     const effectiveTo = toDate || null;
@@ -106,7 +104,6 @@ export function EmployerDashboardView() {
       }
       if (activeFilter === "drugScreens" && !row.isDrugScreen) return false;
       if (activeFilter === "unreadReports") {
-        // Match KPI “4” as employees that still have unread shared reports
         if (!(row.unreadReportCount > 0)) return false;
       }
       if (activeFilter === "appointments") {
@@ -128,10 +125,23 @@ export function EmployerDashboardView() {
   }, [activeFilter, appointments, fromDate, query, toDate]);
 
   useEffect(() => {
-    setPage(1);
+    setEmployeePage(1);
   }, [activeFilter, fromDate, toDate, query]);
 
-  const paged = paginateItems(employees, page, EMPLOYEES_PAGE_SIZE);
+  useEffect(() => {
+    setAppointmentPage(1);
+  }, [appointments.length]);
+
+  const pagedEmployees = paginateItems(
+    filteredEmployees,
+    employeePage,
+    PAGE_SIZE
+  );
+  const pagedAppointments = paginateItems(
+    appointments,
+    appointmentPage,
+    PAGE_SIZE
+  );
 
   function handleCreateAppointment(appointment) {
     setAppointments((prev) => [appointment, ...prev]);
@@ -139,19 +149,34 @@ export function EmployerDashboardView() {
     setActiveFilter("appointments");
     setFromDate(last30From);
     setToDate(EMPLOYER_DEMO_TODAY);
-    setPage(1);
+    setEmployeePage(1);
+    setAppointmentPage(1);
+  }
+
+  function openEmployeeDetail(row) {
+    const employee = employeeRecords.find((item) => item.id === row.employeeId);
+    const code = employee?.patientId || employee?.id || row.employeeId;
+    router.push(
+      `/employer/employee-search?employee=${encodeURIComponent(code)}`
+    );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
         Last 30 Days
       </h1>
 
       <div className="overflow-hidden rounded-2xl bg-navy text-white shadow-sm">
-        <div className="grid grid-cols-2 divide-y divide-white/10 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
-          {kpiItems.map((item) => {
+        <div className="grid grid-cols-3 lg:grid-cols-5">
+          {kpiItems.map((item, index) => {
             const active = activeFilter === item.filter;
+            // Mobile/tablet: 3-col grid → row1 Injury/Physicals/Drug, row2 Appts/Unread/(empty)
+            // Desktop: single row of 5
+            const isTopRowMobile = index < 3;
+            const isNotLastInRowMobile = index % 3 !== 2;
+            const isNotLastDesktop = index < kpiItems.length - 1;
+
             return (
               <button
                 key={item.key}
@@ -164,15 +189,18 @@ export function EmployerDashboardView() {
                   handleKpiClick(item.filter, false);
                 }}
                 className={cn(
-                  "relative cursor-pointer px-5 py-5 text-left transition",
-                  active ? "bg-navy-soft" : "hover:bg-white/5"
+                  "relative cursor-pointer px-3 py-4 text-left transition sm:px-4 sm:py-5 lg:px-5",
+                  active ? "bg-navy-soft" : "hover:bg-white/5",
+                  isTopRowMobile && "border-b border-white/10 lg:border-b-0",
+                  isNotLastInRowMobile && "border-r border-white/10 lg:border-r-0",
+                  isNotLastDesktop && "lg:border-r lg:border-white/10"
                 )}
               >
-                <p className="text-[11px] font-semibold tracking-[0.14em] text-white/70 uppercase">
+                <p className="text-[10px] font-semibold tracking-[0.12em] text-white/70 uppercase sm:text-[11px] sm:tracking-[0.14em]">
                   {item.label}
                 </p>
-                <div className="mt-2 flex items-end gap-2">
-                  <p className="font-sans text-4xl font-semibold tabular-nums leading-none">
+                <div className="mt-2 flex items-end gap-1.5 sm:gap-2">
+                  <p className="font-sans text-[1.75rem] font-semibold tabular-nums leading-none sm:text-4xl">
                     {stats[item.key]}
                   </p>
                   {item.showAdd ? (
@@ -192,7 +220,7 @@ export function EmployerDashboardView() {
                           setShowCreateAppt(true);
                         }
                       }}
-                      className="mb-1 inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-primary text-white ring-2 ring-white/20"
+                      className="mb-0.5 inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-primary text-white ring-2 ring-white/20 sm:mb-1"
                     >
                       <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                     </span>
@@ -204,8 +232,8 @@ export function EmployerDashboardView() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-white p-3 lg:flex-row lg:items-center lg:px-4">
-        <label className="relative block min-w-0 flex-1">
+      <div className="flex flex-col gap-2.5 rounded-2xl border border-border/70 bg-white p-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-4 sm:py-3">
+        <label className="relative block min-w-0 flex-1 sm:min-w-[12rem]">
           <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted" />
           <input
             type="search"
@@ -215,7 +243,7 @@ export function EmployerDashboardView() {
             className="w-full rounded-xl border border-border/80 bg-white py-2.5 pr-4 pl-10 text-sm text-ink outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/15"
           />
         </label>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
           <DateRangeInput
             id="dashboard-from"
             label="From"
@@ -232,14 +260,16 @@ export function EmployerDashboardView() {
         </div>
       </div>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[1.45fr_1fr]">
+      <div className="grid items-start gap-4 sm:gap-5 xl:grid-cols-[1.45fr_1fr]">
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3">
+          <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
             <h2 className="text-lg font-semibold text-ink">Employees</h2>
-            <p className="text-sm text-muted">{employees.length} results</p>
+            <p className="text-sm text-muted">
+              {filteredEmployees.length} results
+            </p>
           </div>
 
-          {employees.length === 0 ? (
+          {filteredEmployees.length === 0 ? (
             <EmptyState
               title="No employees match this filter"
               description="Try another KPI, clear the filter, or adjust the date range."
@@ -251,44 +281,35 @@ export function EmployerDashboardView() {
                 <table className="min-w-[40rem] w-full text-left text-sm">
                   <thead className="border-y border-border/70 bg-cream/50 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
                     <tr>
-                      <th className="px-5 py-3">Employee</th>
-                      <th className="px-5 py-3">Incident #</th>
-                      <th className="px-5 py-3">Category</th>
-                      <th className="px-5 py-3">Last Visit</th>
-                      <th className="px-5 py-3">Work Status</th>
+                      <th className="px-4 py-3 sm:px-5">Employee</th>
+                      <th className="px-4 py-3 sm:px-5">Incident #</th>
+                      <th className="px-4 py-3 sm:px-5">Category</th>
+                      <th className="px-4 py-3 sm:px-5">Last Visit</th>
+                      <th className="px-4 py-3 sm:px-5">Work Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
-                    {paged.items.map((row) => (
+                    {pagedEmployees.items.map((row) => (
                       <tr
                         key={row.id}
                         className="cursor-pointer bg-white transition hover:bg-cream/40"
-                        onClick={() => {
-                          const employee = employees.find(
-                            (item) => item.id === row.employeeId
-                          );
-                          const code =
-                            employee?.patientId ||
-                            employee?.id ||
-                            row.employeeId;
-                          router.push(
-                            `/employer/employee-search?employee=${encodeURIComponent(code)}`
-                          );
-                        }}
+                        onClick={() => openEmployeeDetail(row)}
                       >
-                        <td className="px-5 py-4 font-semibold text-ink">
+                        <td className="px-4 py-3.5 font-semibold text-ink sm:px-5 sm:py-4">
                           {row.employee}
                         </td>
-                        <td className="px-5 py-4 tabular-nums text-muted">
+                        <td className="px-4 py-3.5 tabular-nums text-muted sm:px-5 sm:py-4">
                           {row.incidentNumber}
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-4 py-3.5 sm:px-5 sm:py-4">
                           <Badge className={categoryStyles[row.category]}>
                             {row.category}
                           </Badge>
                         </td>
-                        <td className="px-5 py-4 text-ink">{row.lastVisit}</td>
-                        <td className="px-5 py-4">
+                        <td className="px-4 py-3.5 text-ink sm:px-5 sm:py-4">
+                          {row.lastVisit}
+                        </td>
+                        <td className="px-4 py-3.5 sm:px-5 sm:py-4">
                           <Badge
                             className={
                               workStatusStyles[row.workStatus] ||
@@ -306,19 +327,19 @@ export function EmployerDashboardView() {
 
               <Pagination
                 alwaysShow
-                page={paged.currentPage}
-                totalPages={paged.totalPages}
-                total={paged.total}
-                start={paged.start}
-                end={paged.end}
-                onChange={setPage}
+                page={pagedEmployees.currentPage}
+                totalPages={pagedEmployees.totalPages}
+                total={pagedEmployees.total}
+                start={pagedEmployees.start}
+                end={pagedEmployees.end}
+                onChange={setEmployeePage}
               />
             </>
           )}
         </Card>
 
-        <Card className="flex max-h-[36rem] flex-col overflow-hidden p-0">
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
+        <Card className="flex flex-col overflow-hidden p-0">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/70 px-4 py-4 sm:px-5">
             <h2 className="text-lg font-semibold text-ink">
               Upcoming Appointments
             </h2>
@@ -332,38 +353,62 @@ export function EmployerDashboardView() {
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5">
-            <div className="divide-y divide-border/60">
-              {appointments.map((appt) => (
-                <div key={appt.id} className="py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-ink">{appt.employee}</p>
-                        <Badge className={categoryStyles[appt.category]}>
-                          {appt.category}
-                        </Badge>
+          {pagedAppointments.total === 0 ? (
+            <EmptyState
+              title="No upcoming appointments"
+              description="Use + to schedule a new appointment."
+              className="min-h-48 rounded-none border-0"
+            />
+          ) : (
+            <>
+              <div className="divide-y divide-border/60">
+                {pagedAppointments.items.map((appt) => (
+                  <div
+                    key={appt.id}
+                    className="px-4 py-4 transition hover:bg-cream/40 sm:px-5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-ink">
+                            {appt.employee}
+                          </p>
+                          <Badge className={categoryStyles[appt.category]}>
+                            {appt.category}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-ink">
+                          {appt.visitType || appt.type}
+                        </p>
+                        <p className="mt-1 text-sm text-muted">
+                          {appt.date} · {appt.time}
+                        </p>
                       </div>
-                      <p className="mt-1 text-sm text-ink">
-                        {appt.visitType || appt.type}
-                      </p>
-                      <p className="mt-1 text-sm text-muted">
-                        {appt.date} · {appt.time}
-                      </p>
+                      <Badge
+                        className={cn(
+                          "shrink-0",
+                          appointmentStatusStyles[appt.status] ||
+                            "bg-stone-100 text-stone-600"
+                        )}
+                      >
+                        {appt.status}
+                      </Badge>
                     </div>
-                    <Badge
-                      className={cn(
-                        appointmentStatusStyles[appt.status] ||
-                          "bg-stone-100 text-stone-600"
-                      )}
-                    >
-                      {appt.status}
-                    </Badge>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                ))}
+              </div>
+
+              <Pagination
+                alwaysShow
+                page={pagedAppointments.currentPage}
+                totalPages={pagedAppointments.totalPages}
+                total={pagedAppointments.total}
+                start={pagedAppointments.start}
+                end={pagedAppointments.end}
+                onChange={setAppointmentPage}
+              />
+            </>
+          )}
         </Card>
       </div>
 

@@ -10,7 +10,7 @@ export function VisitDetailPanel({ visit, onClose, onSelectDocument }) {
   if (!visit) return null;
 
   return (
-    <Card className="p-5">
+    <Card className="p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <h2 className="text-lg font-semibold text-ink">Visit Details</h2>
         {onClose ? (
@@ -25,7 +25,7 @@ export function VisitDetailPanel({ visit, onClose, onSelectDocument }) {
         ) : null}
       </div>
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-5 space-y-4 border-b border-border/60 pb-5">
         <Detail label="Visit ID" value={visit.id} />
         <Detail label="Date" value={visit.date} />
         <div>
@@ -47,10 +47,10 @@ export function VisitDetailPanel({ visit, onClose, onSelectDocument }) {
         <Detail label="Follow-up" value={visit.followUp} />
       </div>
 
-      <div className="mt-6">
+      <div className="border-b border-border/60 py-5">
         <div className="flex items-center gap-2">
           <Info className="h-4 w-4 text-amber-500" />
-          <p className="text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
+          <p className="text-[11px] font-semibold tracking-[0.08em] text-[#8B6D4F] uppercase">
             Special Instructions
           </p>
         </div>
@@ -61,7 +61,7 @@ export function VisitDetailPanel({ visit, onClose, onSelectDocument }) {
         </div>
       </div>
 
-      <div className="mt-6">
+      <div className="pt-5">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-primary" />
           <p className="text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">

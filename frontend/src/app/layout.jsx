@@ -1,14 +1,14 @@
-import { Libre_Baskerville, Source_Sans_3 } from "next/font/google";
+import { Outfit, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
-const display = Libre_Baskerville({
-  variable: "--font-libre",
+const heading = Playfair_Display({
+  variable: "--font-heading",
   subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const body = Source_Sans_3({
-  variable: "--font-source",
+const body = Outfit({
+  variable: "--font-body",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
@@ -28,25 +28,25 @@ export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
-      className={`${display.variable} ${body.variable}`}
+      className={`${heading.variable} ${body.variable}`}
       style={{
         margin: 0,
         padding: 0,
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        background: "#0b2a4a",
+        background: "#0e3a6d",
       }}
     >
       <body
-        className="font-sans antialiased"
+        className="font-body antialiased"
         style={{
           margin: 0,
           padding: 0,
           width: "100%",
           height: "100%",
           overflow: "hidden",
-          background: "#0b2a4a",
+          background: "#0e3a6d",
         }}
       >
         <div
@@ -59,7 +59,7 @@ export default function RootLayout({ children }) {
             width: "100%",
             height: "100%",
             overflow: "hidden",
-            background: "#f7f3ea",
+            background: "#fcf8f1",
           }}
         >
           {children}

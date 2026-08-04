@@ -17,6 +17,10 @@ Demo logins (any password):
 - `patient@demo.com` → Patient Portal
 - `employer@demo.com` → Employer Portal
 
+### Theme
+
+Warm cream + brand blue + coral accent (`src/app/globals.css`). Headings: **Playfair Display** (`font-heading` / `font-display`). Body: **Outfit** (`font-body` / `font-sans`). Scales: `primary-*`, `accent-*`, `secondary-*`, `background-*`, `foreground-*` (legacy `bg-primary`, `bg-navy`, `bg-cream`, `text-ink` still work).
+
 ### Secure shared-document email (Epic 4)
 
 Mock ClaudMD share email (not real email):

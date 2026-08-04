@@ -167,7 +167,7 @@ export function EmployerDashboardView() {
         Last 30 Days
       </h1>
 
-      <div className="overflow-hidden rounded-2xl bg-navy text-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl bg-primary-800 text-white shadow-sm">
         <div className="grid grid-cols-3 lg:grid-cols-5">
           {kpiItems.map((item, index) => {
             const active = activeFilter === item.filter;
@@ -190,7 +190,7 @@ export function EmployerDashboardView() {
                 }}
                 className={cn(
                   "relative cursor-pointer px-3 py-4 text-left transition sm:px-4 sm:py-5 lg:px-5",
-                  active ? "bg-navy-soft" : "hover:bg-white/5",
+                  active ? "bg-primary-700" : "hover:bg-white/5",
                   isTopRowMobile && "border-b border-white/10 lg:border-b-0",
                   isNotLastInRowMobile && "border-r border-white/10 lg:border-r-0",
                   isNotLastDesktop && "lg:border-r lg:border-white/10"

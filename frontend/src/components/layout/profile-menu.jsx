@@ -49,7 +49,7 @@ export function ProfileMenu({
             className="h-9 w-9 rounded-full object-cover"
           />
         ) : (
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#dbeafe] text-primary">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-600">
             <UserRound className="h-4 w-4" />
           </span>
         )}

@@ -62,7 +62,7 @@ export function Sidebar({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-full w-[min(20rem,88vw)] flex-col bg-navy text-white transition-transform duration-300 lg:static lg:z-auto lg:h-full lg:w-64 lg:shrink-0 lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex h-full w-[min(20rem,88vw)] flex-col bg-primary-800 text-white transition-transform duration-300 lg:static lg:z-auto lg:h-full lg:w-64 lg:shrink-0 lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
@@ -71,7 +71,7 @@ export function Sidebar({
             <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/75">
               <HeartPulse className="h-4 w-4" strokeWidth={2} />
             </div>
-            <span className="font-display text-xl tracking-tight text-white">
+            <span className="font-heading text-xl tracking-tight text-white">
               ClaudMD
             </span>
           </div>
@@ -98,8 +98,8 @@ export function Sidebar({
                 className={cn(
                   "flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                   active
-                    ? "bg-navy-soft text-white"
-                    : "text-white/75 hover:bg-white/5 hover:text-white"
+                    ? "bg-primary-700 text-white"
+                    : "text-white/75 hover:bg-primary-700/50 hover:text-white"
                 )}
               >
                 {Icon ? <Icon className="h-4 w-4" /> : null}

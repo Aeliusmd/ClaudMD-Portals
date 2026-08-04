@@ -9,13 +9,13 @@ export function ProfileMenuItem({ href, icon: Icon, label, tone = "default", onC
   const className = cn(
     "flex w-full items-center gap-3 px-4 py-2.5 text-left font-sans text-sm font-medium transition",
     isDanger
-      ? "text-[#c23b3b] hover:bg-[#fff1f2]"
-      : "text-[#374151] hover:bg-cream"
+      ? "text-accent-600 hover:bg-accent-50"
+      : "text-foreground-700 hover:bg-background-100"
   );
 
   const content = (
     <>
-      <Icon className={cn("h-4 w-4 shrink-0", isDanger && "text-[#c23b3b]")} />
+      <Icon className={cn("h-4 w-4 shrink-0", isDanger && "text-accent-600")} />
       {label}
     </>
   );

@@ -15,7 +15,6 @@ import {
   clearSecureShareSession,
   getSecureShareSession,
 } from "@/lib/secure-share-session";
-import { cn } from "@/lib/utils";
 
 function formatDob(value) {
   if (!value) return "—";
@@ -120,8 +119,8 @@ export function EmployerScopedSharedDocumentsView() {
         </div>
       </Card>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,1.05fr)]">
-        <div className="space-y-5">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="min-w-0 space-y-5">
           <Card className="p-5">
             <h2 className="mb-4 text-[11px] font-semibold tracking-[0.1em] text-muted uppercase">
               Employee Demographics
@@ -150,7 +149,7 @@ export function EmployerScopedSharedDocumentsView() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className={cn("bg-sky-50")}>
+                  <tr className="border-l-4 border-l-primary-500 bg-primary-50">
                     <td className="px-5 py-3.5 font-semibold tabular-nums text-ink">
                       {visitRow.date}
                     </td>
@@ -162,24 +161,24 @@ export function EmployerScopedSharedDocumentsView() {
           </Card>
         </div>
 
-        <div className="rounded-2xl bg-[#3a342f] p-5 shadow-sm sm:p-6">
-          <div className="mx-auto max-w-xs">
+        <div className="h-fit w-fit max-w-full justify-self-start rounded-2xl bg-foreground-900 p-4 shadow-sm sm:p-5">
+          <div className="w-[8.75rem] sm:w-[9.5rem]">
             <button
               type="button"
               onClick={() => setPreviewDocument(document)}
-              className="flex aspect-[3/4] w-full cursor-pointer flex-col items-center justify-center rounded-xl bg-white shadow-sm transition hover:ring-2 hover:ring-primary/40"
+              className="flex aspect-[3/4] w-full cursor-pointer flex-col items-center justify-center rounded-xl bg-white shadow-sm transition hover:ring-2 hover:ring-primary-400/50"
             >
-              <div className="flex h-14 w-12 flex-col items-center justify-center rounded-md bg-[#f3ebe1] text-[#8B6D4F]">
+              <div className="flex h-14 w-12 flex-col items-center justify-center rounded-md bg-background-100 text-foreground-700">
                 <FileText className="h-5 w-5" />
                 <span className="mt-1 text-[10px] font-bold tracking-wide">
                   {shortLabel}
                 </span>
               </div>
             </button>
-            <p className="mt-3 text-center text-sm font-medium text-white">
+            <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
               {visitRow.date} {previewLabel}
             </p>
-            <div className="mt-2 flex justify-center gap-3">
+            <div className="mt-1.5 flex justify-center gap-2">
               <button
                 type="button"
                 onClick={() => setPreviewDocument(document)}
@@ -195,9 +194,8 @@ export function EmployerScopedSharedDocumentsView() {
                 Download
               </button>
             </div>
-            <p className="mt-4 text-center text-[11px] leading-relaxed text-white/55">
-              {document.documentType} · {document.provider} · Incident{" "}
-              {document.incidentNumber}
+            <p className="mt-3 text-center text-[11px] leading-relaxed text-white/55">
+              {document.documentType} · {document.provider}
             </p>
           </div>
         </div>

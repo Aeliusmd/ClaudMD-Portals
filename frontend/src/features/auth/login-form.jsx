@@ -137,30 +137,30 @@ function LoginFormInner() {
 
   return (
     <div className="grid h-full min-h-0 w-full grid-cols-1 overflow-hidden lg:grid-cols-2">
-      <section className="relative hidden min-h-0 flex-col bg-primary text-white lg:flex">
+      <section className="relative hidden min-h-0 flex-col bg-primary-500 text-white lg:flex">
         <div className="flex min-h-0 flex-1 flex-col px-10 py-8 xl:px-16 xl:py-12">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-white/20">
               <HeartPulse className="h-5 w-5 text-white" strokeWidth={2.25} />
             </div>
-            <span className="font-display text-[1.35rem] font-bold tracking-tight text-white">
+            <span className="font-heading text-[1.35rem] font-bold tracking-tight text-white">
               ClaudMD
             </span>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col justify-center py-8">
             <div className="max-w-md">
-              <h1 className="font-display text-4xl leading-[1.12] font-bold text-white xl:text-[3.1rem]">
+              <h1 className="font-heading text-4xl leading-[1.12] font-bold text-white xl:text-[3.1rem]">
                 Unified Healthcare Portal
               </h1>
-              <p className="mt-5 max-w-[26rem] font-sans text-base leading-[1.65] text-white/90 xl:text-[1.05rem]">
+              <p className="mt-5 max-w-[26rem] font-body text-base leading-[1.65] text-white/90 xl:text-[1.05rem]">
                 Securely access your healthcare information, manage appointments,
                 and review documents all in one place.
               </p>
             </div>
           </div>
 
-          <p className="font-sans text-sm text-white/70">
+          <p className="font-body text-sm text-white/70">
             © 2026 ClaudMD Healthcare Systems
           </p>
         </div>
@@ -170,18 +170,18 @@ function LoginFormInner() {
         <div className="flex flex-1 items-start justify-center px-4 py-8 sm:items-center sm:px-8 sm:py-10 md:px-10">
           <div className="w-full max-w-[392px]">
             <div className="mb-7 flex items-center gap-2.5 sm:mb-8 lg:hidden">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary text-white sm:h-10 sm:w-10">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary-500 text-white sm:h-10 sm:w-10">
                 <HeartPulse className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.25} />
               </div>
-              <span className="font-display text-lg font-bold tracking-tight text-ink sm:text-xl">
+              <span className="font-heading text-lg font-bold tracking-tight text-foreground-900 sm:text-xl">
                 ClaudMD
               </span>
             </div>
 
-            <h2 className="font-display text-[1.85rem] leading-[1.15] font-bold text-ink sm:text-[2.35rem] md:text-[2.5rem]">
+            <h2 className="font-heading text-[1.85rem] leading-[1.15] font-bold text-foreground-900 sm:text-[2.35rem] md:text-[2.5rem]">
               Welcome back
             </h2>
-            <p className="mt-2 font-sans text-sm text-muted sm:mt-2.5 sm:text-[0.9375rem]">
+            <p className="mt-2 font-body text-sm text-foreground-500 sm:mt-2.5 sm:text-[0.9375rem]">
               Enter your credentials to access your secure portal.
             </p>
 
@@ -251,11 +251,11 @@ function LoginFormInner() {
                 />
               </div>
 
-              <div className="rounded-xl bg-[#faf5f0] px-3.5 py-3 sm:px-4 sm:py-3.5">
-                <p className="mb-2 font-sans text-sm font-medium text-[#4a4540]">
+              <div className="rounded-xl bg-background-100 px-3.5 py-3 sm:px-4 sm:py-3.5">
+                <p className="mb-2 font-sans text-sm font-medium text-foreground-700">
                   Demo accounts (use any password):
                 </p>
-                <ul className="space-y-1 font-sans text-sm font-normal text-[#5c5650]">
+                <ul className="space-y-1 font-sans text-sm font-normal text-foreground-700">
                   {DEMO_ACCOUNTS.map((account) => (
                     <li key={account} className="leading-relaxed">
                       • {account}
@@ -267,13 +267,13 @@ function LoginFormInner() {
               {error ? (
                 <div
                   role="alert"
-                  className="flex items-start gap-2.5 rounded-lg border border-[#f1c0c0] bg-[#fdecec] px-3.5 py-3"
+                  className="flex items-start gap-2.5 rounded-lg border border-accent-100 bg-accent-50 px-3.5 py-3"
                 >
                   <Info
-                    className="mt-0.5 h-4 w-4 shrink-0 text-[#c23b3b]"
+                    className="mt-0.5 h-4 w-4 shrink-0 text-accent-600"
                     strokeWidth={2.25}
                   />
-                  <p className="font-sans text-sm font-medium text-[#c23b3b]">
+                  <p className="font-sans text-sm font-medium text-accent-600">
                     {error}
                   </p>
                 </div>
@@ -285,7 +285,7 @@ function LoginFormInner() {
                 className={`inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-3 font-sans text-[0.9375rem] font-semibold text-white transition sm:py-3.5 ${
                   isSigningIn
                     ? "cursor-wait bg-[#5ba3e8]"
-                    : "bg-primary hover:bg-primary-dark"
+                    : "bg-primary-500 hover:bg-primary-600"
                 }`}
               >
                 {isSigningIn ? (

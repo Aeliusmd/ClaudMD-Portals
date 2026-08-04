@@ -1,37 +1,112 @@
 @import "tailwindcss";
 
+/*
+  ClaudMD Portals color system — warm cream + brand blue + coral accent.
+  Shades mirror the ClaudMD OKLCH token roles (documented as approx hex).
+  Legacy aliases (primary, navy, cream, ink, muted) keep existing classNames working.
+*/
+
 :root {
-  --navy: #0b2a4a;
-  --navy-soft: #163a5f;
-  --cream: #f7f3ea;
-  --cream-deep: #efe7d8;
-  --ink: #1c1917;
-  --muted: #8a8f98;
-  --border: #d9dde3;
-  --primary: #1d78d6;
-  --primary-dark: #1666b5;
+  /* Primary — brand blue */
+  --primary-50: #eef6fd;
+  --primary-100: #d9ebfb;
+  --primary-400: #3d94e8;
+  --primary-500: #1779e1;
+  --primary-600: #0961bb;
+  --primary-700: #0b4c92;
+  --primary-800: #0e3a6d;
+
+  /* Accent — coral / coral-red */
+  --accent-50: #fdeceb;
+  --accent-100: #fbd5d3;
+  --accent-500: #e85854;
+  --accent-600: #c74b47;
+  --accent-700: #a33d3a;
+
+  /* Secondary — muted green */
+  --secondary-50: #f0f7f0;
+  --secondary-100: #d5ecd5;
+  --secondary-500: #618d62;
+  --secondary-700: #3f6840;
+
+  /* Background — warm cream / beige */
+  --background-50: #fcf8f1;
+  --background-100: #f6ede0;
+  --background-200: #e9dcc8;
+
+  /* Foreground — warm brown text */
+  --foreground-500: #8a7f6c;
+  --foreground-700: #564c3b;
+  --foreground-900: #201a10;
+
   --white: #ffffff;
-  --label: #2f2a26;
+
+  /* Legacy / semantic aliases used across the app today */
+  --primary: var(--primary-500);
+  --primary-dark: var(--primary-600);
+  --navy: var(--primary-800);
+  --navy-soft: var(--primary-700);
+  --cream: var(--background-50);
+  --cream-deep: var(--background-100);
+  --border: var(--background-200);
+  --ink: var(--foreground-900);
+  --muted: var(--foreground-500);
+  --label: var(--foreground-700);
   --placeholder: #b0b6bf;
-  --demo-bg: #faf5f0;
-  --demo-text: #5c5650;
-  --footer: #9aa0a8;
+  --demo-bg: var(--background-50);
+  --demo-text: var(--foreground-700);
+  --footer: var(--foreground-500);
 }
 
 @theme inline {
-  --color-navy: var(--navy);
-  --color-navy-soft: var(--navy-soft);
-  --color-cream: var(--cream);
-  --color-cream-deep: var(--cream-deep);
-  --color-ink: var(--ink);
-  --color-muted: var(--muted);
-  --color-border: var(--border);
-  --color-primary: var(--primary);
-  --color-primary-dark: var(--primary-dark);
-  --color-background: var(--cream);
-  --color-foreground: var(--ink);
-  --font-sans: var(--font-source);
-  --font-display: var(--font-libre);
+  /* Scaled tokens → bg-primary-500, text-foreground-900, etc. */
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-400: var(--primary-400);
+  --color-primary-500: var(--primary-500);
+  --color-primary-600: var(--primary-600);
+  --color-primary-700: var(--primary-700);
+  --color-primary-800: var(--primary-800);
+
+  --color-accent-50: var(--accent-50);
+  --color-accent-100: var(--accent-100);
+  --color-accent-500: var(--accent-500);
+  --color-accent-600: var(--accent-600);
+  --color-accent-700: var(--accent-700);
+
+  --color-secondary-50: var(--secondary-50);
+  --color-secondary-100: var(--secondary-100);
+  --color-secondary-500: var(--secondary-500);
+  --color-secondary-700: var(--secondary-700);
+
+  --color-background-50: var(--background-50);
+  --color-background-100: var(--background-100);
+  --color-background-200: var(--background-200);
+
+  --color-foreground-500: var(--foreground-500);
+  --color-foreground-700: var(--foreground-700);
+  --color-foreground-900: var(--foreground-900);
+
+  /* Flat aliases used by existing markup */
+  --color-primary: var(--primary-500);
+  --color-primary-dark: var(--primary-600);
+  --color-navy: var(--primary-800);
+  --color-navy-soft: var(--primary-700);
+  --color-cream: var(--background-50);
+  --color-cream-deep: var(--background-100);
+  --color-ink: var(--foreground-900);
+  --color-muted: var(--foreground-500);
+  --color-border: var(--background-200);
+  --color-accent: var(--accent-500);
+  --color-secondary: var(--secondary-500);
+  --color-background: var(--background-50);
+  --color-foreground: var(--foreground-900);
+  --color-white: var(--white);
+
+  --font-sans: var(--font-body);
+  --font-display: var(--font-heading);
+  --font-body: var(--font-body);
+  --font-heading: var(--font-heading);
 }
 
 /* Unlayered so these beat Tailwind @layer base / utilities. */
@@ -47,13 +122,13 @@ body {
 }
 
 html {
-  background: #0b2a4a;
+  background: var(--primary-800);
 }
 
 body {
-  background: #0b2a4a !important;
-  color: var(--ink);
-  font-family: var(--font-source), "Segoe UI", sans-serif;
+  background: var(--primary-800) !important;
+  color: var(--foreground-900);
+  font-family: var(--font-body), "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -65,7 +140,7 @@ body {
   width: 100% !important;
   height: 100% !important;
   overflow: hidden !important;
-  background: var(--cream);
+  background: var(--background-50);
 }
 
 @layer base {
@@ -101,12 +176,14 @@ body {
   }
 }
 
-.font-display {
-  font-family: var(--font-libre), "Times New Roman", Times, serif;
+.font-display,
+.font-heading {
+  font-family: var(--font-heading), Georgia, "Times New Roman", serif;
 }
 
-.font-sans {
-  font-family: var(--font-source), "Segoe UI", sans-serif;
+.font-sans,
+.font-body {
+  font-family: var(--font-body), "Segoe UI", sans-serif;
 }
 
 @layer components {

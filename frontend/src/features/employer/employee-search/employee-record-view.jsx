@@ -5,7 +5,6 @@ import { FileText, UserRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import { sharedDocuments } from "@/data/employer";
-import { openDocumentInNewTab } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
 function shortDocLabel(doc) {
@@ -47,11 +46,11 @@ function VisitDocumentThumb({ doc, selectedVisit, onPreview }) {
   const label = shortDocLabel(doc);
 
   return (
-    <div className="w-[8.75rem] shrink-0 sm:w-[9.5rem]">
+    <div className="min-w-0 w-full">
       <button
         type="button"
         onClick={() => onPreview(doc)}
-        className="flex aspect-[3/4] w-full cursor-pointer flex-col items-center justify-center rounded-xl bg-white shadow-sm transition hover:ring-2 hover:ring-primary-400/50"
+        className="flex aspect-[3/4] w-full max-h-72 cursor-pointer flex-col items-center justify-center rounded-xl bg-white shadow-sm transition hover:ring-2 hover:ring-primary-400/50 sm:max-h-80"
       >
         <div className="flex h-14 w-12 flex-col items-center justify-center rounded-md bg-background-100 text-foreground-700">
           <FileText className="h-5 w-5" />
@@ -63,27 +62,15 @@ function VisitDocumentThumb({ doc, selectedVisit, onPreview }) {
       <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
         {docCaption(doc, selectedVisit)}
       </p>
-      <div className="mt-1.5 flex justify-center gap-2">
-        <button
-          type="button"
-          onClick={() => onPreview(doc)}
-          className="cursor-pointer text-xs font-semibold text-white/80 underline-offset-2 hover:text-white hover:underline"
-        >
-          Preview
-        </button>
-        <button
-          type="button"
-          onClick={() => openDocumentInNewTab(doc.url)}
-          className="cursor-pointer text-xs font-semibold text-white/80 underline-offset-2 hover:text-white hover:underline"
-        >
-          Download
-        </button>
-      </div>
     </div>
   );
 }
 
-export function EmployeeRecordView({ employee, onBack }) {
+export function EmployeeRecordView({
+  employee,
+  onBack,
+  backLabel = "← Back to search",
+}) {
   const incident = employee.incidents?.[0];
   const visits = useMemo(() => {
     if (incident?.visits?.length) return incident.visits;
@@ -130,7 +117,7 @@ export function EmployeeRecordView({ employee, onBack }) {
             onClick={onBack}
             className="cursor-pointer text-sm font-semibold text-primary-500 hover:text-primary-600"
           >
-            ← Back to search
+            {backLabel}
           </button>
         ) : null}
       </div>
@@ -151,7 +138,7 @@ export function EmployeeRecordView({ employee, onBack }) {
         </div>
       </Card>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="grid items-start gap-5 xl:grid-cols-2">
         <div className="min-w-0 space-y-5">
           <Card className="p-5">
             <h2 className="mb-4 text-[11px] font-semibold tracking-[0.1em] text-foreground-500 uppercase">
@@ -220,17 +207,17 @@ export function EmployeeRecordView({ employee, onBack }) {
           </Card>
         </div>
 
-        {/* Panel hugs content; up to 3 thumbnails per row when more exist */}
-        <div className="h-fit w-fit max-w-full justify-self-start rounded-2xl bg-foreground-900 p-4 shadow-sm sm:p-5">
+        {/* Right half of screen for visit documents */}
+        <div className="min-h-[18rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[22rem] sm:p-5 xl:min-h-full">
           {visitDocs.length === 0 ? (
-            <div className="flex h-36 w-48 items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">
+            <div className="flex h-full min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">
               No documents for this visit.
             </div>
           ) : (
             <div
               className={cn(
                 "grid gap-4",
-                visitDocs.length === 1 && "grid-cols-1",
+                visitDocs.length === 1 && "mx-auto max-w-[12rem] grid-cols-1",
                 visitDocs.length === 2 && "grid-cols-2",
                 visitDocs.length >= 3 && "grid-cols-2 sm:grid-cols-3"
               )}

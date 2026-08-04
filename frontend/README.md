@@ -31,6 +31,18 @@ Mock ClaudMD share email (not real email):
 
 Also on that page: an **expired link** demo. Normal employer login (no share link) still opens the full portal.
 
+### Environments & subdomains
+
+Hostnames for ClaudMD Portals (patient vs employer) by environment:
+
+| Environment | Patient portal | Employer portal |
+|-------------|----------------|-----------------|
+| Development | `devpatientportal` | `devemployerportal` |
+| QA | `qapatientportal` | `qaemployerportal` |
+| Production | `patientportal` | `employerportal` |
+
+Locally both portals run in one app (`/patient/*` and `/employer/*`). Deployed hosts above should map each subdomain/app to the matching portal experience.
+
 ## Structure
 
 - `src/app/patient/*` and `src/app/employer/*` — App Router URLs (thin `page.jsx` files only)

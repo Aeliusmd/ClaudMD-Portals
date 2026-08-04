@@ -33,6 +33,7 @@ function EmployeeSearchContent() {
   const searchParams = useSearchParams();
   const employeeParam =
     searchParams.get("employee") || searchParams.get("employeeId");
+  const fromParam = searchParams.get("from");
 
   const selectedEmployee = useMemo(
     () => findEmployeeByQuery(employeeParam),
@@ -54,15 +55,27 @@ function EmployeeSearchContent() {
   useEffect(() => {
     // Keep URL clean when an unknown employee code is used
     if (employeeParam && !selectedEmployee) {
-      router.replace("/employer/employee-search");
+      router.replace(
+        fromParam === "dashboard"
+          ? "/employer/dashboard"
+          : "/employer/employee-search"
+      );
     }
-  }, [employeeParam, selectedEmployee, router]);
+  }, [employeeParam, selectedEmployee, router, fromParam]);
 
   if (selectedEmployee) {
+    const backToDashboard = fromParam === "dashboard";
     return (
       <EmployeeRecordView
         employee={selectedEmployee}
-        onBack={() => router.push("/employer/employee-search")}
+        backLabel={backToDashboard ? "← Back to dashboard" : "← Back to search"}
+        onBack={() =>
+          router.push(
+            backToDashboard
+              ? "/employer/dashboard"
+              : "/employer/employee-search"
+          )
+        }
       />
     );
   }

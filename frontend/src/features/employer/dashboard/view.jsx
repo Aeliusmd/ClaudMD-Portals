@@ -157,7 +157,7 @@ export function EmployerDashboardView() {
     const employee = employeeRecords.find((item) => item.id === row.employeeId);
     const code = employee?.patientId || employee?.id || row.employeeId;
     router.push(
-      `/employer/employee-search?employee=${encodeURIComponent(code)}`
+      `/employer/employee-search?employee=${encodeURIComponent(code)}&from=dashboard`
     );
   }
 
@@ -189,19 +189,16 @@ export function EmployerDashboardView() {
                   handleKpiClick(item.filter, false);
                 }}
                 className={cn(
-                  "relative cursor-pointer px-3 py-4 text-left transition sm:px-4 sm:py-5 lg:px-5",
+                  "relative cursor-pointer px-3 py-4 text-center transition sm:px-4 sm:py-5 lg:px-5",
                   active ? "bg-primary-700" : "hover:bg-white/5",
                   isTopRowMobile && "border-b border-white/10 lg:border-b-0",
                   isNotLastInRowMobile && "border-r border-white/10 lg:border-r-0",
                   isNotLastDesktop && "lg:border-r lg:border-white/10"
                 )}
               >
-                <p className="text-[10px] font-semibold tracking-[0.12em] text-white/70 uppercase sm:text-[11px] sm:tracking-[0.14em]">
-                  {item.label}
-                </p>
-                <div className="mt-2 flex items-end gap-1.5 sm:gap-2">
-                  <p className="font-sans text-[1.75rem] font-semibold tabular-nums leading-none sm:text-4xl">
-                    {stats[item.key]}
+                <div className="flex items-center justify-center gap-1.5">
+                  <p className="text-[10px] font-semibold tracking-[0.12em] text-white/70 uppercase sm:text-[11px] sm:tracking-[0.14em]">
+                    {item.label}
                   </p>
                   {item.showAdd ? (
                     <span
@@ -220,12 +217,15 @@ export function EmployerDashboardView() {
                           setShowCreateAppt(true);
                         }
                       }}
-                      className="mb-0.5 inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-primary text-white ring-2 ring-white/20 sm:mb-1"
+                      className="inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary-500 text-white ring-2 ring-white/25"
                     >
                       <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                     </span>
                   ) : null}
                 </div>
+                <p className="mt-3 font-sans text-4xl font-semibold tabular-nums leading-none sm:text-5xl lg:text-[3.25rem]">
+                  {stats[item.key]}
+                </p>
               </button>
             );
           })}

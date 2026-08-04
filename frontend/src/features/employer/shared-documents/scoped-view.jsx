@@ -10,7 +10,6 @@ import {
   findSecureShare,
   isSecureShareExpired,
 } from "@/data/secure-shares";
-import { openDocumentInNewTab } from "@/lib/documents";
 import {
   clearSecureShareSession,
   getSecureShareSession,
@@ -178,22 +177,6 @@ export function EmployerScopedSharedDocumentsView() {
             <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
               {visitRow.date} {previewLabel}
             </p>
-            <div className="mt-1.5 flex justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPreviewDocument(document)}
-                className="cursor-pointer text-xs font-semibold text-white/80 underline-offset-2 hover:text-white hover:underline"
-              >
-                Preview
-              </button>
-              <button
-                type="button"
-                onClick={() => openDocumentInNewTab(document.url)}
-                className="cursor-pointer text-xs font-semibold text-white/80 underline-offset-2 hover:text-white hover:underline"
-              >
-                Download
-              </button>
-            </div>
             <p className="mt-3 text-center text-[11px] leading-relaxed text-white/55">
               {document.documentType} · {document.provider}
             </p>

@@ -14,6 +14,7 @@ import {
   clearSecureShareSession,
   getSecureShareSession,
 } from "@/lib/secure-share-session";
+import { LOGIN_PATH } from "@/lib/auth-routes";
 
 function formatDob(value) {
   if (!value) return "—";
@@ -49,14 +50,14 @@ export function EmployerScopedSharedDocumentsView() {
   useEffect(() => {
     const active = getSecureShareSession();
     if (!active?.token) {
-      router.replace("/login");
+      router.replace(LOGIN_PATH);
       return;
     }
 
     const share = findSecureShare(active.token);
     if (!share || isSecureShareExpired(share)) {
       clearSecureShareSession();
-      router.replace("/login");
+      router.replace(LOGIN_PATH);
       return;
     }
 

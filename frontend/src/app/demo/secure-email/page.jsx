@@ -6,6 +6,7 @@ import {
   DEMO_SECURE_SHARE_TOKEN,
   findSecureShare,
 } from "@/data/secure-shares";
+import { LOGIN_PATH } from "@/lib/auth-routes";
 
 /**
  * Demo-only stand-in for the ClaudMD (main app) secure share email (US-4.1).
@@ -96,7 +97,7 @@ export default function DemoSecureEmailPage() {
 
         <p className="text-sm text-muted">
           After a normal{" "}
-          <Link href="/login" className="font-semibold text-primary">
+          <Link href={LOGIN_PATH} className="font-semibold text-primary">
             employer login
           </Link>{" "}
           (no secure link), the full employer portal remains unchanged.

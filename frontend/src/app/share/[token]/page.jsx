@@ -13,6 +13,7 @@ import {
   getSecureShareLoginHref,
   saveSecureShareSession,
 } from "@/lib/secure-share-session";
+import { LOGIN_PATH } from "@/lib/auth-routes";
 
 export default function SecureShareLandingPage() {
   const params = useParams();
@@ -73,7 +74,7 @@ export default function SecureShareLandingPage() {
               period. Request a new share or sign in to the portal normally.
             </p>
             <Link
-              href="/login"
+              href={LOGIN_PATH}
               className="mt-6 inline-flex cursor-pointer rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
             >
               Go to login
@@ -93,7 +94,7 @@ export default function SecureShareLandingPage() {
               This secure link is invalid or no longer available.
             </p>
             <Link
-              href="/login"
+              href={LOGIN_PATH}
               className="mt-6 inline-flex cursor-pointer rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
             >
               Go to login

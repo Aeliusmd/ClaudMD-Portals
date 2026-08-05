@@ -45,8 +45,10 @@ export function clearSecureShareSession() {
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
+import { getLoginHref } from "@/lib/auth-routes";
+
 export function getSecureShareLoginHref(token) {
-  return `/login?share=${encodeURIComponent(token)}`;
+  return getLoginHref({ share: token });
 }
 
 export function getSecureShareScopedHref() {

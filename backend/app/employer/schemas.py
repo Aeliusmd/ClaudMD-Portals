@@ -11,3 +11,17 @@ class EmployerProfileResponse(BaseModel):
     phone: str | None = None
     organization: str | None = None
     login_id: str | None = None
+
+
+class DashboardSummaryResponse(BaseModel):
+    employerId: int
+    employerName: str | None = None
+    fromDate: str
+    toDate: str
+    last30Days: dict
+
+
+class EmployeeListResponse(BaseModel):
+    employerId: int
+    count: int
+    items: list[dict]

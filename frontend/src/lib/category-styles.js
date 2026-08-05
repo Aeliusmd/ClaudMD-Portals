@@ -3,6 +3,8 @@ export const categoryStyles = {
   "Personal Injury": "bg-rose-50 text-rose-700",
   Injury: "bg-accent-50 text-accent-700",
   Physical: "bg-secondary-100 text-secondary-700",
+  "Drug Screen": "bg-amber-50 text-amber-800",
+  Other: "bg-stone-100 text-stone-600",
 };
 
 export const appointmentStatusStyles = {

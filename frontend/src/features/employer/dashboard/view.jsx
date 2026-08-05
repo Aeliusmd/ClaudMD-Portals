@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -9,13 +9,13 @@ import { DateRangeInput } from "@/components/ui/date-range-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PAGE_SIZE, Pagination, paginateItems } from "@/components/ui/pagination";
 import { CreateAppointmentModal } from "@/features/employer/dashboard/create-appointment-modal";
+import { upcomingEmployerAppointments } from "@/data/employer";
 import {
-  EMPLOYER_DEMO_TODAY,
-  employerDashboardSummary,
-  employees as employeeRecords,
-  recentActivity,
-  upcomingEmployerAppointments,
-} from "@/data/employer";
+  fetchDashboardSummary,
+  fetchEmployerEmployees,
+} from "@/lib/api/employer";
+import { getAccessToken } from "@/lib/auth-session";
+import { LOGIN_PATH } from "@/lib/auth-routes";
 import {
   appointmentStatusStyles,
   categoryStyles,
@@ -23,11 +23,34 @@ import {
 } from "@/lib/category-styles";
 import { cn } from "@/lib/utils";
 
-function daysAgoIso(todayIso, days) {
-  const date = new Date(`${todayIso}T12:00:00`);
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daysAgoIso(today, days) {
+  const date = new Date(`${today}T12:00:00`);
   date.setDate(date.getDate() - days);
   return date.toISOString().slice(0, 10);
 }
+
+function formatVisitLabel(iso) {
+  if (!iso) return "—";
+  const date = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+const emptyStats = {
+  injury: 0,
+  physicals: 0,
+  drugScreens: 0,
+  appointments: 0,
+  unreadReports: 0,
+};
 
 const kpiItems = [
   { key: "injury", label: "Injury", filter: "injury" },
@@ -48,7 +71,8 @@ const kpiItems = [
 
 export function EmployerDashboardView() {
   const router = useRouter();
-  const last30From = daysAgoIso(EMPLOYER_DEMO_TODAY, 30);
+  const today = todayIso();
+  const last30From = daysAgoIso(today, 30);
 
   const [activeFilter, setActiveFilter] = useState(null);
   const [query, setQuery] = useState("");
@@ -59,15 +83,102 @@ export function EmployerDashboardView() {
   const [appointments, setAppointments] = useState(
     upcomingEmployerAppointments
   );
-  const [apptCount, setApptCount] = useState(
-    employerDashboardSummary.last30Days.appointments
-  );
+  const [stats, setStats] = useState(null);
+  const [loadingSummary, setLoadingSummary] = useState(true);
+  const [rangeFrom, setRangeFrom] = useState(last30From);
+  const [rangeTo, setRangeTo] = useState(today);
+  const [employees, setEmployees] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [showCreateAppt, setShowCreateAppt] = useState(false);
 
-  const stats = {
-    ...employerDashboardSummary.last30Days,
-    appointments: apptCount,
-  };
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSummary() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(LOGIN_PATH);
+        return;
+      }
+      setLoadingSummary(true);
+      try {
+        const summary = await fetchDashboardSummary(token);
+        if (cancelled) return;
+        setStats({ ...emptyStats, ...summary.last30Days });
+        setRangeFrom(summary.fromDate || last30From);
+        setRangeTo(summary.toDate || today);
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(LOGIN_PATH);
+          return;
+        }
+        setLoadError(err?.message || "Unable to load dashboard.");
+        setStats(emptyStats);
+      } finally {
+        if (!cancelled) setLoadingSummary(false);
+      }
+    }
+
+    loadSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [last30From, router, today]);
+
+  const loadEmployees = useCallback(async () => {
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(LOGIN_PATH);
+      return;
+    }
+
+    const effectiveFrom = fromDate || rangeFrom;
+    const effectiveTo = toDate || rangeTo;
+    const category =
+      activeFilter === "injury" ||
+      activeFilter === "physicals" ||
+      activeFilter === "drugScreens"
+        ? activeFilter
+        : null;
+
+    setLoadingEmployees(true);
+    setLoadError(null);
+    try {
+      const result = await fetchEmployerEmployees(token, {
+        from: effectiveFrom,
+        to: effectiveTo,
+        category,
+        search: query.trim() || undefined,
+      });
+      setEmployees(result.items);
+    } catch (err) {
+      if (err?.status === 401) {
+        router.replace(LOGIN_PATH);
+        return;
+      }
+      setLoadError(err?.message || "Unable to load employees.");
+      setEmployees([]);
+    } finally {
+      setLoadingEmployees(false);
+    }
+  }, [
+    activeFilter,
+    fromDate,
+    query,
+    rangeFrom,
+    rangeTo,
+    router,
+    toDate,
+  ]);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      loadEmployees();
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [loadEmployees]);
 
   function handleKpiClick(filter, openCreate = false) {
     if (openCreate) {
@@ -77,12 +188,12 @@ export function EmployerDashboardView() {
 
     setActiveFilter((prev) => {
       const next = prev === filter ? null : filter;
-      if (next === "drugScreens") {
-        setFromDate("");
-        setToDate("");
+      if (next === "drugScreens" || next === "injury" || next === "physicals") {
+        setFromDate(rangeFrom);
+        setToDate(rangeTo);
       } else if (next) {
-        setFromDate(last30From);
-        setToDate(EMPLOYER_DEMO_TODAY);
+        setFromDate(rangeFrom);
+        setToDate(rangeTo);
       }
       return next;
     });
@@ -90,43 +201,24 @@ export function EmployerDashboardView() {
   }
 
   const filteredEmployees = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    const effectiveFrom = fromDate || null;
-    const effectiveTo = toDate || null;
-
-    return recentActivity.filter((row) => {
-      if (effectiveFrom && row.lastVisitValue < effectiveFrom) return false;
-      if (effectiveTo && row.lastVisitValue > effectiveTo) return false;
-
-      if (activeFilter === "injury" && row.category !== "Injury") return false;
-      if (activeFilter === "physicals" && row.category !== "Physical") {
-        return false;
-      }
-      if (activeFilter === "drugScreens" && !row.isDrugScreen) return false;
-      if (activeFilter === "unreadReports") {
-        if (!(row.unreadReportCount > 0)) return false;
-      }
-      if (activeFilter === "appointments") {
-        const hasAppt = appointments.some(
+    if (activeFilter === "unreadReports") {
+      return employees.filter((row) => (row.unreadReportCount || 0) > 0);
+    }
+    if (activeFilter === "appointments") {
+      return employees.filter((row) =>
+        appointments.some(
           (appt) =>
             appt.employeeId === row.employeeId ||
             appt.employee === row.employee
-        );
-        if (!hasAppt) return false;
-      }
-
-      if (normalized) {
-        const haystack = `${row.employee} ${row.incidentNumber}`.toLowerCase();
-        if (!haystack.includes(normalized)) return false;
-      }
-
-      return true;
-    });
-  }, [activeFilter, appointments, fromDate, query, toDate]);
+        )
+      );
+    }
+    return employees;
+  }, [activeFilter, appointments, employees]);
 
   useEffect(() => {
     setEmployeePage(1);
-  }, [activeFilter, fromDate, toDate, query]);
+  }, [activeFilter, fromDate, toDate, query, employees]);
 
   useEffect(() => {
     setAppointmentPage(1);
@@ -145,17 +237,19 @@ export function EmployerDashboardView() {
 
   function handleCreateAppointment(appointment) {
     setAppointments((prev) => [appointment, ...prev]);
-    setApptCount((prev) => prev + 1);
+    setStats((prev) => ({
+      ...(prev || emptyStats),
+      appointments: ((prev && prev.appointments) || 0) + 1,
+    }));
     setActiveFilter("appointments");
-    setFromDate(last30From);
-    setToDate(EMPLOYER_DEMO_TODAY);
+    setFromDate(rangeFrom);
+    setToDate(rangeTo);
     setEmployeePage(1);
     setAppointmentPage(1);
   }
 
   function openEmployeeDetail(row) {
-    const employee = employeeRecords.find((item) => item.id === row.employeeId);
-    const code = employee?.patientId || employee?.id || row.employeeId;
+    const code = row.patientId || row.employeeId;
     router.push(
       `/employer/employee-search?employee=${encodeURIComponent(code)}&from=dashboard`
     );
@@ -171,8 +265,6 @@ export function EmployerDashboardView() {
         <div className="grid grid-cols-3 lg:grid-cols-5">
           {kpiItems.map((item, index) => {
             const active = activeFilter === item.filter;
-            // Mobile/tablet: 3-col grid → row1 Injury/Physicals/Drug, row2 Appts/Unread/(empty)
-            // Desktop: single row of 5
             const isTopRowMobile = index < 3;
             const isNotLastInRowMobile = index % 3 !== 2;
             const isNotLastDesktop = index < kpiItems.length - 1;
@@ -181,7 +273,9 @@ export function EmployerDashboardView() {
               <button
                 key={item.key}
                 type="button"
+                disabled={loadingSummary}
                 onClick={(event) => {
+                  if (loadingSummary) return;
                   if (item.showAdd && event.target.closest("[data-kpi-add]")) {
                     handleKpiClick(item.filter, true);
                     return;
@@ -190,6 +284,7 @@ export function EmployerDashboardView() {
                 }}
                 className={cn(
                   "relative cursor-pointer px-3 py-4 text-center transition sm:px-4 sm:py-5 lg:px-5",
+                  loadingSummary && "cursor-wait",
                   active ? "bg-primary-700" : "hover:bg-white/5",
                   isTopRowMobile && "border-b border-white/10 lg:border-b-0",
                   isNotLastInRowMobile && "border-r border-white/10 lg:border-r-0",
@@ -223,9 +318,16 @@ export function EmployerDashboardView() {
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-3 font-sans text-4xl font-semibold tabular-nums leading-none sm:text-5xl lg:text-[3.25rem]">
-                  {stats[item.key]}
-                </p>
+                {loadingSummary || !stats ? (
+                  <div
+                    aria-hidden
+                    className="mx-auto mt-3 h-10 w-12 animate-pulse rounded-md bg-white/25 sm:h-12 sm:w-14"
+                  />
+                ) : (
+                  <p className="mt-3 font-sans text-4xl font-semibold tabular-nums leading-none sm:text-5xl lg:text-[3.25rem]">
+                    {stats[item.key] ?? 0}
+                  </p>
+                )}
               </button>
             );
           })}
@@ -260,19 +362,33 @@ export function EmployerDashboardView() {
         </div>
       </div>
 
+      {loadError ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {loadError}
+        </p>
+      ) : null}
+
       <div className="grid items-start gap-4 sm:gap-5 xl:grid-cols-[1.45fr_1fr]">
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
             <h2 className="text-lg font-semibold text-ink">Employees</h2>
             <p className="text-sm text-muted">
-              {filteredEmployees.length} results
+              {loadingEmployees
+                ? "Loading…"
+                : `${filteredEmployees.length} results`}
             </p>
           </div>
 
-          {filteredEmployees.length === 0 ? (
+          {!loadingEmployees && filteredEmployees.length === 0 ? (
             <EmptyState
               title="No employees match this filter"
               description="Try another KPI, clear the filter, or adjust the date range."
+              className="min-h-64 rounded-none border-0"
+            />
+          ) : loadingEmployees ? (
+            <EmptyState
+              title="Loading employees"
+              description="Fetching unique patients from clinic check-ins."
               className="min-h-64 rounded-none border-0"
             />
           ) : (
@@ -302,12 +418,17 @@ export function EmployerDashboardView() {
                           {row.incidentNumber}
                         </td>
                         <td className="px-4 py-3.5 sm:px-5 sm:py-4">
-                          <Badge className={categoryStyles[row.category]}>
+                          <Badge
+                            className={
+                              categoryStyles[row.category] ||
+                              "bg-stone-100 text-stone-600"
+                            }
+                          >
                             {row.category}
                           </Badge>
                         </td>
                         <td className="px-4 py-3.5 text-ink sm:px-5 sm:py-4">
-                          {row.lastVisit}
+                          {formatVisitLabel(row.lastVisitValue || row.lastVisit)}
                         </td>
                         <td className="px-4 py-3.5 sm:px-5 sm:py-4">
                           <Badge

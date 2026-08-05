@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 export function SearchInput({
   value,
   onChange,
+  onKeyDown,
   placeholder,
   ariaLabel = "Search",
   className,
@@ -22,6 +23,7 @@ export function SearchInput({
         type="search"
         value={value}
         onChange={onChange}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         className="h-[3.15rem] w-full rounded-2xl border border-border bg-white py-3 pr-11 pl-11 text-sm text-ink outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20"
       />

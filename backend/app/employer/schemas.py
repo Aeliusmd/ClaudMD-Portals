@@ -10,7 +10,10 @@ class EmployerProfileResponse(BaseModel):
     email: str | None = None
     phone: str | None = None
     organization: str | None = None
+    address: str | None = None
     login_id: str | None = None
+    type_id: int | None = None
+    type_label: str | None = None
 
 
 class DashboardSummaryResponse(BaseModel):

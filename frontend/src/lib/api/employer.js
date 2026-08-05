@@ -39,14 +39,18 @@ export async function fetchEmployerProfile(accessToken) {
 
   return {
     fullName: data.full_name,
-    title: data.title || "Employer Contact",
-    role: "Employer",
-    email: data.email,
-    phone: data.phone,
-    organization: data.organization,
+    title: data.title || "",
+    role: data.type_label || null,
+    jobTitle: data.title || null,
+    email: data.email || "",
+    phone: data.phone || "",
+    organization: data.organization || "",
+    address: data.address || "",
     employerId: data.employer_id,
     userId: data.user_id,
     loginId: data.login_id,
+    typeId: data.type_id,
+    typeLabel: data.type_label,
   };
 }
 

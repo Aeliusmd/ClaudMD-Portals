@@ -1,17 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Lock, Shield, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonBlock } from "@/components/ui/skeleton";
 import { ToggleRow } from "@/components/ui/toggle-row";
 import {
-  currentEmployer,
   employerAccessLevels,
   employerOrgUsers,
   employerPermissionAuditSeed,
 } from "@/data/employer";
+import { useEmployerProfile } from "@/hooks/use-employer-profile";
 import { cn } from "@/lib/utils";
 
 const profileTabs = [
@@ -59,6 +60,7 @@ function Field({
   error,
   placeholder,
   autoComplete,
+  readOnly = false,
 }) {
   return (
     <label className="block space-y-1.5" htmlFor={id}>
@@ -71,10 +73,12 @@ function Field({
         value={value}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        onChange={(event) => onChange(event.target.value)}
+        readOnly={readOnly}
+        onChange={(event) => onChange?.(event.target.value)}
         className={cn(
           "w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm font-medium text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15",
-          error ? "border-rose-300" : "border-border/80"
+          error ? "border-rose-300" : "border-border/80",
+          readOnly && "cursor-default bg-cream/60 text-foreground-700"
         )}
       />
       {error ? (
@@ -101,6 +105,25 @@ function StatusBanner({ tone = "success", children }) {
   );
 }
 
+function ProfileInfoSkeleton() {
+  return (
+    <Card className="p-5 sm:p-6" aria-busy="true" aria-label="Loading profile">
+      <SkeletonBlock className="mb-5 h-6 w-48" />
+      <div className="grid gap-4 md:grid-cols-2">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div
+            key={index}
+            className={cn("space-y-2", index >= 4 && "md:col-span-2")}
+          >
+            <SkeletonBlock className="h-3 w-20" />
+            <SkeletonBlock className="h-10 w-full" />
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function formatNow() {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -114,18 +137,13 @@ function formatNow() {
 function validateProfile(profile) {
   const errors = {};
   if (!profile.fullName.trim()) errors.fullName = "Full name is required.";
-  if (!profile.title.trim()) errors.title = "Title is required.";
-  if (!EMAIL_PATTERN.test(profile.email.trim())) {
+  if (profile.email.trim() && !EMAIL_PATTERN.test(profile.email.trim())) {
     errors.email = "Enter a valid email address.";
   }
   const digits = profile.phone.replace(/\D/g, "");
-  if (digits.length < PHONE_DIGITS_MIN) {
+  if (profile.phone.trim() && digits.length < PHONE_DIGITS_MIN) {
     errors.phone = "Enter a valid phone number (at least 10 digits).";
   }
-  if (!profile.organization.trim()) {
-    errors.organization = "Organization is required.";
-  }
-  if (!profile.address.trim()) errors.address = "Address is required.";
   return errors;
 }
 
@@ -151,19 +169,28 @@ function validatePassword(form) {
 }
 
 export function EmployerProfileView() {
+  const {
+    profile: liveProfile,
+    loading: profileLoading,
+    error: profileLoadError,
+  } = useEmployerProfile();
+
   const [tab, setTab] = useState("profile");
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   const [profile, setProfile] = useState({
-    fullName: currentEmployer.fullName,
-    title: currentEmployer.title,
-    email: currentEmployer.email,
-    phone: currentEmployer.phone,
-    organization: currentEmployer.organization,
-    address: currentEmployer.address,
+    fullName: "",
+    title: "",
+    userType: "",
+    email: "",
+    phone: "",
+    organization: "",
+    address: "",
+    loginId: "",
   });
   const [profileErrors, setProfileErrors] = useState({});
+  const [hydrated, setHydrated] = useState(false);
 
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -175,6 +202,27 @@ export function EmployerProfileView() {
 
   const [orgUsers, setOrgUsers] = useState(employerOrgUsers);
   const [auditLog, setAuditLog] = useState(employerPermissionAuditSeed);
+
+  useEffect(() => {
+    if (!liveProfile) return;
+    setProfile({
+      fullName: liveProfile.fullName || "",
+      title: liveProfile.jobTitle || liveProfile.title || "",
+      userType: liveProfile.typeLabel || "",
+      email: liveProfile.email || "",
+      phone: liveProfile.phone || "",
+      organization: liveProfile.organization || "",
+      address: liveProfile.address || "",
+      loginId: liveProfile.loginId || "",
+    });
+    setHydrated(true);
+  }, [liveProfile]);
+
+  useEffect(() => {
+    if (profileLoadError) {
+      setErrorMessage(profileLoadError);
+    }
+  }, [profileLoadError]);
 
   const activeUsers = useMemo(
     () => orgUsers.filter((user) => user.active),
@@ -195,7 +243,7 @@ export function EmployerProfileView() {
       {
         id: `pal-${Date.now()}`,
         at: formatNow(),
-        actor: profile.fullName || currentEmployer.fullName,
+        actor: profile.fullName || "User",
         action,
         detail,
       },
@@ -222,7 +270,7 @@ export function EmployerProfileView() {
       setErrorMessage("Please fix the highlighted fields before saving.");
       return;
     }
-    setMessage("Organization profile updated successfully.");
+    setMessage("Profile details saved locally. Backend update is not enabled yet.");
   }
 
   function handleUpdatePassword() {
@@ -290,6 +338,8 @@ export function EmployerProfileView() {
     setTab(nextTab);
   }
 
+  const showProfileSkeleton = profileLoading && !hydrated;
+
   return (
     <div>
       <PageHeader title="Profile / Security" className="mb-5" />
@@ -299,68 +349,86 @@ export function EmployerProfileView() {
       <StatusBanner tone="error">{errorMessage}</StatusBanner>
 
       {tab === "profile" ? (
-        <Card className="p-5 sm:p-6">
-          <h2 className="mb-5 text-lg font-semibold text-ink">
-            Organization Profile
-          </h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field
-              id="employer-full-name"
-              label="Full Name"
-              value={profile.fullName}
-              onChange={(value) => updateProfileField("fullName", value)}
-              error={profileErrors.fullName}
-              autoComplete="name"
-            />
-            <Field
-              id="employer-title"
-              label="Title"
-              value={profile.title}
-              onChange={(value) => updateProfileField("title", value)}
-              error={profileErrors.title}
-            />
-            <Field
-              id="employer-email"
-              label="Email"
-              type="email"
-              value={profile.email}
-              onChange={(value) => updateProfileField("email", value)}
-              error={profileErrors.email}
-              autoComplete="email"
-            />
-            <Field
-              id="employer-phone"
-              label="Phone"
-              type="tel"
-              value={profile.phone}
-              onChange={(value) => updateProfileField("phone", value)}
-              error={profileErrors.phone}
-              autoComplete="tel"
-            />
-            <div className="md:col-span-2">
+        showProfileSkeleton ? (
+          <ProfileInfoSkeleton />
+        ) : (
+          <Card className="p-5 sm:p-6">
+            <h2 className="mb-5 text-lg font-semibold text-ink">
+              Profile Info
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2">
               <Field
-                id="employer-organization"
-                label="Organization"
-                value={profile.organization}
-                onChange={(value) => updateProfileField("organization", value)}
-                error={profileErrors.organization}
+                id="employer-full-name"
+                label="Full Name"
+                value={profile.fullName}
+                onChange={(value) => updateProfileField("fullName", value)}
+                error={profileErrors.fullName}
+                autoComplete="name"
               />
-            </div>
-            <div className="md:col-span-2">
               <Field
-                id="employer-address"
-                label="Address"
-                value={profile.address}
-                onChange={(value) => updateProfileField("address", value)}
-                error={profileErrors.address}
-                autoComplete="street-address"
+                id="employer-user-type"
+                label="User Type"
+                value={profile.userType || "—"}
+                readOnly
               />
+              <Field
+                id="employer-title"
+                label="Title"
+                value={profile.title}
+                onChange={(value) => updateProfileField("title", value)}
+                error={profileErrors.title}
+                placeholder="Job title (optional)"
+              />
+              <Field
+                id="employer-login-id"
+                label="Login ID"
+                value={profile.loginId || "—"}
+                readOnly
+              />
+              <Field
+                id="employer-email"
+                label="Email"
+                type="email"
+                value={profile.email}
+                onChange={(value) => updateProfileField("email", value)}
+                error={profileErrors.email}
+                autoComplete="email"
+              />
+              <Field
+                id="employer-phone"
+                label="Phone"
+                type="tel"
+                value={profile.phone}
+                onChange={(value) => updateProfileField("phone", value)}
+                error={profileErrors.phone}
+                autoComplete="tel"
+              />
+              <div className="md:col-span-2">
+                <Field
+                  id="employer-organization"
+                  label="Organization"
+                  value={profile.organization}
+                  onChange={(value) => updateProfileField("organization", value)}
+                  error={profileErrors.organization}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Field
+                  id="employer-address"
+                  label="Address"
+                  value={profile.address}
+                  onChange={(value) => updateProfileField("address", value)}
+                  error={profileErrors.address}
+                  autoComplete="street-address"
+                  placeholder="Organization address"
+                />
+              </div>
             </div>
-          </div>
-          <Button className="mt-6" onClick={handleSaveProfile}>
-            Save Changes
-          </Button>
-        </Card>
+            <Button className="mt-6" onClick={handleSaveProfile}>
+              Save Changes
+            </Button>
+          </Card>
+        )
       ) : null}
 
       {tab === "security" ? (
@@ -537,8 +605,10 @@ export function EmployerProfileView() {
                 Revoked:{" "}
                 <span className="font-semibold">{revokedUsers.length}</span>
                 {" · "}
-                Account ID:{" "}
-                <span className="font-semibold">{currentEmployer.accountId}</span>
+                Employer ID:{" "}
+                <span className="font-semibold">
+                  {liveProfile?.employerId ?? "—"}
+                </span>
               </p>
             </div>
           </Card>

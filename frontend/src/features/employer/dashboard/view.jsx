@@ -16,6 +16,9 @@ import {
   recentActivity,
   upcomingEmployerAppointments,
 } from "@/data/employer";
+import { fetchEmployerDashboardSummary } from "@/lib/api/employer";
+import { getAccessToken } from "@/lib/auth-session";
+import { LOGIN_PATH } from "@/lib/auth-routes";
 import {
   appointmentStatusStyles,
   categoryStyles,
@@ -62,10 +65,48 @@ export function EmployerDashboardView() {
   const [apptCount, setApptCount] = useState(
     employerDashboardSummary.last30Days.appointments
   );
+  const [summaryCounts, setSummaryCounts] = useState({
+    injury: employerDashboardSummary.last30Days.injury,
+    physicals: employerDashboardSummary.last30Days.physicals,
+    drugScreens: employerDashboardSummary.last30Days.drugScreens,
+  });
   const [showCreateAppt, setShowCreateAppt] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSummary() {
+      const token = getAccessToken();
+      if (!token) return;
+
+      try {
+        const data = await fetchEmployerDashboardSummary(token);
+        if (!cancelled) {
+          setSummaryCounts({
+            injury: data.injury,
+            physicals: data.physicals,
+            drugScreens: data.drugScreens,
+          });
+        }
+      } catch (err) {
+        if (!cancelled && err?.status === 401) {
+          router.replace(LOGIN_PATH);
+        }
+      }
+    }
+
+    loadSummary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   const stats = {
-    ...employerDashboardSummary.last30Days,
+    injury: summaryCounts.injury,
+    physicals: summaryCounts.physicals,
+    drugScreens: summaryCounts.drugScreens,
+    unreadReports: employerDashboardSummary.last30Days.unreadReports,
     appointments: apptCount,
   };
 

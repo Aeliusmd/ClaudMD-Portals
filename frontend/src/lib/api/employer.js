@@ -50,7 +50,7 @@ export async function fetchEmployerProfile(accessToken) {
   };
 }
 
-export async function fetchDashboardSummary(accessToken) {
+export async function fetchEmployerDashboardSummary(accessToken) {
   const data = await employerFetch(
     "/api/employer/dashboard/summary",
     accessToken,
@@ -58,41 +58,119 @@ export async function fetchDashboardSummary(accessToken) {
   );
 
   return {
-    employerId: data.employerId,
-    employerName: data.employerName,
-    fromDate: data.fromDate,
-    toDate: data.toDate,
-    last30Days: data.last30Days || {
-      injury: 0,
-      physicals: 0,
-      drugScreens: 0,
-      appointments: 0,
-      unreadReports: 0,
-    },
+    injury: data.injury ?? 0,
+    physicals: data.physicals ?? 0,
+    drugScreens: data.drug_screens ?? 0,
+    days: data.days ?? 30,
+    employerId: data.employer_id,
   };
 }
 
-export async function fetchEmployerEmployees(
+function genderLabel(genderId, gender) {
+  if (gender) return gender;
+  if (genderId === 1) return "Male";
+  if (genderId === 2) return "Female";
+  return "—";
+}
+
+function mapEmployeeSearchRow(row) {
+  const category = row.category || null;
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    checkInId: row.check_in_id,
+    employeeId: row.employee_id,
+    employeeName: row.employee_name,
+    employee: row.employee_name,
+    accountNo: row.account_no,
+    ssnLast4: row.ssn_last4,
+    ssn: row.ssn,
+    employerName: row.employer_name,
+    insuranceCompany: row.insurance_company || "—",
+    incidentId: row.incident_id,
+    incidentNumber: row.incident_number || "N/A",
+    category,
+    date: row.check_in_date,
+    dateValue: row.check_in_date_value,
+    lastVisit: row.check_in_date,
+    lastVisitValue: row.check_in_date_value,
+    dateOfInjury: row.date_of_injury,
+    timeOfInjury: row.time_of_injury,
+    reportType: row.report_type || "Status Report",
+    workStatus: row.work_status || "—",
+    disabilityStatus: row.disability_status,
+    disabilityLabel: row.disability_status,
+    unreadReportCount: row.unread_report_count ?? 0,
+    appointmentCount: row.appointment_count ?? 0,
+    isDrugScreen: category === "Drug Screen",
+    dateOfBirth: row.date_of_birth,
+    genderId: row.gender_id,
+    gender: genderLabel(row.gender_id, row.gender),
+    phone: row.phone,
+    email: row.email,
+    address: row.address,
+    city: row.city,
+    state: row.state,
+    zipCode: row.zip_code,
+  };
+}
+
+export function searchRowToEmployee(row) {
+  if (!row) return null;
+  return {
+    id: row.employeeId,
+    name: row.employeeName,
+    patientId: row.accountNo ? `P-${row.accountNo}` : row.employeeId,
+    accountNo: row.accountNo,
+    employerName: row.employerName,
+    phone: row.phone,
+    dateOfBirth: row.dateOfBirth,
+    gender: row.gender || genderLabel(row.genderId),
+    address: row.address,
+    incidents: [
+      {
+        id: row.incidentId || row.checkInId,
+        incidentNumber: row.incidentNumber,
+        category: row.category,
+        checkInDate: row.date,
+        dateOfInjury: row.dateOfInjury,
+        timeOfInjury: row.timeOfInjury,
+        reportType: row.reportType,
+        workStatus: row.workStatus,
+        visits: [
+          {
+            id: String(row.checkInId),
+            date: row.date,
+            label: row.reportType,
+            category: row.category,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export async function fetchEmployerEmployeeSearch(
   accessToken,
-  { from, to, category, search } = {}
+  { fromDate, toDate } = {}
 ) {
   const params = new URLSearchParams();
-  if (from) params.set("from", from);
-  if (to) params.set("to", to);
-  if (category) params.set("category", category);
-  if (search) params.set("search", search);
+  if (fromDate) params.set("fromDate", fromDate);
+  if (toDate) params.set("toDate", toDate);
   const qs = params.toString();
-  const path = `/api/employer/employees${qs ? `?${qs}` : ""}`;
+  const path = `/api/employer/employees/search${qs ? `?${qs}` : ""}`;
 
   const data = await employerFetch(
     path,
     accessToken,
-    "Unable to load employees."
+    "Unable to load employee search results."
   );
 
   return {
-    employerId: data.employerId,
-    count: data.count || 0,
-    items: Array.isArray(data.items) ? data.items : [],
+    items: (data.items || []).map(mapEmployeeSearchRow),
+    total: data.total ?? 0,
+    fromDate: data.from_date,
+    toDate: data.to_date,
+    employerId: data.employer_id,
   };
 }

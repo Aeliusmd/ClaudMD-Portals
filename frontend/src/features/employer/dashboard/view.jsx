@@ -9,10 +9,13 @@ import { DateRangeInput } from "@/components/ui/date-range-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PAGE_SIZE, Pagination, paginateItems } from "@/components/ui/pagination";
 import { CreateAppointmentModal } from "@/features/employer/dashboard/create-appointment-modal";
-import { upcomingEmployerAppointments } from "@/data/employer";
 import {
-  fetchDashboardSummary,
-  fetchEmployerEmployees,
+  employerDashboardSummary,
+  upcomingEmployerAppointments,
+} from "@/data/employer";
+import {
+  fetchEmployerDashboardSummary,
+  fetchEmployerEmployeeSearch,
 } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { LOGIN_PATH } from "@/lib/auth-routes";
@@ -33,23 +36,25 @@ function daysAgoIso(today, days) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatVisitLabel(iso) {
-  if (!iso) return "—";
-  const date = new Date(`${iso}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+function formatVisitLabel(isoOrLabel) {
+  if (!isoOrLabel) return "—";
+  if (/^\d{4}-\d{2}-\d{2}/.test(isoOrLabel)) {
+    const date = new Date(`${isoOrLabel.slice(0, 10)}T12:00:00`);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+  }
+  return isoOrLabel;
 }
 
-const emptyStats = {
+const emptyCounts = {
   injury: 0,
   physicals: 0,
   drugScreens: 0,
-  appointments: 0,
-  unreadReports: 0,
 };
 
 const kpiItems = [
@@ -83,10 +88,11 @@ export function EmployerDashboardView() {
   const [appointments, setAppointments] = useState(
     upcomingEmployerAppointments
   );
-  const [stats, setStats] = useState(null);
+  const [apptCount, setApptCount] = useState(
+    employerDashboardSummary.last30Days.appointments
+  );
+  const [summaryCounts, setSummaryCounts] = useState(null);
   const [loadingSummary, setLoadingSummary] = useState(true);
-  const [rangeFrom, setRangeFrom] = useState(last30From);
-  const [rangeTo, setRangeTo] = useState(today);
   const [employees, setEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -101,13 +107,17 @@ export function EmployerDashboardView() {
         router.replace(LOGIN_PATH);
         return;
       }
+
       setLoadingSummary(true);
       try {
-        const summary = await fetchDashboardSummary(token);
-        if (cancelled) return;
-        setStats({ ...emptyStats, ...summary.last30Days });
-        setRangeFrom(summary.fromDate || last30From);
-        setRangeTo(summary.toDate || today);
+        const data = await fetchEmployerDashboardSummary(token);
+        if (!cancelled) {
+          setSummaryCounts({
+            injury: data.injury,
+            physicals: data.physicals,
+            drugScreens: data.drugScreens,
+          });
+        }
       } catch (err) {
         if (cancelled) return;
         if (err?.status === 401) {
@@ -115,7 +125,7 @@ export function EmployerDashboardView() {
           return;
         }
         setLoadError(err?.message || "Unable to load dashboard.");
-        setStats(emptyStats);
+        setSummaryCounts(emptyCounts);
       } finally {
         if (!cancelled) setLoadingSummary(false);
       }
@@ -125,7 +135,7 @@ export function EmployerDashboardView() {
     return () => {
       cancelled = true;
     };
-  }, [last30From, router, today]);
+  }, [router]);
 
   const loadEmployees = useCallback(async () => {
     const token = getAccessToken();
@@ -134,25 +144,17 @@ export function EmployerDashboardView() {
       return;
     }
 
-    const effectiveFrom = fromDate || rangeFrom;
-    const effectiveTo = toDate || rangeTo;
-    const category =
-      activeFilter === "injury" ||
-      activeFilter === "physicals" ||
-      activeFilter === "drugScreens"
-        ? activeFilter
-        : null;
+    const effectiveFrom = fromDate || last30From;
+    const effectiveTo = toDate || today;
 
     setLoadingEmployees(true);
-    setLoadError(null);
     try {
-      const result = await fetchEmployerEmployees(token, {
-        from: effectiveFrom,
-        to: effectiveTo,
-        category,
-        search: query.trim() || undefined,
+      const data = await fetchEmployerEmployeeSearch(token, {
+        fromDate: effectiveFrom,
+        toDate: effectiveTo,
       });
-      setEmployees(result.items);
+      setEmployees(data.items);
+      setLoadError(null);
     } catch (err) {
       if (err?.status === 401) {
         router.replace(LOGIN_PATH);
@@ -163,15 +165,7 @@ export function EmployerDashboardView() {
     } finally {
       setLoadingEmployees(false);
     }
-  }, [
-    activeFilter,
-    fromDate,
-    query,
-    rangeFrom,
-    rangeTo,
-    router,
-    toDate,
-  ]);
+  }, [fromDate, last30From, router, toDate, today]);
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -179,6 +173,14 @@ export function EmployerDashboardView() {
     }, 250);
     return () => clearTimeout(handle);
   }, [loadEmployees]);
+
+  const stats = {
+    injury: summaryCounts?.injury ?? 0,
+    physicals: summaryCounts?.physicals ?? 0,
+    drugScreens: summaryCounts?.drugScreens ?? 0,
+    unreadReports: employerDashboardSummary.last30Days.unreadReports,
+    appointments: apptCount,
+  };
 
   function handleKpiClick(filter, openCreate = false) {
     if (openCreate) {
@@ -188,12 +190,9 @@ export function EmployerDashboardView() {
 
     setActiveFilter((prev) => {
       const next = prev === filter ? null : filter;
-      if (next === "drugScreens" || next === "injury" || next === "physicals") {
-        setFromDate(rangeFrom);
-        setToDate(rangeTo);
-      } else if (next) {
-        setFromDate(rangeFrom);
-        setToDate(rangeTo);
+      if (next) {
+        setFromDate(last30From);
+        setToDate(today);
       }
       return next;
     });
@@ -201,20 +200,35 @@ export function EmployerDashboardView() {
   }
 
   const filteredEmployees = useMemo(() => {
-    if (activeFilter === "unreadReports") {
-      return employees.filter((row) => (row.unreadReportCount || 0) > 0);
-    }
-    if (activeFilter === "appointments") {
-      return employees.filter((row) =>
-        appointments.some(
+    const normalized = query.trim().toLowerCase();
+
+    return employees.filter((row) => {
+      if (activeFilter === "injury" && row.category !== "Injury") return false;
+      if (activeFilter === "physicals" && row.category !== "Physical") {
+        return false;
+      }
+      if (activeFilter === "drugScreens" && !row.isDrugScreen) return false;
+      if (activeFilter === "unreadReports") {
+        if (!(row.unreadReportCount > 0)) return false;
+      }
+      if (activeFilter === "appointments") {
+        const hasAppt = appointments.some(
           (appt) =>
             appt.employeeId === row.employeeId ||
             appt.employee === row.employee
-        )
-      );
-    }
-    return employees;
-  }, [activeFilter, appointments, employees]);
+        );
+        if (!hasAppt) return false;
+      }
+
+      if (normalized) {
+        const haystack =
+          `${row.employee || row.employeeName} ${row.incidentNumber}`.toLowerCase();
+        if (!haystack.includes(normalized)) return false;
+      }
+
+      return true;
+    });
+  }, [activeFilter, appointments, employees, query]);
 
   useEffect(() => {
     setEmployeePage(1);
@@ -237,13 +251,10 @@ export function EmployerDashboardView() {
 
   function handleCreateAppointment(appointment) {
     setAppointments((prev) => [appointment, ...prev]);
-    setStats((prev) => ({
-      ...(prev || emptyStats),
-      appointments: ((prev && prev.appointments) || 0) + 1,
-    }));
+    setApptCount((prev) => prev + 1);
     setActiveFilter("appointments");
-    setFromDate(rangeFrom);
-    setToDate(rangeTo);
+    setFromDate(last30From);
+    setToDate(today);
     setEmployeePage(1);
     setAppointmentPage(1);
   }
@@ -318,7 +329,7 @@ export function EmployerDashboardView() {
                     </span>
                   ) : null}
                 </div>
-                {loadingSummary || !stats ? (
+                {loadingSummary || !summaryCounts ? (
                   <div
                     aria-hidden
                     className="mx-auto mt-3 h-10 w-12 animate-pulse rounded-md bg-white/25 sm:h-12 sm:w-14"
@@ -379,16 +390,16 @@ export function EmployerDashboardView() {
             </p>
           </div>
 
-          {!loadingEmployees && filteredEmployees.length === 0 ? (
-            <EmptyState
-              title="No employees match this filter"
-              description="Try another KPI, clear the filter, or adjust the date range."
-              className="min-h-64 rounded-none border-0"
-            />
-          ) : loadingEmployees ? (
+          {loadingEmployees ? (
             <EmptyState
               title="Loading employees"
               description="Fetching unique patients from clinic check-ins."
+              className="min-h-64 rounded-none border-0"
+            />
+          ) : filteredEmployees.length === 0 ? (
+            <EmptyState
+              title="No employees match this filter"
+              description="Try another KPI, clear the filter, or adjust the date range."
               className="min-h-64 rounded-none border-0"
             />
           ) : (
@@ -412,7 +423,7 @@ export function EmployerDashboardView() {
                         onClick={() => openEmployeeDetail(row)}
                       >
                         <td className="px-4 py-3.5 font-semibold text-ink sm:px-5 sm:py-4">
-                          {row.employee}
+                          {row.employee || row.employeeName}
                         </td>
                         <td className="px-4 py-3.5 tabular-nums text-muted sm:px-5 sm:py-4">
                           {row.incidentNumber}

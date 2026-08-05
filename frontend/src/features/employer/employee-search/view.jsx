@@ -5,27 +5,43 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, FileText, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { DateRangeInput } from "@/components/ui/date-range-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchInput } from "@/components/ui/search-input";
 import { EmployeeRecordView } from "@/features/employer/employee-search/employee-record-view";
 import { matchesEmployeeSearch } from "@/features/employer/employee-search/search-utils";
-import { employeeSearchEntries, employees } from "@/data/employer";
+import {
+  fetchEmployerEmployeeSearch,
+  searchRowToEmployee,
+} from "@/lib/api/employer";
+import { LOGIN_PATH } from "@/lib/auth-routes";
+import { getAccessToken } from "@/lib/auth-session";
 import { reportBadgeStyles } from "@/lib/report-badge-styles";
 import { workStatusStyles } from "@/lib/category-styles";
 import { cn } from "@/lib/utils";
 
-function findEmployeeByQuery(param) {
+function daysAgoIso(days) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function findEmployeeFromRows(rows, param) {
   if (!param) return null;
   const normalized = param.trim().toLowerCase();
-  return (
-    employees.find(
-      (employee) =>
-        employee.patientId?.toLowerCase() === normalized ||
-        employee.id.toLowerCase() === normalized ||
-        employee.accountNo?.toLowerCase() === normalized
-    ) || null
+  const row = rows.find(
+    (entry) =>
+      String(entry.patientId) === normalized ||
+      String(entry.employeeId).toLowerCase() === normalized ||
+      String(entry.accountNo || "").toLowerCase() === normalized ||
+      `p-${String(entry.accountNo || "").toLowerCase()}` === normalized
   );
+  return row ? searchRowToEmployee(row) : null;
 }
 
 function EmployeeSearchContent() {
@@ -34,34 +50,82 @@ function EmployeeSearchContent() {
   const employeeParam =
     searchParams.get("employee") || searchParams.get("employeeId");
   const fromParam = searchParams.get("from");
-
-  const selectedEmployee = useMemo(
-    () => findEmployeeByQuery(employeeParam),
-    [employeeParam]
-  );
-
-  const [query, setQuery] = useState("");
   const categoryFilter = searchParams.get("category");
 
+  const [query, setQuery] = useState("");
+  const [fromDate, setFromDate] = useState(daysAgoIso(30));
+  const [toDate, setToDate] = useState(todayIso());
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEmployees() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(LOGIN_PATH);
+        return;
+      }
+
+      setLoading(true);
+      setLoadError("");
+
+      try {
+        const data = await fetchEmployerEmployeeSearch(token, {
+          fromDate,
+          toDate,
+        });
+        if (!cancelled) {
+          setRows(data.items);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          if (err?.status === 401) {
+            router.replace(LOGIN_PATH);
+            return;
+          }
+          setLoadError(err?.message || "Unable to load employees.");
+          setRows([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadEmployees();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fromDate, toDate, router]);
+
+  const selectedEmployee = useMemo(
+    () => findEmployeeFromRows(rows, employeeParam),
+    [employeeParam, rows]
+  );
+
   const filteredRows = useMemo(() => {
-    return employeeSearchEntries.filter((entry) => {
+    return rows.filter((entry) => {
       if (categoryFilter === "Injury" || categoryFilter === "Physical") {
         if (entry.category !== categoryFilter) return false;
       }
       return matchesEmployeeSearch(entry, query);
     });
-  }, [categoryFilter, query]);
+  }, [categoryFilter, query, rows]);
 
   useEffect(() => {
-    // Keep URL clean when an unknown employee code is used
-    if (employeeParam && !selectedEmployee) {
+    if (employeeParam && !loading && !selectedEmployee) {
       router.replace(
         fromParam === "dashboard"
           ? "/employer/dashboard"
           : "/employer/employee-search"
       );
     }
-  }, [employeeParam, selectedEmployee, router, fromParam]);
+  }, [employeeParam, selectedEmployee, router, fromParam, loading]);
 
   if (selectedEmployee) {
     const backToDashboard = fromParam === "dashboard";
@@ -81,8 +145,7 @@ function EmployeeSearchContent() {
   }
 
   function openEmployee(row) {
-    const employee = employees.find((item) => item.id === row.employeeId);
-    const code = employee?.patientId || employee?.id || row.employeeId;
+    const code = row.accountNo || row.employeeId || row.patientId;
     router.push(`/employer/employee-search?employee=${encodeURIComponent(code)}`);
   }
 
@@ -90,23 +153,52 @@ function EmployeeSearchContent() {
     <div>
       <PageHeader title="Employee Search" className="mb-1" />
       <p className="mb-4 text-sm text-muted">
-        Showing {filteredRows.length} results
+        {loading
+          ? "Loading employees…"
+          : `Showing ${filteredRows.length} results`}
       </p>
 
-      <SearchInput
-        className="mb-4 max-w-xl"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search by name, account, or SSN"
-        ariaLabel="Search employees"
-      />
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <SearchInput
+          className="max-w-xl flex-1"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by name, account, or SSN"
+          ariaLabel="Search employees"
+        />
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <DateRangeInput
+            id="employee-search-from"
+            label="From"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+          <span className="text-sm text-muted">to</span>
+          <DateRangeInput
+            id="employee-search-to"
+            label="To"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {loadError ? (
+        <Card className="mb-4 border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {loadError}
+        </Card>
+      ) : null}
 
       <Card className="overflow-hidden">
-        {filteredRows.length === 0 ? (
+        {loading ? (
+          <div className="flex min-h-72 items-center justify-center text-sm text-muted">
+            Loading employee records…
+          </div>
+        ) : filteredRows.length === 0 ? (
           <EmptyState
             icon={UserRound}
             title="No employees match your search"
-            description="Try a different name, account number, or SSN."
+            description="Try a different date range, name, account number, or SSN."
             className="min-h-72 rounded-none border-0"
           />
         ) : (

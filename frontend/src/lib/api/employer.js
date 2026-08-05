@@ -61,7 +61,50 @@ export async function fetchEmployerDashboardSummary(accessToken) {
     injury: data.injury ?? 0,
     physicals: data.physicals ?? 0,
     drugScreens: data.drug_screens ?? 0,
+    appointments: data.appointments ?? 0,
     days: data.days ?? 30,
+    employerId: data.employer_id,
+  };
+}
+
+function mapUpcomingAppointment(row) {
+  return {
+    id: row.id,
+    employee: row.employee_name,
+    employeeId: row.employee_id,
+    patientId: row.patient_id,
+    category: row.category || "Injury",
+    visitType: row.visit_type,
+    type: row.visit_type,
+    provider: row.provider || "—",
+    clinic: row.clinic || "—",
+    date: row.date,
+    dateValue: row.date_value,
+    time: row.time || "—",
+    status: row.status || "Scheduled",
+  };
+}
+
+export async function fetchEmployerUpcomingAppointments(
+  accessToken,
+  { page = 1, pageSize = 10 } = {}
+) {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+
+  const data = await employerFetch(
+    `/api/employer/appointments/upcoming?${params.toString()}`,
+    accessToken,
+    "Unable to load upcoming appointments."
+  );
+
+  return {
+    items: (data.items || []).map(mapUpcomingAppointment),
+    total: data.total ?? 0,
+    page: data.page ?? page,
+    pageSize: data.page_size ?? pageSize,
+    totalPages: data.total_pages ?? 1,
     employerId: data.employer_id,
   };
 }

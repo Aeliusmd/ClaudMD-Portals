@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
 from app.employer.schemas import EmployeeSearchResponse, EmployeeSearchRow
-from app.employer.service import _fetch_profile_from_clinic
+from app.employer.profile import fetch_profile_from_clinic
 from app.employer.shift_type import shift_type_label
 
 DEFAULT_PAGE_SIZE = 10
@@ -42,7 +42,7 @@ def search_employees(
             detail="Clinic not found for this session.",
         )
 
-    profile = _fetch_profile_from_clinic(clinic, current_user)
+    profile = fetch_profile_from_clinic(clinic, current_user)
     if profile.employer_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

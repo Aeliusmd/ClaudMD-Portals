@@ -17,6 +17,7 @@ class DashboardSummaryResponse(BaseModel):
     injury: int = 0
     physicals: int = 0
     drug_screens: int = 0
+    appointments: int = 0
     days: int = 30
     employer_id: int | None = None
 
@@ -63,5 +64,32 @@ class EmployeeSearchResponse(BaseModel):
     total_pages: int = 1
     from_date: str
     to_date: str
+    employer_id: int | None = None
+
+
+class UpcomingAppointmentRow(BaseModel):
+    id: str
+    schedule_id: int
+    appointment_id: int | None = None
+    patient_id: int | None = None
+    employee_id: str | None = None
+    employee_name: str
+    category: str | None = None
+    visit_type: str | None = None
+    provider: str | None = None
+    clinic: str | None = None
+    date: str | None = None
+    date_value: str | None = None
+    time: str | None = None
+    status: str | None = None
+    appointment_status_id: int | None = None
+
+
+class UpcomingAppointmentsResponse(BaseModel):
+    items: list[UpcomingAppointmentRow]
+    total: int
+    page: int = 1
+    page_size: int = 10
+    total_pages: int = 1
     employer_id: int | None = None
 

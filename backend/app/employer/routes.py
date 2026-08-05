@@ -4,6 +4,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.auth.dependencies import CurrentUser, get_current_user
+from app.employer.appointments import (
+    DEFAULT_PAGE_SIZE as APPT_DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE as APPT_MAX_PAGE_SIZE,
+    list_upcoming_appointments,
+)
 from app.employer.employee_search import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -14,6 +19,7 @@ from app.employer.schemas import (
     DashboardSummaryResponse,
     EmployeeSearchResponse,
     EmployerProfileResponse,
+    UpcomingAppointmentsResponse,
 )
 from app.employer.service import get_dashboard_summary, get_employer_profile
 
@@ -69,4 +75,26 @@ def employer_employee_search_endpoint(
         search=search,
         category=category,
         patient_id=patient_id,
+    )
+
+
+@router.get("/appointments/upcoming", response_model=UpcomingAppointmentsResponse)
+def employer_upcoming_appointments_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(
+        default=APPT_DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=APPT_MAX_PAGE_SIZE,
+        alias="pageSize",
+    ),
+):
+    """
+    Upcoming appointments (SELECT only): AppointmentSchedules from today onward
+    for this employer via Appointments.EmployerId or CheckInsHeader.EmployerId.
+    """
+    return list_upcoming_appointments(
+        current_user,
+        page=page,
+        page_size=page_size,
     )

@@ -7,16 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { DateRangeInput } from "@/components/ui/date-range-input";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PAGE_SIZE, Pagination, paginateItems } from "@/components/ui/pagination";
+import { PAGE_SIZE, Pagination } from "@/components/ui/pagination";
 import { KpiSkeletonStrip, TableSkeleton } from "@/components/ui/skeleton";
 import { CreateAppointmentModal } from "@/features/employer/dashboard/create-appointment-modal";
-import {
-  employerDashboardSummary,
-  upcomingEmployerAppointments,
-} from "@/data/employer";
+import { employerDashboardSummary } from "@/data/employer";
 import {
   fetchEmployerDashboardSummary,
   fetchEmployerEmployeeSearch,
+  fetchEmployerUpcomingAppointments,
 } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { LOGIN_PATH } from "@/lib/auth-routes";
@@ -64,6 +62,7 @@ const emptyCounts = {
   injury: 0,
   physicals: 0,
   drugScreens: 0,
+  appointments: 0,
 };
 
 const employeeTableHeaders = [
@@ -105,12 +104,11 @@ export function EmployerDashboardView() {
   const [employeeTotal, setEmployeeTotal] = useState(0);
   const [employeeTotalPages, setEmployeeTotalPages] = useState(1);
   const [appointmentPage, setAppointmentPage] = useState(1);
-  const [appointments, setAppointments] = useState(
-    upcomingEmployerAppointments
-  );
-  const [apptCount, setApptCount] = useState(
-    employerDashboardSummary.last30Days.appointments
-  );
+  const [appointments, setAppointments] = useState([]);
+  const [appointmentTotal, setAppointmentTotal] = useState(0);
+  const [appointmentTotalPages, setAppointmentTotalPages] = useState(1);
+  const [loadingAppointments, setLoadingAppointments] = useState(true);
+  const [apptCount, setApptCount] = useState(0);
   const [summaryCounts, setSummaryCounts] = useState(null);
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [employees, setEmployees] = useState([]);
@@ -141,7 +139,9 @@ export function EmployerDashboardView() {
             injury: data.injury,
             physicals: data.physicals,
             drugScreens: data.drugScreens,
+            appointments: data.appointments,
           });
+          setApptCount(data.appointments ?? 0);
         }
       } catch (err) {
         if (cancelled) return;
@@ -161,6 +161,48 @@ export function EmployerDashboardView() {
       cancelled = true;
     };
   }, [router]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAppointments() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(LOGIN_PATH);
+        return;
+      }
+
+      setLoadingAppointments(true);
+      try {
+        const data = await fetchEmployerUpcomingAppointments(token, {
+          page: appointmentPage,
+          pageSize: PAGE_SIZE,
+        });
+        if (!cancelled) {
+          setAppointments(data.items);
+          setAppointmentTotal(data.total);
+          setAppointmentTotalPages(data.totalPages);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(LOGIN_PATH);
+          return;
+        }
+        setAppointments([]);
+        setAppointmentTotal(0);
+        setAppointmentTotalPages(1);
+      } finally {
+        if (!cancelled) setLoadingAppointments(false);
+      }
+    }
+
+    loadAppointments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appointmentPage, router]);
 
   const loadEmployees = useCallback(async () => {
     const token = getAccessToken();
@@ -239,7 +281,7 @@ export function EmployerDashboardView() {
     physicals: summaryCounts?.physicals ?? 0,
     drugScreens: summaryCounts?.drugScreens ?? 0,
     unreadReports: employerDashboardSummary.last30Days.unreadReports,
-    appointments: apptCount,
+    appointments: summaryCounts?.appointments ?? apptCount ?? 0,
   };
 
   function handleKpiClick(filter, openCreate = false) {
@@ -267,11 +309,9 @@ export function EmployerDashboardView() {
     employeeTotal === 0 ? 0 : (employeePage - 1) * PAGE_SIZE + 1;
   const employeeEnd = Math.min(employeePage * PAGE_SIZE, employeeTotal);
 
-  const pagedAppointments = paginateItems(
-    appointments,
-    appointmentPage,
-    PAGE_SIZE
-  );
+  const appointmentStart =
+    appointmentTotal === 0 ? 0 : (appointmentPage - 1) * PAGE_SIZE + 1;
+  const appointmentEnd = Math.min(appointmentPage * PAGE_SIZE, appointmentTotal);
 
   function handleCreateAppointment(appointment) {
     setAppointments((prev) => [appointment, ...prev]);
@@ -503,16 +543,20 @@ export function EmployerDashboardView() {
             </button>
           </div>
 
-          {pagedAppointments.total === 0 ? (
+          {loadingAppointments ? (
+            <div className="flex min-h-48 items-center justify-center text-sm text-muted">
+              Loading appointments…
+            </div>
+          ) : appointmentTotal === 0 ? (
             <EmptyState
               title="No upcoming appointments"
-              description="Use + to schedule a new appointment."
+              description="There are no scheduled appointments from today onward for this employer."
               className="min-h-48 rounded-none border-0"
             />
           ) : (
             <>
               <div className="divide-y divide-border/60">
-                {pagedAppointments.items.map((appt) => (
+                {appointments.map((appt) => (
                   <div
                     key={appt.id}
                     className="px-4 py-4 transition hover:bg-cream/40 sm:px-5"
@@ -550,11 +594,11 @@ export function EmployerDashboardView() {
 
               <Pagination
                 alwaysShow
-                page={pagedAppointments.currentPage}
-                totalPages={pagedAppointments.totalPages}
-                total={pagedAppointments.total}
-                start={pagedAppointments.start}
-                end={pagedAppointments.end}
+                page={appointmentPage}
+                totalPages={appointmentTotalPages}
+                total={appointmentTotal}
+                start={appointmentStart}
+                end={appointmentEnd}
                 onChange={setAppointmentPage}
               />
             </>

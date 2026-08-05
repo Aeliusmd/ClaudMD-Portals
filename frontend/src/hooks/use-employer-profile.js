@@ -6,8 +6,13 @@ import { fetchEmployerProfile } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { LOGIN_PATH } from "@/lib/auth-routes";
 
+let cachedProfile = null;
+let cachedToken = null;
+let inflightPromise = null;
+
 export function useEmployerProfile() {
   const router = useRouter();
+  // Always start equal on server + client to avoid hydration mismatches.
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -22,15 +27,34 @@ export function useEmployerProfile() {
         return;
       }
 
+      if (cachedProfile && cachedToken === token) {
+        if (!cancelled) {
+          setProfile(cachedProfile);
+          setLoading(false);
+          setError(null);
+        }
+        return;
+      }
+
+      if (!cancelled) setLoading(true);
+
       try {
-        const data = await fetchEmployerProfile(token);
+        if (!inflightPromise || cachedToken !== token) {
+          cachedToken = token;
+          inflightPromise = fetchEmployerProfile(token);
+        }
+        const data = await inflightPromise;
+        cachedProfile = data;
         if (!cancelled) {
           setProfile(data);
           setError(null);
         }
       } catch (err) {
+        inflightPromise = null;
         if (cancelled) return;
         if (err?.status === 401) {
+          cachedProfile = null;
+          cachedToken = null;
           router.replace(LOGIN_PATH);
           return;
         }

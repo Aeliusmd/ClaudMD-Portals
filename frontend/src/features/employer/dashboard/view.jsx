@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Filter, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -29,14 +29,22 @@ import {
 } from "@/lib/category-styles";
 import { cn } from "@/lib/utils";
 
+const emptySubscribe = () => () => {};
+function formatLocalIso(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return formatLocalIso(new Date());
 }
 
 function daysAgoIso(today, days) {
   const date = new Date(`${today}T12:00:00`);
   date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
+  return formatLocalIso(date);
 }
 
 function formatVisitLabel(isoOrLabel) {
@@ -94,20 +102,29 @@ const kpiItems = [
 
 export function EmployerDashboardView() {
   const router = useRouter();
-  const today = todayIso();
-  const last30From = daysAgoIso(today, 30);
+
+  // Client-only defaults (server snapshot is empty) avoid timezone hydration mismatches.
+  const defaultTo = useSyncExternalStore(emptySubscribe, todayIso, () => "");
+  const defaultFrom = useSyncExternalStore(
+    emptySubscribe,
+    () => daysAgoIso(todayIso(), 30),
+    () => ""
+  );
+  const rangeReady = Boolean(defaultFrom && defaultTo);
 
   const [activeFilter, setActiveFilter] = useState(null);
 
-  // Draft inputs — applied only when Filter is clicked (default: last 30 days)
   const [draftQuery, setDraftQuery] = useState("");
-  const [draftFromDate, setDraftFromDate] = useState(last30From);
-  const [draftToDate, setDraftToDate] = useState(today);
-
-  // Applied values used by the employee table request
+  const [draftFromDate, setDraftFromDate] = useState(null);
+  const [draftToDate, setDraftToDate] = useState(null);
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedFromDate, setAppliedFromDate] = useState(last30From);
-  const [appliedToDate, setAppliedToDate] = useState(today);
+  const [appliedFromDate, setAppliedFromDate] = useState(null);
+  const [appliedToDate, setAppliedToDate] = useState(null);
+
+  const effectiveDraftFrom = draftFromDate ?? defaultFrom;
+  const effectiveDraftTo = draftToDate ?? defaultTo;
+  const effectiveAppliedFrom = appliedFromDate ?? defaultFrom;
+  const effectiveAppliedTo = appliedToDate ?? defaultTo;
 
   const [employeePage, setEmployeePage] = useState(1);
   const [employeeTotal, setEmployeeTotal] = useState(0);
@@ -166,21 +183,21 @@ export function EmployerDashboardView() {
   }, [router]);
 
   const loadEmployees = useCallback(async () => {
+    if (!rangeReady || !effectiveAppliedFrom || !effectiveAppliedTo) return;
+
     const token = getAccessToken();
     if (!token) {
       router.replace(LOGIN_PATH);
       return;
     }
 
-    const effectiveFrom = appliedFromDate || last30From;
-    const effectiveTo = appliedToDate || today;
     const category = serverCategory(activeFilter);
 
     setLoadingEmployees(true);
     try {
       const data = await fetchEmployerEmployeeSearch(token, {
-        fromDate: effectiveFrom,
-        toDate: effectiveTo,
+        fromDate: effectiveAppliedFrom,
+        toDate: effectiveAppliedTo,
         page: employeePage,
         pageSize: PAGE_SIZE,
         search: appliedQuery || undefined,
@@ -217,13 +234,12 @@ export function EmployerDashboardView() {
   }, [
     activeFilter,
     appointments,
-    appliedFromDate,
     appliedQuery,
-    appliedToDate,
+    effectiveAppliedFrom,
+    effectiveAppliedTo,
     employeePage,
-    last30From,
+    rangeReady,
     router,
-    today,
   ]);
 
   useEffect(() => {
@@ -232,8 +248,8 @@ export function EmployerDashboardView() {
 
   function applyFilters() {
     setAppliedQuery(draftQuery.trim());
-    setAppliedFromDate(draftFromDate || last30From);
-    setAppliedToDate(draftToDate || today);
+    setAppliedFromDate(effectiveDraftFrom);
+    setAppliedToDate(effectiveDraftTo);
     setEmployeePage(1);
   }
 
@@ -254,10 +270,10 @@ export function EmployerDashboardView() {
     setActiveFilter((prev) => {
       const next = prev === filter ? null : filter;
       // KPI clicks apply last-30-days immediately (Injury / Physicals / Drug Screens)
-      setDraftFromDate(last30From);
-      setDraftToDate(today);
-      setAppliedFromDate(last30From);
-      setAppliedToDate(today);
+      setDraftFromDate(null);
+      setDraftToDate(null);
+      setAppliedFromDate(null);
+      setAppliedToDate(null);
       return next;
     });
     setEmployeePage(1);
@@ -281,10 +297,10 @@ export function EmployerDashboardView() {
     setAppointments((prev) => [appointment, ...prev]);
     setApptCount((prev) => prev + 1);
     setActiveFilter("appointments");
-    setDraftFromDate(last30From);
-    setDraftToDate(today);
-    setAppliedFromDate(last30From);
-    setAppliedToDate(today);
+    setDraftFromDate(null);
+    setDraftToDate(null);
+    setAppliedFromDate(null);
+    setAppliedToDate(null);
     setEmployeePage(1);
     setAppointmentPage(1);
   }
@@ -390,14 +406,14 @@ export function EmployerDashboardView() {
           <DateRangeInput
             id="dashboard-from"
             label="From"
-            value={draftFromDate}
+            value={effectiveDraftFrom}
             onChange={(e) => setDraftFromDate(e.target.value)}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="dashboard-to"
             label="To"
-            value={draftToDate}
+            value={effectiveDraftTo}
             onChange={(e) => setDraftToDate(e.target.value)}
           />
           <Button

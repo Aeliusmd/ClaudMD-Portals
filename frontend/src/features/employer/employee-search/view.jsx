@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, FileText, Filter, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -23,14 +23,23 @@ import { employerPaths } from "@/lib/portal-paths";
 import { reportBadgeStyles } from "@/lib/report-badge-styles";
 import { workStatusStyles } from "@/lib/category-styles";
 
+const emptySubscribe = () => () => {};
+
+function formatLocalIso(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function daysAgoIso(days) {
   const date = new Date();
   date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
+  return formatLocalIso(date);
 }
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return formatLocalIso(new Date());
 }
 
 function parsePatientId(param) {
@@ -65,16 +74,24 @@ function EmployeeSearchContent() {
   const fromParam = searchParams.get("from");
   const categoryFilter = searchParams.get("category");
 
-  const initialFrom = daysAgoIso(30);
-  const initialTo = todayIso();
-
   const [draftQuery, setDraftQuery] = useState("");
-  const [draftFromDate, setDraftFromDate] = useState(initialFrom);
-  const [draftToDate, setDraftToDate] = useState(initialTo);
-
+  const [draftFromDate, setDraftFromDate] = useState(null);
+  const [draftToDate, setDraftToDate] = useState(null);
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedFromDate, setAppliedFromDate] = useState(initialFrom);
-  const [appliedToDate, setAppliedToDate] = useState(initialTo);
+  const [appliedFromDate, setAppliedFromDate] = useState(null);
+  const [appliedToDate, setAppliedToDate] = useState(null);
+
+  const defaultTo = useSyncExternalStore(emptySubscribe, todayIso, () => "");
+  const defaultFrom = useSyncExternalStore(
+    emptySubscribe,
+    () => daysAgoIso(30),
+    () => ""
+  );
+  const rangeReady = Boolean(defaultFrom && defaultTo);
+  const effectiveDraftFrom = draftFromDate ?? defaultFrom;
+  const effectiveDraftTo = draftToDate ?? defaultTo;
+  const effectiveAppliedFrom = appliedFromDate ?? defaultFrom;
+  const effectiveAppliedTo = appliedToDate ?? defaultTo;
 
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState([]);
@@ -86,6 +103,8 @@ function EmployeeSearchContent() {
   const [loadingDetail, setLoadingDetail] = useState(Boolean(employeeParam));
 
   const loadEmployees = useCallback(async () => {
+    if (!rangeReady || !effectiveAppliedFrom || !effectiveAppliedTo) return;
+
     const token = getAccessToken();
     if (!token) {
       router.replace(LOGIN_PATH);
@@ -106,8 +125,8 @@ function EmployeeSearchContent() {
               : undefined;
 
       const data = await fetchEmployerEmployeeSearch(token, {
-        fromDate: appliedFromDate,
-        toDate: appliedToDate,
+        fromDate: effectiveAppliedFrom,
+        toDate: effectiveAppliedTo,
         page,
         pageSize: PAGE_SIZE,
         search: appliedQuery || undefined,
@@ -129,11 +148,12 @@ function EmployeeSearchContent() {
       setLoading(false);
     }
   }, [
-    appliedFromDate,
     appliedQuery,
-    appliedToDate,
     categoryFilter,
+    effectiveAppliedFrom,
+    effectiveAppliedTo,
     page,
+    rangeReady,
     router,
   ]);
 
@@ -149,8 +169,8 @@ function EmployeeSearchContent() {
 
   function applyFilters() {
     setAppliedQuery(draftQuery.trim());
-    setAppliedFromDate(draftFromDate || initialFrom);
-    setAppliedToDate(draftToDate || initialTo);
+    setAppliedFromDate(effectiveDraftFrom);
+    setAppliedToDate(effectiveDraftTo);
     setPage(1);
   }
 
@@ -174,8 +194,8 @@ function EmployeeSearchContent() {
       try {
         const patientId = parsePatientId(employeeParam);
         const data = await fetchEmployerEmployeeSearch(token, {
-          fromDate: appliedFromDate,
-          toDate: appliedToDate,
+          fromDate: effectiveAppliedFrom,
+          toDate: effectiveAppliedTo,
           page: 1,
           pageSize: 1,
           patientId: patientId || undefined,
@@ -212,7 +232,7 @@ function EmployeeSearchContent() {
     return () => {
       cancelled = true;
     };
-  }, [appliedFromDate, appliedToDate, employeeParam, fromParam, router]);
+  }, [effectiveAppliedFrom, effectiveAppliedTo, employeeParam, fromParam, router]);
 
   if (employeeParam) {
     const backToDashboard = fromParam === "dashboard";
@@ -271,14 +291,14 @@ function EmployeeSearchContent() {
           <DateRangeInput
             id="employee-search-from"
             label="From"
-            value={draftFromDate}
+            value={effectiveDraftFrom}
             onChange={(e) => setDraftFromDate(e.target.value)}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="employee-search-to"
             label="To"
-            value={draftToDate}
+            value={effectiveDraftTo}
             onChange={(e) => setDraftToDate(e.target.value)}
           />
           <Button

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from threading import Lock
+from time import monotonic
 
 import pyodbc
 
@@ -20,6 +22,11 @@ class ClinicConnectionInfo:
     active: bool
 
 
+_clinic_cache_lock = Lock()
+_clinic_cache: dict[str, tuple[float, ClinicConnectionInfo | None]] = {}
+_CLINIC_CACHE_TTL_SECONDS = 300.0
+
+
 def get_master_connection() -> pyodbc.Connection:
     settings = get_settings()
     if not settings.master_db_configured:
@@ -35,10 +42,16 @@ def get_master_connection() -> pyodbc.Connection:
 
 
 def get_clinic_by_activation_key(activation_key: str) -> ClinicConnectionInfo | None:
-    """Read clinic DB credentials from master ClinicSetup (SELECT only)."""
+    """Read clinic DB credentials from master ClinicSetup (SELECT only, cached)."""
     key = (activation_key or "").strip()
     if not key:
         return None
+
+    now = monotonic()
+    with _clinic_cache_lock:
+        cached = _clinic_cache.get(key)
+        if cached and (now - cached[0]) < _CLINIC_CACHE_TTL_SECONDS:
+            return cached[1]
 
     with get_master_connection() as conn:
         cursor = conn.cursor()
@@ -60,18 +73,22 @@ def get_clinic_by_activation_key(activation_key: str) -> ClinicConnectionInfo | 
         )
         row = cursor.fetchone()
         if not row:
-            return None
+            clinic = None
+        else:
+            clinic = ClinicConnectionInfo(
+                clinic_id=int(row.ClinicID),
+                clinic_name=row.ClinicName or "",
+                database_server=row.DatabaseServer,
+                database_user=row.DatabaseUser,
+                database_password=row.DatabasePassword,
+                database_name=row.DatabaseName,
+                activation_key=str(row.ActivationKey),
+                active=bool(row.Active),
+            )
 
-        return ClinicConnectionInfo(
-            clinic_id=int(row.ClinicID),
-            clinic_name=row.ClinicName or "",
-            database_server=row.DatabaseServer,
-            database_user=row.DatabaseUser,
-            database_password=row.DatabasePassword,
-            database_name=row.DatabaseName,
-            activation_key=str(row.ActivationKey),
-            active=bool(row.Active),
-        )
+    with _clinic_cache_lock:
+        _clinic_cache[key] = (monotonic(), clinic)
+    return clinic
 
 
 def get_clinic_connection(clinic: ClinicConnectionInfo) -> pyodbc.Connection:

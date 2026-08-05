@@ -5,6 +5,8 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 import { currentPatient } from "@/data/patient";
 import { notifications as patientNotifications } from "@/data/notifications";
+import { patientNavItems } from "@/data/navigation";
+import { patientPaths } from "@/lib/portal-paths";
 
 export function PatientShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
@@ -32,14 +34,18 @@ export function PatientShell({ children }) {
       className="flex h-full w-full overflow-hidden bg-cream"
       style={{ position: "absolute", inset: 0, margin: 0, padding: 0 }}
     >
-      <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
+      <Sidebar
+        open={navOpen}
+        onClose={() => setNavOpen(false)}
+        items={patientNavItems}
+      />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar
           onMenuClick={() => setNavOpen(true)}
           portalLabel="Patient Portal"
           profileUser={currentPatient}
-          profileHref="/patient/profile"
+          profileHref={patientPaths.profile}
           notifications={patientNotifications}
           showSearch={false}
         />

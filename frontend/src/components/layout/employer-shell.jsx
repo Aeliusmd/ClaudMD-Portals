@@ -19,6 +19,7 @@ import {
   clearSecureShareSession,
   getSecureShareSession,
 } from "@/lib/secure-share-session";
+import { employerPaths } from "@/lib/portal-paths";
 
 function hasActiveSecureShareSession() {
   const session = getSecureShareSession();
@@ -61,9 +62,9 @@ export function EmployerShell({ children }) {
     if (
       active &&
       pathname &&
-      !pathname.startsWith("/employer/shared-documents/scoped")
+      !pathname.startsWith(employerPaths.sharedDocumentsScoped)
     ) {
-      router.replace("/employer/shared-documents/scoped");
+      router.replace(employerPaths.sharedDocumentsScoped);
     }
   }, [pathname, router]);
 
@@ -110,8 +111,8 @@ export function EmployerShell({ children }) {
           profileUser={profileUser}
           profileHref={
             scopedSession
-              ? "/employer/shared-documents/scoped"
-              : "/employer/profile"
+              ? employerPaths.sharedDocumentsScoped
+              : employerPaths.profile
           }
           notifications={scopedSession ? [] : employerNotifications}
           showSearch={false}

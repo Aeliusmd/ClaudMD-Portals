@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { LogOut, Settings, UserRound } from "lucide-react";
 import { LOGIN_PATH } from "@/lib/auth-routes";
+import { patientPaths } from "@/lib/portal-paths";
 import { cn } from "@/lib/utils";
 
 export function ProfileMenuItem({ href, icon: Icon, label, tone = "default", onClick }) {
@@ -39,7 +40,7 @@ export function ProfileMenuItem({ href, icon: Icon, label, tone = "default", onC
 export function ProfileDropdownCard({
   user,
   patient,
-  profileHref = "/patient/profile",
+  profileHref = patientPaths.profile,
   onClose,
 }) {
   const profileUser = user || patient;

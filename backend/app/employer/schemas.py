@@ -46,6 +46,7 @@ class EmployeeSearchRow(BaseModel):
     appointment_count: int = 0
     date_of_birth: str | None = None
     gender_id: int | None = None
+    gender: str | None = None
     phone: str | None = None
     email: str | None = None
     address: str | None = None
@@ -57,6 +58,10 @@ class EmployeeSearchRow(BaseModel):
 class EmployeeSearchResponse(BaseModel):
     items: list[EmployeeSearchRow]
     total: int
+    page: int = 1
+    page_size: int = 10
+    total_pages: int = 1
     from_date: str
     to_date: str
     employer_id: int | None = None
+

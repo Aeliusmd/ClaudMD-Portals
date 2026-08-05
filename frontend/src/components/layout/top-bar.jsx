@@ -3,6 +3,7 @@
 import { Menu, Search } from "lucide-react";
 import { NotificationsMenu } from "@/components/layout/notifications-menu";
 import { ProfileMenu } from "@/components/layout/profile-menu";
+import { patientPaths } from "@/lib/portal-paths";
 import { cn } from "@/lib/utils";
 
 export function TopBar({
@@ -10,7 +11,7 @@ export function TopBar({
   portalLabel = "Patient Portal",
   organizationLabel,
   profileUser,
-  profileHref = "/patient/profile",
+  profileHref = patientPaths.profile,
   notifications,
   showSearch = true,
   className,

@@ -23,7 +23,7 @@ const ERROR_ACTIVATION =
   "Missing activation key. Open the link from your invitation email.";
 const ERROR_GENERIC = "Unable to sign in. Please check your credentials.";
 
-function LoginFormInner() {
+function LoginFormInner({ portal = "employer" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shareToken = searchParams.get("share") || "";
@@ -102,6 +102,7 @@ function LoginFormInner() {
         username: normalizedEmail,
         password,
         activationKey,
+        portal,
       });
 
       saveAuthSession({
@@ -114,7 +115,9 @@ function LoginFormInner() {
         clinic: result.clinic,
       });
 
-      const defaultDestination = resolvePortalDestination(result.user?.portal);
+      const defaultDestination = resolvePortalDestination(
+        result.user?.portal || portal
+      );
       const shareSession = getSecureShareSession();
       const share =
         shareSession && findSecureShare(shareSession.token)
@@ -327,7 +330,7 @@ function LoginFormInner() {
   );
 }
 
-export function LoginForm() {
+export function LoginForm({ portal = "employer" }) {
   return (
     <Suspense
       fallback={
@@ -336,7 +339,7 @@ export function LoginForm() {
         </div>
       }
     >
-      <LoginFormInner />
+      <LoginFormInner portal={portal} />
     </Suspense>
   );
 }

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { FileText, UserRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
-import { sharedDocuments } from "@/data/employer";
+import { SkeletonBlock } from "@/components/ui/skeleton";
+import { employees as mockEmployees, sharedDocuments } from "@/data/employer";
 import { cn } from "@/lib/utils";
 
 function shortDocLabel(doc) {
@@ -31,8 +32,9 @@ function docCaption(doc, selectedVisit) {
 
 function formatDob(value) {
   if (!value) return "—";
+  if (String(value).includes("/")) return value;
   const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime()) && value.includes("-")) {
+  if (!Number.isNaN(parsed.getTime()) && /\d{4}-\d{2}-\d{2}/.test(String(value))) {
     return parsed.toLocaleDateString("en-US");
   }
   const asDate = new Date(value);
@@ -66,13 +68,112 @@ function VisitDocumentThumb({ doc, selectedVisit, onPreview }) {
   );
 }
 
+export function EmployeeRecordSkeleton({
+  onBack,
+  backLabel = "← Back to search",
+}) {
+  return (
+    <div className="space-y-5" aria-busy="true" aria-label="Loading employee">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <SkeletonBlock className="h-10 w-56" />
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="cursor-pointer text-sm font-semibold text-primary-500 hover:text-primary-600"
+          >
+            {backLabel}
+          </button>
+        ) : null}
+      </div>
+
+      <Card className="p-5">
+        <div className="flex items-center gap-3.5">
+          <SkeletonBlock className="h-12 w-12 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <SkeletonBlock className="h-5 w-40" />
+            <SkeletonBlock className="h-4 w-48" />
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid items-start gap-5 xl:grid-cols-2">
+        <div className="min-w-0 space-y-5">
+          <Card className="p-5">
+            <h2 className="mb-4 text-[11px] font-bold tracking-[0.1em] text-foreground-500 uppercase">
+              Employee Demographics
+            </h2>
+            <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+              <div className="space-y-2.5">
+                <SkeletonBlock className="h-4 w-28" />
+                <SkeletonBlock className="h-4 w-24" />
+                <SkeletonBlock className="h-4 w-36" />
+                <SkeletonBlock className="h-4 w-full" />
+                <SkeletonBlock className="h-4 w-32" />
+              </div>
+              <div className="space-y-2.5">
+                <SkeletonBlock className="h-4 w-32" />
+                <SkeletonBlock className="h-4 w-10" />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden p-0">
+            <div className="border-b border-background-200 bg-background-50 px-5 py-3">
+              <SkeletonBlock className="h-3 w-40" />
+            </div>
+            <div className="space-y-3 p-5">
+              <SkeletonBlock className="h-10 w-full" />
+              <SkeletonBlock className="h-10 w-full" />
+            </div>
+          </Card>
+        </div>
+
+        <div className="min-h-[18rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[22rem] sm:p-5 xl:min-h-full">
+          <div className="mx-auto flex max-w-[12rem] flex-col items-center gap-3">
+            <div className="aspect-[3/4] w-full animate-pulse rounded-xl bg-white/20" />
+            <div className="h-4 w-28 animate-pulse rounded bg-white/20" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function enrichWithMockProfile(employee) {
+  if (!employee?.name) return employee;
+  const normalized = employee.name.trim().toLowerCase();
+  const mock = mockEmployees.find(
+    (item) => item.name.trim().toLowerCase() === normalized
+  );
+  if (!mock) return employee;
+
+  return {
+    ...employee,
+    patientId: employee.patientId || mock.patientId,
+    accountNo: employee.accountNo || mock.accountNo,
+    phone: employee.phone || mock.phone,
+    address: employee.address || mock.address,
+    dateOfBirth: employee.dateOfBirth || mock.dateOfBirth,
+    gender: employee.gender || mock.gender,
+    mockEmployeeId: mock.id,
+  };
+}
+
 export function EmployeeRecordView({
   employee,
   onBack,
   backLabel = "← Back to search",
+  loading = false,
 }) {
-  const incident = employee.incidents?.[0];
+  const profile = useMemo(
+    () => (employee ? enrichWithMockProfile(employee) : null),
+    [employee]
+  );
+
+  const incident = profile?.incidents?.[0];
   const visits = useMemo(() => {
+    if (!profile) return [];
     if (incident?.visits?.length) return incident.visits;
     return [
       {
@@ -81,35 +182,50 @@ export function EmployeeRecordView({
         label: incident?.reportType || "Visit",
       },
     ];
-  }, [incident]);
+  }, [incident, profile]);
 
-  const [selectedVisitId, setSelectedVisitId] = useState(visits[0]?.id || null);
+  const [selectedVisitId, setSelectedVisitId] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
 
   useEffect(() => {
     setSelectedVisitId(visits[0]?.id || null);
-  }, [employee.id, visits]);
+  }, [profile?.id, visits]);
 
   const selectedVisit =
     visits.find((visit) => visit.id === selectedVisitId) || visits[0] || null;
 
   const visitDocs = useMemo(() => {
-    if (!selectedVisit) return [];
+    if (!profile || !selectedVisit) return [];
+    const ids = new Set(
+      [profile.id, profile.mockEmployeeId].filter(Boolean).map(String)
+    );
+    const name = (profile.name || "").trim().toLowerCase();
+
+    const matchesEmployee = (doc) =>
+      ids.has(String(doc.employeeId)) ||
+      (doc.employee || "").trim().toLowerCase() === name;
+
     const byVisit = sharedDocuments.filter(
       (doc) =>
-        doc.employeeId === employee.id &&
+        matchesEmployee(doc) &&
         (doc.visitDate === selectedVisit.date ||
           (!doc.visitDate && doc.shareDate === selectedVisit.date))
     );
     if (byVisit.length > 0) return byVisit;
-    return sharedDocuments.filter((doc) => doc.employeeId === employee.id);
-  }, [employee.id, selectedVisit]);
+    return sharedDocuments.filter(matchesEmployee);
+  }, [profile, selectedVisit]);
+
+  if (loading || !profile) {
+    return (
+      <EmployeeRecordSkeleton onBack={onBack} backLabel={backLabel} />
+    );
+  }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground-900 md:text-4xl">
-          {employee.name}
+        <h1 className="font-heading text-3xl font-bold tracking-tight text-foreground-900 md:text-4xl">
+          {profile.name}
         </h1>
         {onBack ? (
           <button
@@ -128,11 +244,12 @@ export function EmployeeRecordView({
             <UserRound className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <p className="text-lg font-semibold text-foreground-900">
-              {employee.name}
+            <p className="text-lg font-bold text-foreground-900">
+              {profile.name}
             </p>
             <p className="mt-0.5 text-sm tabular-nums text-foreground-500">
-              {employee.patientId || employee.employeeId} · {employee.accountNo}
+              {profile.patientId || profile.employeeId}
+              {profile.accountNo ? `-${profile.accountNo}` : ""}
             </p>
           </div>
         </div>
@@ -141,30 +258,29 @@ export function EmployeeRecordView({
       <div className="grid items-start gap-5 xl:grid-cols-2">
         <div className="min-w-0 space-y-5">
           <Card className="p-5">
-            <h2 className="mb-4 text-[11px] font-semibold tracking-[0.1em] text-foreground-500 uppercase">
+            <h2 className="mb-4 text-[11px] font-bold tracking-[0.1em] text-foreground-500 uppercase">
               Employee Demographics
             </h2>
             <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
               <div className="space-y-2.5">
-                <p className="tabular-nums text-foreground-900">
-                  {employee.accountNo}
+                <p className="font-bold tabular-nums text-foreground-900">
+                  {profile.accountNo || "—"}
                 </p>
-                <p className="tabular-nums text-foreground-900">
-                  {formatDob(employee.dateOfBirth)}
+                <p className="font-bold text-foreground-900">{profile.name}</p>
+                <p className="font-normal text-foreground-900">
+                  {profile.address || "Address not on file"}
                 </p>
-                <p className="font-medium text-foreground-900">{employee.name}</p>
-                <p className="text-foreground-900">
-                  {employee.address || "Address not on file"}
-                </p>
-                <p className="tabular-nums text-foreground-900">
-                  {employee.phone || "—"}
+                <p className="font-normal tabular-nums text-foreground-900">
+                  {profile.phone || "—"}
                 </p>
               </div>
               <div className="space-y-2.5">
-                <p className="tabular-nums text-foreground-900">
-                  {employee.phone || "—"}
+                <p className="font-normal tabular-nums text-foreground-900">
+                  {formatDob(profile.dateOfBirth)}
                 </p>
-                <p className="text-foreground-900">{employee.gender || "—"}</p>
+                <p className="font-normal text-foreground-900">
+                  {profile.gender || "—"}
+                </p>
               </div>
             </div>
           </Card>
@@ -172,10 +288,10 @@ export function EmployeeRecordView({
           <Card className="overflow-hidden p-0">
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-background-200 bg-background-50 text-[11px] font-semibold tracking-[0.08em] text-foreground-500 uppercase">
+                <thead className="border-b border-background-200 bg-background-50 text-[11px] font-bold tracking-[0.08em] text-foreground-500 uppercase">
                   <tr>
-                    <th className="px-5 py-3">Date</th>
-                    <th className="px-5 py-3">Visit</th>
+                    <th className="px-5 py-3 font-bold">Date</th>
+                    <th className="px-5 py-3 font-bold">Visit</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-background-200">
@@ -192,10 +308,22 @@ export function EmployeeRecordView({
                             : "border-l-4 border-l-transparent bg-white hover:bg-background-50"
                         )}
                       >
-                        <td className="px-5 py-3.5 font-semibold tabular-nums text-foreground-900">
+                        <td
+                          className={cn(
+                            "px-5 py-3.5 tabular-nums text-foreground-900",
+                            selected ? "font-bold" : "font-normal"
+                          )}
+                        >
                           {visit.date}
                         </td>
-                        <td className="px-5 py-3.5 text-foreground-900">
+                        <td
+                          className={cn(
+                            "px-5 py-3.5",
+                            selected
+                              ? "font-bold text-primary-600"
+                              : "font-normal text-foreground-900"
+                          )}
+                        >
                           {visit.label || "Visit"}
                         </td>
                       </tr>
@@ -207,7 +335,6 @@ export function EmployeeRecordView({
           </Card>
         </div>
 
-        {/* Right half of screen for visit documents */}
         <div className="min-h-[18rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[22rem] sm:p-5 xl:min-h-full">
           {visitDocs.length === 0 ? (
             <div className="flex h-full min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">

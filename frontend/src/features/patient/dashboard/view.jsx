@@ -5,6 +5,7 @@ import { CalendarDays, Clock3, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { currentPatient, dashboardSummary } from "@/data/patient";
+import { patientPaths } from "@/lib/portal-paths";
 import { recentVisits } from "@/data/visits";
 import { visitStatusStyles } from "@/lib/category-styles";
 import { cn } from "@/lib/utils";
@@ -75,7 +76,7 @@ export function PatientDashboardView() {
             </p>
           </div>
           <Link
-            href="/patient/visits"
+            href={patientPaths.visits}
             className="shrink-0 cursor-pointer text-sm font-semibold text-primary hover:text-primary-dark"
           >
             View All

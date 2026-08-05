@@ -4,10 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
-import {
-  currentEmployer,
-  employerNotifications,
-} from "@/data/employer";
+import { employerNotifications } from "@/data/employer";
 import {
   employerNavItems,
   employerScopedShareNavItems,
@@ -16,6 +13,8 @@ import {
   findSecureShare,
   isSecureShareExpired,
 } from "@/data/secure-shares";
+import { useEmployerProfile } from "@/hooks/use-employer-profile";
+import { clearAuthSession } from "@/lib/auth-session";
 import {
   clearSecureShareSession,
   getSecureShareSession,
@@ -32,11 +31,27 @@ function hasActiveSecureShareSession() {
   return true;
 }
 
+function handleLogout() {
+  clearAuthSession();
+  clearSecureShareSession();
+}
+
 export function EmployerShell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
   const [scopedSession, setScopedSession] = useState(false);
+  const { profile, loading: profileLoading } = useEmployerProfile();
+
+  const profileUser = useMemo(
+    () =>
+      profile || {
+        fullName: profileLoading ? "Loading..." : "Employer User",
+        title: profileLoading ? "" : "Employer Contact",
+        role: "Employer",
+      },
+    [profile, profileLoading]
+  );
 
   useEffect(() => {
     const active = hasActiveSecureShareSession();
@@ -84,15 +99,15 @@ export function EmployerShell({ children }) {
         open={navOpen}
         onClose={() => setNavOpen(false)}
         items={navItems}
-        onLogout={clearSecureShareSession}
+        onLogout={handleLogout}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar
           onMenuClick={() => setNavOpen(true)}
           portalLabel="Employer Portal"
-          organizationLabel={currentEmployer.organization}
-          profileUser={currentEmployer}
+          organizationLabel={profile?.organization}
+          profileUser={profileUser}
           profileHref={
             scopedSession
               ? "/employer/shared-documents/scoped"

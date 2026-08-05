@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { LogOut, Settings, UserRound } from "lucide-react";
+import { LOGIN_PATH } from "@/lib/auth-routes";
 import { cn } from "@/lib/utils";
 
 export function ProfileMenuItem({ href, icon: Icon, label, tone = "default", onClick }) {
@@ -75,7 +76,7 @@ export function ProfileDropdownCard({
 
       <div className="border-t border-[#f0ebe3] py-1.5">
         <ProfileMenuItem
-          href="/login"
+          href={LOGIN_PATH}
           icon={LogOut}
           label="Log Out"
           tone="danger"

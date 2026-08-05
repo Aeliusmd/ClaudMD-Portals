@@ -33,6 +33,12 @@ yarn-error.log*
 .env*
 !.env.example
 
+# python
+backend/.venv/
+backend/**/__pycache__/
+backend/**/*.pyc
+*.py[cod]
+
 # typescript / vercel
 *.tsbuildinfo
 next-env.d.ts

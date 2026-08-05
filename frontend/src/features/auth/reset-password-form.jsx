@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { HeartPulse } from "lucide-react";
+import { LOGIN_PATH } from "@/lib/auth-routes";
 
 export function ResetPasswordForm() {
   const [email, setEmail] = useState("");
@@ -84,7 +85,7 @@ export function ResetPasswordForm() {
         )}
 
         <Link
-          href="/login"
+          href={LOGIN_PATH}
           className="mt-8 inline-flex items-center justify-center font-sans text-[0.9rem] font-medium text-[#8a8f98] transition hover:text-[#2f2a26]"
         >
           ← Back to login

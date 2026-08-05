@@ -8,6 +8,8 @@ import {
   findSecureShare,
   isSecureShareExpired,
 } from "@/data/secure-shares";
+import { loginWithCredentials, resolvePortalDestination } from "@/lib/api/auth";
+import { saveAuthSession } from "@/lib/auth-session";
 import {
   clearSecureShareSession,
   getSecureShareSession,
@@ -15,21 +17,20 @@ import {
   saveSecureShareSession,
 } from "@/lib/secure-share-session";
 
-const DEMO_ACCOUNTS = [
-  "patient@demo.com",
-  "employer@demo.com",
-  "insurance@demo.com",
-  "outsider@demo.com",
-];
-
+const DEFAULT_ACTIVATION_KEY = "20000002";
 const ERROR_MISSING = "Please enter both email and password.";
-const ERROR_INVALID =
-  "Invalid credentials. Please use a recognized email address.";
+const ERROR_ACTIVATION =
+  "Missing activation key. Open the link from your invitation email.";
+const ERROR_GENERIC = "Unable to sign in. Please check your credentials.";
 
 function LoginFormInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shareToken = searchParams.get("share") || "";
+  const activationKey =
+    searchParams.get("activationkey") ||
+    searchParams.get("activationKey") ||
+    DEFAULT_ACTIVATION_KEY;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -79,7 +80,7 @@ function LoginFormInner() {
     event.preventDefault();
     if (isSigningIn) return;
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = email.trim();
     const hasEmail = Boolean(normalizedEmail);
     const hasPassword = Boolean(password);
 
@@ -88,48 +89,58 @@ function LoginFormInner() {
       return;
     }
 
-    if (!DEMO_ACCOUNTS.includes(normalizedEmail)) {
-      setError(ERROR_INVALID);
-      return;
-    }
-
-    const portalRoutes = {
-      "patient@demo.com": "/patient/dashboard",
-      "employer@demo.com": "/employer/dashboard",
-    };
-
-    const defaultDestination = portalRoutes[normalizedEmail];
-    if (!defaultDestination) {
-      setError(ERROR_INVALID);
+    if (!activationKey) {
+      setError(ERROR_ACTIVATION);
       return;
     }
 
     setError("");
     setIsSigningIn(true);
 
-    const shareSession = getSecureShareSession();
-    const share =
-      shareSession && findSecureShare(shareSession.token)
-        ? findSecureShare(shareSession.token)
-        : null;
-    const shareValid = Boolean(share && !isSecureShareExpired(share));
+    try {
+      const result = await loginWithCredentials({
+        username: normalizedEmail,
+        password,
+        activationKey,
+      });
 
-    const destination = resolvePostLoginDestination({
-      email: normalizedEmail,
-      defaultDestination,
-      shareSession: shareValid ? shareSession : null,
-      isShareExpired: !shareValid,
-    });
+      saveAuthSession({
+        accessToken: result.access_token,
+        refreshToken: result.refresh_token || null,
+        tokenType: result.token_type || "Bearer",
+        expiresIn: result.expires_in || null,
+        scope: result.scope || null,
+        user: result.user,
+        clinic: result.clinic,
+      });
 
-    // Normal login must not keep scoped session (US-4.3).
-    if (destination === defaultDestination) {
-      clearSecureShareSession();
-    } else if (share) {
-      saveSecureShareSession(share);
+      const defaultDestination = resolvePortalDestination(result.user?.portal);
+      const shareSession = getSecureShareSession();
+      const share =
+        shareSession && findSecureShare(shareSession.token)
+          ? findSecureShare(shareSession.token)
+          : null;
+      const shareValid = Boolean(share && !isSecureShareExpired(share));
+
+      const destination = resolvePostLoginDestination({
+        email: (result.user?.email || normalizedEmail).toLowerCase(),
+        defaultDestination,
+        shareSession: shareValid ? shareSession : null,
+        isShareExpired: !shareValid,
+      });
+
+      // Normal login must not keep scoped session (US-4.3).
+      if (destination === defaultDestination) {
+        clearSecureShareSession();
+      } else if (share) {
+        saveSecureShareSession(share);
+      }
+
+      router.push(destination);
+    } catch (err) {
+      setError(err?.message || ERROR_GENERIC);
+      setIsSigningIn(false);
     }
-
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    router.push(destination);
   }
 
   const inputClassName =
@@ -249,19 +260,6 @@ function LoginFormInner() {
                   disabled={isSigningIn}
                   className={inputClassName}
                 />
-              </div>
-
-              <div className="rounded-xl bg-background-100 px-3.5 py-3 sm:px-4 sm:py-3.5">
-                <p className="mb-2 font-sans text-sm font-medium text-foreground-700">
-                  Demo accounts (use any password):
-                </p>
-                <ul className="space-y-1 font-sans text-sm font-normal text-foreground-700">
-                  {DEMO_ACCOUNTS.map((account) => (
-                    <li key={account} className="leading-relaxed">
-                      • {account}
-                    </li>
-                  ))}
-                </ul>
               </div>
 
               {error ? (

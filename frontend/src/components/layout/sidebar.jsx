@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { patientNavItems } from "@/data/navigation";
+import { LOGIN_PATH } from "@/lib/auth-routes";
 import { cn } from "@/lib/utils";
 
 const icons = {
@@ -111,7 +112,7 @@ export function Sidebar({
 
         <div className="mt-auto shrink-0 border-t border-white/10 px-3 py-4">
           <Link
-            href="/login"
+            href={LOGIN_PATH}
             onClick={handleLogoutClick}
             className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/5 hover:text-white"
           >

@@ -2,8 +2,9 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, FileText, UserRound } from "lucide-react";
+import { CalendarDays, FileText, Filter, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DateRangeInput } from "@/components/ui/date-range-input";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -64,10 +65,17 @@ function EmployeeSearchContent() {
   const fromParam = searchParams.get("from");
   const categoryFilter = searchParams.get("category");
 
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [fromDate, setFromDate] = useState(daysAgoIso(30));
-  const [toDate, setToDate] = useState(todayIso());
+  const initialFrom = daysAgoIso(30);
+  const initialTo = todayIso();
+
+  const [draftQuery, setDraftQuery] = useState("");
+  const [draftFromDate, setDraftFromDate] = useState(initialFrom);
+  const [draftToDate, setDraftToDate] = useState(initialTo);
+
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [appliedFromDate, setAppliedFromDate] = useState(initialFrom);
+  const [appliedToDate, setAppliedToDate] = useState(initialTo);
+
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -76,15 +84,6 @@ function EmployeeSearchContent() {
   const [loadError, setLoadError] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(Boolean(employeeParam));
-
-  useEffect(() => {
-    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
-    return () => clearTimeout(handle);
-  }, [query]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [fromDate, toDate, debouncedQuery, categoryFilter]);
 
   const loadEmployees = useCallback(async () => {
     const token = getAccessToken();
@@ -107,11 +106,11 @@ function EmployeeSearchContent() {
               : undefined;
 
       const data = await fetchEmployerEmployeeSearch(token, {
-        fromDate,
-        toDate,
+        fromDate: appliedFromDate,
+        toDate: appliedToDate,
         page,
         pageSize: PAGE_SIZE,
-        search: debouncedQuery || undefined,
+        search: appliedQuery || undefined,
         category,
       });
       setRows(data.items);
@@ -130,21 +129,30 @@ function EmployeeSearchContent() {
       setLoading(false);
     }
   }, [
+    appliedFromDate,
+    appliedQuery,
+    appliedToDate,
     categoryFilter,
-    debouncedQuery,
-    fromDate,
     page,
     router,
-    toDate,
   ]);
 
   useEffect(() => {
     if (employeeParam) return undefined;
-    const handle = setTimeout(() => {
-      loadEmployees();
-    }, 100);
-    return () => clearTimeout(handle);
+    loadEmployees();
+    return undefined;
   }, [employeeParam, loadEmployees]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [categoryFilter]);
+
+  function applyFilters() {
+    setAppliedQuery(draftQuery.trim());
+    setAppliedFromDate(draftFromDate || initialFrom);
+    setAppliedToDate(draftToDate || initialTo);
+    setPage(1);
+  }
 
   useEffect(() => {
     if (!employeeParam) {
@@ -166,8 +174,8 @@ function EmployeeSearchContent() {
       try {
         const patientId = parsePatientId(employeeParam);
         const data = await fetchEmployerEmployeeSearch(token, {
-          fromDate,
-          toDate,
+          fromDate: appliedFromDate,
+          toDate: appliedToDate,
           page: 1,
           pageSize: 1,
           patientId: patientId || undefined,
@@ -204,7 +212,7 @@ function EmployeeSearchContent() {
     return () => {
       cancelled = true;
     };
-  }, [employeeParam, fromDate, fromParam, router, toDate]);
+  }, [appliedFromDate, appliedToDate, employeeParam, fromParam, router]);
 
   if (employeeParam) {
     const backToDashboard = fromParam === "dashboard";
@@ -248,8 +256,14 @@ function EmployeeSearchContent() {
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <SearchInput
           className="max-w-xl flex-1"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={draftQuery}
+          onChange={(e) => setDraftQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              applyFilters();
+            }
+          }}
           placeholder="Search by name, account, or SSN"
           ariaLabel="Search employees"
         />
@@ -257,16 +271,25 @@ function EmployeeSearchContent() {
           <DateRangeInput
             id="employee-search-from"
             label="From"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
+            value={draftFromDate}
+            onChange={(e) => setDraftFromDate(e.target.value)}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="employee-search-to"
             label="To"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
+            value={draftToDate}
+            onChange={(e) => setDraftToDate(e.target.value)}
           />
+          <Button
+            type="button"
+            onClick={applyFilters}
+            className="h-[2.625rem] shrink-0 gap-1.5 rounded-xl px-3.5 py-0 text-sm"
+            aria-label="Apply filters"
+          >
+            <Filter className="h-3.5 w-3.5" strokeWidth={2.25} />
+            Filter
+          </Button>
         </div>
       </div>
 

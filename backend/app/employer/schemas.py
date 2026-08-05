@@ -65,3 +65,32 @@ class EmployeeSearchResponse(BaseModel):
     to_date: str
     employer_id: int | None = None
 
+
+class EmployeeVisitDocument(BaseModel):
+    id: int
+    check_in_id: int
+    report_id: int | None = None
+    report_name: str
+    name: str
+    path: str | None = None
+    preview_badge: str
+    preview_label: str
+    is_completed: bool = False
+
+
+class EmployeeVisitRecord(BaseModel):
+    check_in_id: int
+    check_in_date: str | None = None
+    check_in_date_value: str | None = None
+    visit_label: str | None = None
+    category: str | None = None
+    documents: list[EmployeeVisitDocument] = []
+
+
+class EmployeeVisitsResponse(BaseModel):
+    patient_id: int
+    employer_id: int | None = None
+    from_date: str
+    to_date: str
+    visits: list[EmployeeVisitRecord] = []
+

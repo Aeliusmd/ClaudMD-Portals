@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search } from "lucide-react";
+import { Filter, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DateRangeInput } from "@/components/ui/date-range-input";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -97,10 +98,17 @@ export function EmployerDashboardView() {
   const last30From = daysAgoIso(today, 30);
 
   const [activeFilter, setActiveFilter] = useState(null);
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+
+  // Draft inputs — applied only when Filter is clicked (default: last 30 days)
+  const [draftQuery, setDraftQuery] = useState("");
+  const [draftFromDate, setDraftFromDate] = useState(last30From);
+  const [draftToDate, setDraftToDate] = useState(today);
+
+  // Applied values used by the employee table request
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [appliedFromDate, setAppliedFromDate] = useState(last30From);
+  const [appliedToDate, setAppliedToDate] = useState(today);
+
   const [employeePage, setEmployeePage] = useState(1);
   const [employeeTotal, setEmployeeTotal] = useState(0);
   const [employeeTotalPages, setEmployeeTotalPages] = useState(1);
@@ -117,11 +125,6 @@ export function EmployerDashboardView() {
   const [loadingEmployees, setLoadingEmployees] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [showCreateAppt, setShowCreateAppt] = useState(false);
-
-  useEffect(() => {
-    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
-    return () => clearTimeout(handle);
-  }, [query]);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,8 +172,8 @@ export function EmployerDashboardView() {
       return;
     }
 
-    const effectiveFrom = fromDate || last30From;
-    const effectiveTo = toDate || today;
+    const effectiveFrom = appliedFromDate || last30From;
+    const effectiveTo = appliedToDate || today;
     const category = serverCategory(activeFilter);
 
     setLoadingEmployees(true);
@@ -180,7 +183,7 @@ export function EmployerDashboardView() {
         toDate: effectiveTo,
         page: employeePage,
         pageSize: PAGE_SIZE,
-        search: debouncedQuery || undefined,
+        search: appliedQuery || undefined,
         category: category || undefined,
       });
       let items = data.items;
@@ -214,25 +217,25 @@ export function EmployerDashboardView() {
   }, [
     activeFilter,
     appointments,
-    debouncedQuery,
+    appliedFromDate,
+    appliedQuery,
+    appliedToDate,
     employeePage,
-    fromDate,
     last30From,
     router,
-    toDate,
     today,
   ]);
 
   useEffect(() => {
-    const handle = setTimeout(() => {
-      loadEmployees();
-    }, 150);
-    return () => clearTimeout(handle);
+    loadEmployees();
   }, [loadEmployees]);
 
-  useEffect(() => {
+  function applyFilters() {
+    setAppliedQuery(draftQuery.trim());
+    setAppliedFromDate(draftFromDate || last30From);
+    setAppliedToDate(draftToDate || today);
     setEmployeePage(1);
-  }, [activeFilter, fromDate, toDate, debouncedQuery]);
+  }
 
   const stats = {
     injury: summaryCounts?.injury ?? 0,
@@ -250,10 +253,11 @@ export function EmployerDashboardView() {
 
     setActiveFilter((prev) => {
       const next = prev === filter ? null : filter;
-      if (next) {
-        setFromDate(last30From);
-        setToDate(today);
-      }
+      // KPI clicks apply last-30-days immediately (Injury / Physicals / Drug Screens)
+      setDraftFromDate(last30From);
+      setDraftToDate(today);
+      setAppliedFromDate(last30From);
+      setAppliedToDate(today);
       return next;
     });
     setEmployeePage(1);
@@ -277,8 +281,10 @@ export function EmployerDashboardView() {
     setAppointments((prev) => [appointment, ...prev]);
     setApptCount((prev) => prev + 1);
     setActiveFilter("appointments");
-    setFromDate(last30From);
-    setToDate(today);
+    setDraftFromDate(last30From);
+    setDraftToDate(today);
+    setAppliedFromDate(last30From);
+    setAppliedToDate(today);
     setEmployeePage(1);
     setAppointmentPage(1);
   }
@@ -368,8 +374,14 @@ export function EmployerDashboardView() {
           <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted" />
           <input
             type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={draftQuery}
+            onChange={(e) => setDraftQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                applyFilters();
+              }
+            }}
             placeholder="Search employee..."
             className="w-full rounded-xl border border-border/80 bg-white py-2.5 pr-4 pl-10 text-sm text-ink outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/15"
           />
@@ -378,16 +390,25 @@ export function EmployerDashboardView() {
           <DateRangeInput
             id="dashboard-from"
             label="From"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
+            value={draftFromDate}
+            onChange={(e) => setDraftFromDate(e.target.value)}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="dashboard-to"
             label="To"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
+            value={draftToDate}
+            onChange={(e) => setDraftToDate(e.target.value)}
           />
+          <Button
+            type="button"
+            onClick={applyFilters}
+            className="h-[2.625rem] shrink-0 gap-1.5 rounded-xl px-3.5 py-0 text-sm"
+            aria-label="Apply filters"
+          >
+            <Filter className="h-3.5 w-3.5" strokeWidth={2.25} />
+            Filter
+          </Button>
         </div>
       </div>
 

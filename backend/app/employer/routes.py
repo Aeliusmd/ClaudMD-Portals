@@ -13,9 +13,11 @@ from app.employer.employee_search import (
 from app.employer.schemas import (
     DashboardSummaryResponse,
     EmployeeSearchResponse,
+    EmployeeVisitsResponse,
     EmployerProfileResponse,
 )
 from app.employer.service import get_dashboard_summary, get_employer_profile
+from app.employer.visit_documents import get_employee_visits
 
 router = APIRouter(prefix="/api/employer", tags=["employer"])
 
@@ -38,6 +40,28 @@ def employer_dashboard_summary_endpoint(
       drugScreens → VisitTypes.Code = 'PDS'
     """
     return get_dashboard_summary(current_user)
+
+
+@router.get(
+    "/employees/{patient_id}/visits",
+    response_model=EmployeeVisitsResponse,
+)
+def employer_employee_visits_endpoint(
+    patient_id: int,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    from_date: date | None = Query(default=None, alias="fromDate"),
+    to_date: date | None = Query(default=None, alias="toDate"),
+):
+    """
+    Visits for a patient under the logged-in employer, with documents from
+    dbo.DocterPublishes (one or many per check-in). SELECT only.
+    """
+    return get_employee_visits(
+        current_user,
+        patient_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
 
 
 @router.get("/employees/search", response_model=EmployeeSearchResponse)

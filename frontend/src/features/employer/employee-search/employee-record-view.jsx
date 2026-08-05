@@ -5,7 +5,9 @@ import { FileText, UserRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import { SkeletonBlock } from "@/components/ui/skeleton";
-import { employees as mockEmployees, sharedDocuments } from "@/data/employer";
+import { employees as mockEmployees } from "@/data/employer";
+import { fetchEmployeeVisits } from "@/lib/api/employer";
+import { getAccessToken } from "@/lib/auth-session";
 import { cn } from "@/lib/utils";
 
 function shortDocLabel(doc) {
@@ -18,7 +20,12 @@ function shortDocLabel(doc) {
   ) {
     return "WSR";
   }
-  if (doc.documentType?.includes("Doctor First")) return "DFR";
+  if (
+    doc.documentType?.includes("Doctor First") ||
+    doc.documentType?.includes("Doctor's First")
+  ) {
+    return "DFR";
+  }
   if (doc.documentType?.includes("Physical")) return "PR";
   return "DOC";
 }
@@ -160,6 +167,32 @@ function enrichWithMockProfile(employee) {
   };
 }
 
+function resolveNumericPatientId(employee) {
+  if (!employee) return null;
+  if (employee.numericPatientId != null) return Number(employee.numericPatientId);
+  if (employee.patientId != null && /^\d+$/.test(String(employee.patientId))) {
+    return Number(employee.patientId);
+  }
+  if (employee.id != null && /^\d+$/.test(String(employee.id))) {
+    return Number(employee.id);
+  }
+  const fromVisit = employee.incidents?.[0]?.visits?.[0]?.id;
+  if (fromVisit != null && /^\d+$/.test(String(fromVisit))) {
+    // visit id is check-in id, not patient — skip
+  }
+  const digits = String(employee.patientId || "")
+    .replace(/^p-/i, "")
+    .replace(/^acc-/i, "")
+    .replace(/\D/g, "");
+  if (digits && /^\d+$/.test(digits) && String(employee.id) === digits) {
+    return Number(digits);
+  }
+  if (employee.id != null && /^\d+$/.test(String(employee.id))) {
+    return Number(employee.id);
+  }
+  return null;
+}
+
 export function EmployeeRecordView({
   employee,
   onBack,
@@ -171,21 +204,65 @@ export function EmployeeRecordView({
     [employee]
   );
 
-  const incident = profile?.incidents?.[0];
-  const visits = useMemo(() => {
+  const fallbackVisits = useMemo(() => {
     if (!profile) return [];
-    if (incident?.visits?.length) return incident.visits;
+    const incident = profile.incidents?.[0];
+    if (incident?.visits?.length) {
+      return incident.visits.map((visit) => ({
+        ...visit,
+        id: String(visit.id),
+        documents: [],
+      }));
+    }
     return [
       {
         id: "base",
         date: incident?.checkInDate || "—",
         label: incident?.reportType || "Visit",
+        documents: [],
       },
     ];
-  }, [incident, profile]);
+  }, [profile]);
 
+  const [apiVisits, setApiVisits] = useState(null);
+  const [loadingVisits, setLoadingVisits] = useState(false);
   const [selectedVisitId, setSelectedVisitId] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
+
+  const visits = apiVisits || fallbackVisits;
+
+  useEffect(() => {
+    if (!profile) return undefined;
+
+    const patientId = resolveNumericPatientId(profile);
+    if (!patientId) {
+      setApiVisits(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function loadVisits() {
+      const token = getAccessToken();
+      if (!token) return;
+
+      setLoadingVisits(true);
+      try {
+        const data = await fetchEmployeeVisits(token, patientId);
+        if (cancelled) return;
+        setApiVisits(data.visits || []);
+      } catch {
+        if (!cancelled) setApiVisits(null);
+      } finally {
+        if (!cancelled) setLoadingVisits(false);
+      }
+    }
+
+    loadVisits();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile]);
 
   useEffect(() => {
     setSelectedVisitId(visits[0]?.id || null);
@@ -194,26 +271,7 @@ export function EmployeeRecordView({
   const selectedVisit =
     visits.find((visit) => visit.id === selectedVisitId) || visits[0] || null;
 
-  const visitDocs = useMemo(() => {
-    if (!profile || !selectedVisit) return [];
-    const ids = new Set(
-      [profile.id, profile.mockEmployeeId].filter(Boolean).map(String)
-    );
-    const name = (profile.name || "").trim().toLowerCase();
-
-    const matchesEmployee = (doc) =>
-      ids.has(String(doc.employeeId)) ||
-      (doc.employee || "").trim().toLowerCase() === name;
-
-    const byVisit = sharedDocuments.filter(
-      (doc) =>
-        matchesEmployee(doc) &&
-        (doc.visitDate === selectedVisit.date ||
-          (!doc.visitDate && doc.shareDate === selectedVisit.date))
-    );
-    if (byVisit.length > 0) return byVisit;
-    return sharedDocuments.filter(matchesEmployee);
-  }, [profile, selectedVisit]);
+  const visitDocs = selectedVisit?.documents || [];
 
   if (loading || !profile) {
     return (
@@ -295,40 +353,54 @@ export function EmployeeRecordView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-background-200">
-                  {visits.map((visit) => {
-                    const selected = visit.id === selectedVisit?.id;
-                    return (
-                      <tr
-                        key={visit.id}
-                        onClick={() => setSelectedVisitId(visit.id)}
-                        className={cn(
-                          "cursor-pointer transition",
-                          selected
-                            ? "border-l-4 border-l-primary-500 bg-primary-50"
-                            : "border-l-4 border-l-transparent bg-white hover:bg-background-50"
-                        )}
-                      >
-                        <td
+                  {loadingVisits && !apiVisits ? (
+                    <tr>
+                      <td colSpan={2} className="px-5 py-4 text-muted">
+                        Loading visits…
+                      </td>
+                    </tr>
+                  ) : visits.length === 0 ? (
+                    <tr>
+                      <td colSpan={2} className="px-5 py-4 text-muted">
+                        No visits found.
+                      </td>
+                    </tr>
+                  ) : (
+                    visits.map((visit) => {
+                      const selected = visit.id === selectedVisit?.id;
+                      return (
+                        <tr
+                          key={visit.id}
+                          onClick={() => setSelectedVisitId(visit.id)}
                           className={cn(
-                            "px-5 py-3.5 tabular-nums text-foreground-900",
-                            selected ? "font-bold" : "font-normal"
-                          )}
-                        >
-                          {visit.date}
-                        </td>
-                        <td
-                          className={cn(
-                            "px-5 py-3.5",
+                            "cursor-pointer transition",
                             selected
-                              ? "font-bold text-primary-600"
-                              : "font-normal text-foreground-900"
+                              ? "border-l-4 border-l-primary-500 bg-primary-50"
+                              : "border-l-4 border-l-transparent bg-white hover:bg-background-50"
                           )}
                         >
-                          {visit.label || "Visit"}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          <td
+                            className={cn(
+                              "px-5 py-3.5 tabular-nums text-foreground-900",
+                              selected ? "font-bold" : "font-normal"
+                            )}
+                          >
+                            {visit.date}
+                          </td>
+                          <td
+                            className={cn(
+                              "px-5 py-3.5",
+                              selected
+                                ? "font-bold text-primary-600"
+                                : "font-normal text-foreground-900"
+                            )}
+                          >
+                            {visit.label || "Visit"}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>

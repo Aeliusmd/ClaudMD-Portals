@@ -5,6 +5,11 @@ export const categoryStyles = {
   Physical: "bg-secondary-100 text-secondary-700",
 };
 
+export const coverageStyles = {
+  "Workers Comp": "bg-accent-50 text-accent-700",
+  "Private Insurance": "bg-secondary-100 text-secondary-700",
+};
+
 export const appointmentStatusStyles = {
   Confirmed: "bg-secondary-100 text-secondary-700",
   Pending: "bg-accent-50 text-accent-700",
@@ -31,3 +36,19 @@ export const workStatusStyles = {
   "Off work — pending MRI": "bg-accent-50 text-accent-700",
   "Off work — 2 weeks": "bg-accent-50 text-accent-700",
 };
+
+const workStatusPrefixStyles = [
+  ["Off work", "bg-accent-50 text-accent-700"],
+  ["Light duty", "bg-amber-50 text-amber-700"],
+  ["Modified", "bg-amber-50 text-amber-700"],
+  ["Full duty", "bg-secondary-100 text-secondary-700"],
+];
+
+/** Work statuses carry a free-text duration ("Off work — 3 weeks"), so fall back to the prefix. */
+export function workStatusStyle(status) {
+  if (workStatusStyles[status]) return workStatusStyles[status];
+  const match = workStatusPrefixStyles.find(([prefix]) =>
+    status?.startsWith(prefix)
+  );
+  return match ? match[1] : "bg-stone-100 text-stone-600";
+}

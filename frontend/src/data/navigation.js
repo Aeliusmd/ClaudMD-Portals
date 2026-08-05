@@ -17,6 +17,11 @@ export const employerNavItems = [
   { href: "/employer/profile", label: "Profile / Security", icon: "Shield" },
 ];
 
+export const insuranceNavItems = [
+  { href: "/insurance/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
+  { href: "/insurance/profile", label: "Profile / Security", icon: "Shield" },
+];
+
 /** Epic 4 scoped session — only Shared Documents (secure email link). */
 export const employerScopedShareNavItems = [
   {

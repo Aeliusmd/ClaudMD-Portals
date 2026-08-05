@@ -5,6 +5,7 @@ export async function loginWithCredentials({
   username,
   password,
   activationKey,
+  portal,
 }) {
   const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
     method: "POST",
@@ -16,6 +17,7 @@ export async function loginWithCredentials({
       username,
       password,
       activationKey,
+      ...(portal ? { portal } : {}),
     }),
   });
 
@@ -40,8 +42,5 @@ export async function loginWithCredentials({
   return data;
 }
 
-export function resolvePortalDestination(portal) {
-  if (portal === "employer") return "/employer/dashboard";
-  if (portal === "patient") return "/patient/dashboard";
-  return "/employer/dashboard";
-}
+export { resolvePortalDestination } from "@/lib/portal-paths";
+

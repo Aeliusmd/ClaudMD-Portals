@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
+from math import ceil
 
 from fastapi import HTTPException, status
 
@@ -8,18 +9,31 @@ from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
 from app.employer.schemas import EmployeeSearchResponse, EmployeeSearchRow
 from app.employer.service import _fetch_profile_from_clinic
+from app.employer.shift_type import shift_type_label
+
+DEFAULT_PAGE_SIZE = 10
+MAX_PAGE_SIZE = 50
 
 
 def search_employees(
     current_user: CurrentUser,
     from_date: date,
     to_date: date,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    search: str | None = None,
+    category: str | None = None,
+    patient_id: int | None = None,
 ) -> EmployeeSearchResponse:
     if from_date > to_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="From date must be on or before to date.",
         )
+
+    page = max(1, int(page or 1))
+    page_size = min(MAX_PAGE_SIZE, max(1, int(page_size or DEFAULT_PAGE_SIZE)))
 
     clinic = get_clinic_by_activation_key(current_user.activation_key)
     if not clinic:
@@ -35,21 +49,60 @@ def search_employees(
             detail="Employer not found for this user.",
         )
 
-    rows = _fetch_employee_rows(
+    total, rows = _fetch_employee_rows(
         clinic=clinic,
         employer_id=profile.employer_id,
         from_date=from_date,
         to_date=to_date,
         organization=profile.organization,
+        page=page,
+        page_size=page_size,
+        search=search,
+        category=category,
+        patient_id=patient_id,
     )
+    total_pages = max(1, ceil(total / page_size)) if total else 1
+    if total and page > total_pages:
+        page = total_pages
+        total, rows = _fetch_employee_rows(
+            clinic=clinic,
+            employer_id=profile.employer_id,
+            from_date=from_date,
+            to_date=to_date,
+            organization=profile.organization,
+            page=page,
+            page_size=page_size,
+            search=search,
+            category=category,
+            patient_id=patient_id,
+        )
 
     return EmployeeSearchResponse(
         items=rows,
-        total=len(rows),
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages if total else 1,
         from_date=from_date.isoformat(),
         to_date=to_date.isoformat(),
         employer_id=profile.employer_id,
     )
+
+
+def _category_sql_clause(category: str | None) -> tuple[str, list]:
+    cat = (category or "").strip().lower()
+    if not cat:
+        return "", []
+    if cat in {"injury"}:
+        return "AND vt.CategoryId = 1", []
+    if cat in {"physicals", "physical"}:
+        return (
+            "AND vt.CategoryId = 2 AND UPPER(LTRIM(RTRIM(ISNULL(vt.Code, '')))) <> 'PDS'",
+            [],
+        )
+    if cat in {"drugscreens", "drug_screens", "drug-screen", "drugscreen"}:
+        return "AND UPPER(LTRIM(RTRIM(ISNULL(vt.Code, '')))) = 'PDS'", []
+    return "", []
 
 
 def _fetch_employee_rows(
@@ -59,12 +112,38 @@ def _fetch_employee_rows(
     from_date: date,
     to_date: date,
     organization: str | None,
-) -> list[EmployeeSearchRow]:
-    """Read-only: unique patients with latest check-in in range."""
-    with get_clinic_connection(clinic) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
+    page: int,
+    page_size: int,
+    search: str | None,
+    category: str | None,
+    patient_id: int | None,
+) -> tuple[int, list[EmployeeSearchRow]]:
+    """Read-only: unique patients with latest check-in in range (paged)."""
+    q = (search or "").strip()
+    search_like = f"%{q.lower()}%"
+    category_sql, _ = _category_sql_clause(category)
+    offset = (page - 1) * page_size
+
+    patient_filter_sql = ""
+    patient_params: list = []
+    if patient_id is not None:
+        patient_filter_sql = "AND r.PatientId = ?"
+        patient_params.append(int(patient_id))
+
+    search_sql = ""
+    search_params: list = []
+    if q:
+        search_sql = """
+              AND (
+                    LOWER(CONCAT(ISNULL(p.FirstName, ''), ' ', ISNULL(p.LastName, ''))) LIKE ?
+                 OR LOWER(CAST(ISNULL(p.AccountNumber, '') AS NVARCHAR(100))) LIKE ?
+                 OR LOWER(CAST(ISNULL(inc.IncidentNumber, '') AS NVARCHAR(100))) LIKE ?
+                 OR LOWER(CAST(ISNULL(p.SSN, '') AS NVARCHAR(100))) LIKE ?
+              )
+        """
+        search_params = [search_like, search_like, search_like, search_like]
+
+    base_cte = f"""
             WITH FilteredCheckIns AS (
                 SELECT
                     ch.Id AS CheckInId,
@@ -92,6 +171,24 @@ def _fetch_employee_rows(
                     ) AS rn
                 FROM FilteredCheckIns
             )
+    """
+
+    count_sql = f"""
+            {base_cte}
+            SELECT COUNT(*) AS TotalCount
+            FROM Ranked r
+            INNER JOIN dbo.Patients p ON p.Id = r.PatientId
+            LEFT JOIN dbo.VisitTypes vt ON vt.Id = r.VisitTypeId
+            LEFT JOIN dbo.Incidents inc ON inc.Id = r.IncidentId
+            WHERE r.rn = 1
+              AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
+              {patient_filter_sql}
+              {category_sql}
+              {search_sql}
+    """
+
+    page_sql = f"""
+            {base_cte}
             SELECT
                 r.CheckInId,
                 r.PatientId,
@@ -100,6 +197,8 @@ def _fetch_employee_rows(
                 r.InjuryTime,
                 r.IncidentId,
                 r.WorkStatusId,
+                ews.CurrentWorkShiftTypeId,
+                ews.NextWorkShiftTypeId,
                 p.Id AS PatientTableId,
                 p.AccountNumber,
                 p.SSN,
@@ -128,20 +227,44 @@ def _fetch_employee_rows(
             LEFT JOIN dbo.Incidents inc ON inc.Id = r.IncidentId
             LEFT JOIN dbo.Insurances ins ON ins.Id = r.InsuranceId
             LEFT JOIN dbo.Employers emp ON emp.Id = r.EmployerId
+            OUTER APPLY (
+                SELECT TOP 1
+                    ws.CurrentWorkShiftTypeId,
+                    ws.NextWorkShiftTypeId
+                FROM dbo.EHRWorkStatuses ws
+                INNER JOIN dbo.CheckInsHeader ch ON ch.Id = ws.CheckInId
+                WHERE ch.PatientId = r.PatientId
+                  AND (ws.IsDeleted = 0 OR ws.IsDeleted IS NULL)
+                  AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+                ORDER BY
+                    CASE WHEN ws.CheckInId = r.CheckInId THEN 0 ELSE 1 END,
+                    CASE WHEN ch.EmployerId = r.EmployerId THEN 0 ELSE 1 END,
+                    ch.CheckInDate DESC,
+                    ws.Id DESC
+            ) ews
             WHERE r.rn = 1
               AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
+              {patient_filter_sql}
+              {category_sql}
+              {search_sql}
             ORDER BY r.CheckInDate DESC, p.LastName, p.FirstName
-            """,
-            (employer_id, from_date, to_date),
-        )
+            OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+    """
+
+    base_params = [employer_id, from_date, to_date]
+    filter_params = base_params + patient_params + search_params
+
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(count_sql, tuple(filter_params))
+        total = int(cursor.fetchone()[0] or 0)
+
+        cursor.execute(page_sql, tuple(filter_params + [offset, page_size]))
         columns = [col[0] for col in cursor.description]
         db_rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-    items: list[EmployeeSearchRow] = []
-    for row in db_rows:
-        items.append(_map_employee_row(row, organization))
-
-    return items
+    items = [_map_employee_row(row, organization) for row in db_rows]
+    return total, items
 
 
 def _map_employee_row(row: dict, organization: str | None) -> EmployeeSearchRow:
@@ -184,6 +307,12 @@ def _map_employee_row(row: dict, organization: str | None) -> EmployeeSearchRow:
 
     check_in_iso = _format_date_iso(row.get("CheckInDate"))
 
+    # Prefer EHRWorkStatuses.CurrentWorkShiftTypeId; fall back to header WorkStatusId.
+    current_shift = row.get("CurrentWorkShiftTypeId")
+    if current_shift is None:
+        current_shift = row.get("WorkStatusId")
+    next_shift = row.get("NextWorkShiftTypeId")
+
     return EmployeeSearchRow(
         id=f"{patient_id}-{check_in_id}",
         patient_id=patient_id,
@@ -203,8 +332,8 @@ def _map_employee_row(row: dict, organization: str | None) -> EmployeeSearchRow:
         incident_number=incident_display,
         date_of_injury=_format_display_date(row.get("InjuryDate")),
         time_of_injury=_format_time_display(row.get("InjuryTime")),
-        work_status=None,
-        disability_status=None,
+        work_status=shift_type_label(current_shift),
+        disability_status=shift_type_label(next_shift),
         unread_report_count=0,
         appointment_count=0,
         date_of_birth=_format_display_date(row.get("DateOfBirth")),

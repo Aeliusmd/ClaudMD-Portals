@@ -58,6 +58,10 @@ class EmployeeSearchRow(BaseModel):
 class EmployeeSearchResponse(BaseModel):
     items: list[EmployeeSearchRow]
     total: int
+    page: int = 1
+    page_size: int = 10
+    total_pages: int = 1
     from_date: str
     to_date: str
     employer_id: int | None = None
+

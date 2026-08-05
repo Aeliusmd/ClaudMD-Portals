@@ -67,22 +67,36 @@ export async function fetchEmployerDashboardSummary(accessToken) {
 }
 
 function genderLabel(genderId, gender) {
-  if (gender) return gender;
-  if (genderId === 1) return "Male";
-  if (genderId === 2) return "Female";
+  if (gender === "Male" || gender === "M" || genderId === 1) return "M";
+  if (gender === "Female" || gender === "F" || genderId === 2) return "F";
+  if (gender) return String(gender).charAt(0).toUpperCase();
   return "—";
+}
+
+function formatAccountNo(accountNo) {
+  if (accountNo == null || accountNo === "") return null;
+  const raw = String(accountNo).trim();
+  if (!raw) return null;
+  if (/^ACC-/i.test(raw)) return raw.toUpperCase();
+  return `ACC-${raw}`;
 }
 
 function mapEmployeeSearchRow(row) {
   const category = row.category || null;
+  const accountNo = formatAccountNo(row.account_no);
+  const patientId = accountNo
+    ? `P-${String(row.account_no).replace(/^ACC-/i, "")}`
+    : row.employee_id
+      ? `P-${row.employee_id}`
+      : null;
   return {
     id: row.id,
     patientId: row.patient_id,
     checkInId: row.check_in_id,
-    employeeId: row.employee_id,
+    employeeId: String(row.employee_id),
     employeeName: row.employee_name,
     employee: row.employee_name,
-    accountNo: row.account_no,
+    accountNo,
     ssnLast4: row.ssn_last4,
     ssn: row.ssn,
     employerName: row.employer_name,
@@ -112,36 +126,47 @@ function mapEmployeeSearchRow(row) {
     city: row.city,
     state: row.state,
     zipCode: row.zip_code,
+    displayPatientId: patientId,
   };
 }
 
 export function searchRowToEmployee(row) {
   if (!row) return null;
+  const accountNo = row.accountNo || formatAccountNo(row.account_no);
+  const patientId =
+    row.displayPatientId ||
+    (accountNo
+      ? `P-${String(accountNo).replace(/^ACC-/i, "")}`
+      : row.employeeId
+        ? `P-${row.employeeId}`
+        : null);
+
   return {
-    id: row.employeeId,
-    name: row.employeeName,
-    patientId: row.accountNo ? `P-${row.accountNo}` : row.employeeId,
-    accountNo: row.accountNo,
+    id: String(row.employeeId),
+    name: row.employeeName || row.employee,
+    patientId,
+    accountNo,
     employerName: row.employerName,
     phone: row.phone,
     dateOfBirth: row.dateOfBirth,
-    gender: row.gender || genderLabel(row.genderId),
+    gender: genderLabel(row.genderId, row.gender),
     address: row.address,
+    email: row.email,
     incidents: [
       {
         id: row.incidentId || row.checkInId,
-        incidentNumber: row.incidentNumber,
+        incidentNumber: row.incidentNumber || "N/A",
         category: row.category,
-        checkInDate: row.date,
+        checkInDate: row.date || row.lastVisit,
         dateOfInjury: row.dateOfInjury,
         timeOfInjury: row.timeOfInjury,
-        reportType: row.reportType,
-        workStatus: row.workStatus,
+        reportType: row.reportType || row.category || "Visit",
+        workStatus: row.workStatus || "—",
         visits: [
           {
-            id: String(row.checkInId),
-            date: row.date,
-            label: row.reportType,
+            id: String(row.checkInId || row.id),
+            date: row.date || row.lastVisit || "—",
+            label: row.reportType || row.category || "Visit",
             category: row.category,
           },
         ],
@@ -152,11 +177,26 @@ export function searchRowToEmployee(row) {
 
 export async function fetchEmployerEmployeeSearch(
   accessToken,
-  { fromDate, toDate } = {}
+  {
+    fromDate,
+    toDate,
+    page = 1,
+    pageSize = 10,
+    search,
+    category,
+    patientId,
+  } = {}
 ) {
   const params = new URLSearchParams();
   if (fromDate) params.set("fromDate", fromDate);
   if (toDate) params.set("toDate", toDate);
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+  if (search) params.set("search", search);
+  if (category) params.set("category", category);
+  if (patientId != null && patientId !== "") {
+    params.set("patientId", String(patientId));
+  }
   const qs = params.toString();
   const path = `/api/employer/employees/search${qs ? `?${qs}` : ""}`;
 
@@ -169,6 +209,9 @@ export async function fetchEmployerEmployeeSearch(
   return {
     items: (data.items || []).map(mapEmployeeSearchRow),
     total: data.total ?? 0,
+    page: data.page ?? page,
+    pageSize: data.page_size ?? pageSize,
+    totalPages: data.total_pages ?? 1,
     fromDate: data.from_date,
     toDate: data.to_date,
     employerId: data.employer_id,

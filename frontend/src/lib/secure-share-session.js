@@ -4,6 +4,9 @@
  * and closing the tab ends the scoped session.
  */
 
+import { getLoginHref } from "@/lib/auth-routes";
+import { employerPaths } from "@/lib/portal-paths";
+
 const STORAGE_KEY = "claudmd.secureShareSession";
 
 function canUseStorage() {
@@ -45,14 +48,12 @@ export function clearSecureShareSession() {
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
-import { getLoginHref } from "@/lib/auth-routes";
-
 export function getSecureShareLoginHref(token) {
   return getLoginHref({ share: token });
 }
 
 export function getSecureShareScopedHref() {
-  return "/employer/shared-documents/scoped";
+  return employerPaths.sharedDocumentsScoped;
 }
 
 /**

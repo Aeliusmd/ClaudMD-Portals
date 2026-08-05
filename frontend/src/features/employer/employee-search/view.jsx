@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, FileText, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -8,18 +8,19 @@ import { Card } from "@/components/ui/card";
 import { DateRangeInput } from "@/components/ui/date-range-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { PAGE_SIZE, Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { EmployeeRecordView } from "@/features/employer/employee-search/employee-record-view";
-import { matchesEmployeeSearch } from "@/features/employer/employee-search/search-utils";
 import {
   fetchEmployerEmployeeSearch,
   searchRowToEmployee,
 } from "@/lib/api/employer";
 import { LOGIN_PATH } from "@/lib/auth-routes";
 import { getAccessToken } from "@/lib/auth-session";
+import { employerPaths } from "@/lib/portal-paths";
 import { reportBadgeStyles } from "@/lib/report-badge-styles";
 import { workStatusStyles } from "@/lib/category-styles";
-import { cn } from "@/lib/utils";
 
 function daysAgoIso(days) {
   const date = new Date();
@@ -31,18 +32,29 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function findEmployeeFromRows(rows, param) {
+function parsePatientId(param) {
   if (!param) return null;
-  const normalized = param.trim().toLowerCase();
-  const row = rows.find(
-    (entry) =>
-      String(entry.patientId) === normalized ||
-      String(entry.employeeId).toLowerCase() === normalized ||
-      String(entry.accountNo || "").toLowerCase() === normalized ||
-      `p-${String(entry.accountNo || "").toLowerCase()}` === normalized
-  );
-  return row ? searchRowToEmployee(row) : null;
+  const raw = String(param).trim();
+  if (/^\d+$/.test(raw)) return Number(raw);
+  const digits = raw.replace(/^p-/i, "").replace(/^acc-/i, "");
+  if (/^\d+$/.test(digits)) return Number(digits);
+  return null;
 }
+
+const searchTableHeaders = [
+  "Patient Name",
+  "Account No.",
+  "Employer",
+  "Insurance",
+  "Report Type",
+  "Checked-in Date",
+  "Incident No.",
+  "Date of Injury",
+  "Time of Injury",
+  "Work Status",
+  "AWS Unread Reports",
+  "Appointments",
+];
 
 function EmployeeSearchContent() {
   const router = useRouter();
@@ -53,109 +65,184 @@ function EmployeeSearchContent() {
   const categoryFilter = searchParams.get("category");
 
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [fromDate, setFromDate] = useState(daysAgoIso(30));
   const [toDate, setToDate] = useState(todayIso());
+  const [page, setPage] = useState(1);
   const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(Boolean(employeeParam));
 
   useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [fromDate, toDate, debouncedQuery, categoryFilter]);
+
+  const loadEmployees = useCallback(async () => {
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(LOGIN_PATH);
+      return;
+    }
+
+    setLoading(true);
+    setLoadError("");
+
+    try {
+      const category =
+        categoryFilter === "Injury"
+          ? "injury"
+          : categoryFilter === "Physical"
+            ? "physicals"
+            : categoryFilter === "Drug Screen"
+              ? "drugscreens"
+              : undefined;
+
+      const data = await fetchEmployerEmployeeSearch(token, {
+        fromDate,
+        toDate,
+        page,
+        pageSize: PAGE_SIZE,
+        search: debouncedQuery || undefined,
+        category,
+      });
+      setRows(data.items);
+      setTotal(data.total);
+      setTotalPages(data.totalPages);
+    } catch (err) {
+      if (err?.status === 401) {
+        router.replace(LOGIN_PATH);
+        return;
+      }
+      setLoadError(err?.message || "Unable to load employees.");
+      setRows([]);
+      setTotal(0);
+      setTotalPages(1);
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    categoryFilter,
+    debouncedQuery,
+    fromDate,
+    page,
+    router,
+    toDate,
+  ]);
+
+  useEffect(() => {
+    if (employeeParam) return undefined;
+    const handle = setTimeout(() => {
+      loadEmployees();
+    }, 100);
+    return () => clearTimeout(handle);
+  }, [employeeParam, loadEmployees]);
+
+  useEffect(() => {
+    if (!employeeParam) {
+      setSelectedEmployee(null);
+      setLoadingDetail(false);
+      return undefined;
+    }
+
     let cancelled = false;
 
-    async function loadEmployees() {
+    async function loadDetail() {
       const token = getAccessToken();
       if (!token) {
         router.replace(LOGIN_PATH);
         return;
       }
 
-      setLoading(true);
-      setLoadError("");
-
+      setLoadingDetail(true);
       try {
+        const patientId = parsePatientId(employeeParam);
         const data = await fetchEmployerEmployeeSearch(token, {
           fromDate,
           toDate,
+          page: 1,
+          pageSize: 1,
+          patientId: patientId || undefined,
+          search: patientId ? undefined : employeeParam,
         });
-        if (!cancelled) {
-          setRows(data.items);
+        if (cancelled) return;
+        const row = data.items[0] || null;
+        if (!row) {
+          router.replace(
+            fromParam === "dashboard"
+              ? employerPaths.dashboard
+              : employerPaths.employeeSearch
+          );
+          return;
         }
+        setSelectedEmployee(searchRowToEmployee(row));
       } catch (err) {
-        if (!cancelled) {
-          if (err?.status === 401) {
-            router.replace(LOGIN_PATH);
-            return;
-          }
-          setLoadError(err?.message || "Unable to load employees.");
-          setRows([]);
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(LOGIN_PATH);
+          return;
         }
+        router.replace(
+          fromParam === "dashboard"
+            ? employerPaths.dashboard
+            : employerPaths.employeeSearch
+        );
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoadingDetail(false);
       }
     }
 
-    loadEmployees();
-
+    loadDetail();
     return () => {
       cancelled = true;
     };
-  }, [fromDate, toDate, router]);
+  }, [employeeParam, fromDate, fromParam, router, toDate]);
 
-  const selectedEmployee = useMemo(
-    () => findEmployeeFromRows(rows, employeeParam),
-    [employeeParam, rows]
-  );
-
-  const filteredRows = useMemo(() => {
-    return rows.filter((entry) => {
-      if (categoryFilter === "Injury" || categoryFilter === "Physical") {
-        if (entry.category !== categoryFilter) return false;
-      }
-      return matchesEmployeeSearch(entry, query);
-    });
-  }, [categoryFilter, query, rows]);
-
-  useEffect(() => {
-    if (employeeParam && !loading && !selectedEmployee) {
-      router.replace(
-        fromParam === "dashboard"
-          ? "/employer/dashboard"
-          : "/employer/employee-search"
-      );
-    }
-  }, [employeeParam, selectedEmployee, router, fromParam, loading]);
-
-  if (selectedEmployee) {
+  if (employeeParam) {
     const backToDashboard = fromParam === "dashboard";
+    const backLabel = backToDashboard
+      ? "← Back to dashboard"
+      : "← Back to search";
+    const onBack = () =>
+      router.push(
+        backToDashboard
+          ? employerPaths.dashboard
+          : employerPaths.employeeSearch
+      );
+
     return (
       <EmployeeRecordView
         employee={selectedEmployee}
-        backLabel={backToDashboard ? "← Back to dashboard" : "← Back to search"}
-        onBack={() =>
-          router.push(
-            backToDashboard
-              ? "/employer/dashboard"
-              : "/employer/employee-search"
-          )
-        }
+        loading={loadingDetail || !selectedEmployee}
+        backLabel={backLabel}
+        onBack={onBack}
       />
     );
   }
 
   function openEmployee(row) {
-    const code = row.accountNo || row.employeeId || row.patientId;
-    router.push(`/employer/employee-search?employee=${encodeURIComponent(code)}`);
+    const code = row.patientId || row.employeeId || row.accountNo;
+    router.push(
+      `${employerPaths.employeeSearch}?employee=${encodeURIComponent(code)}`
+    );
   }
+
+  const start = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const end = Math.min(page * PAGE_SIZE, total);
 
   return (
     <div>
       <PageHeader title="Employee Search" className="mb-1" />
       <p className="mb-4 text-sm text-muted">
-        {loading
-          ? "Loading employees…"
-          : `Showing ${filteredRows.length} results`}
+        {loading ? "Loading employees…" : `Showing ${total} results`}
       </p>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -191,10 +278,12 @@ function EmployeeSearchContent() {
 
       <Card className="overflow-hidden">
         {loading ? (
-          <div className="flex min-h-72 items-center justify-center text-sm text-muted">
-            Loading employee records…
-          </div>
-        ) : filteredRows.length === 0 ? (
+          <TableSkeleton
+            headers={searchTableHeaders}
+            rows={PAGE_SIZE}
+            minWidthClass="min-w-[72rem]"
+          />
+        ) : rows.length === 0 ? (
           <EmptyState
             icon={UserRound}
             title="No employees match your search"
@@ -202,96 +291,100 @@ function EmployeeSearchContent() {
             className="min-h-72 rounded-none border-0"
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-[72rem] w-full text-left text-sm">
-              <thead className="border-b border-border/70 bg-cream/40 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
-                <tr>
-                  <th className="px-4 py-3">Patient Name</th>
-                  <th className="px-4 py-3">Account No.</th>
-                  <th className="px-4 py-3">Employer</th>
-                  <th className="px-4 py-3">Insurance</th>
-                  <th className="px-4 py-3">Report Type</th>
-                  <th className="px-4 py-3">Checked-in Date</th>
-                  <th className="px-4 py-3">Incident No.</th>
-                  <th className="px-4 py-3">Date of Injury</th>
-                  <th className="px-4 py-3">Time of Injury</th>
-                  <th className="px-4 py-3">Work Status</th>
-                  <th className="px-4 py-3">AWS Unread Reports</th>
-                  <th className="px-4 py-3">Appointments</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {filteredRows.map((row) => (
-                  <tr
-                    key={row.id}
-                    onClick={() => openEmployee(row)}
-                    className="cursor-pointer bg-white transition hover:bg-cream/40"
-                  >
-                    <td className="px-4 py-3.5 font-semibold text-ink">
-                      {row.employeeName}
-                    </td>
-                    <td className="px-4 py-3.5 tabular-nums text-muted">
-                      {row.accountNo}
-                    </td>
-                    <td className="px-4 py-3.5 text-ink">{row.employerName}</td>
-                    <td className="max-w-[10rem] truncate px-4 py-3.5 text-ink">
-                      {row.insuranceCompany}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <Badge
-                        className={
-                          reportBadgeStyles[row.reportType] ||
-                          "bg-stone-100 text-stone-700"
-                        }
-                      >
-                        {row.reportType}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3.5 text-ink">{row.date}</td>
-                    <td className="px-4 py-3.5 tabular-nums text-muted">
-                      {row.incidentNumber}
-                    </td>
-                    <td className="px-4 py-3.5 text-ink">
-                      {row.dateOfInjury || "N/A"}
-                    </td>
-                    <td className="px-4 py-3.5 text-ink">
-                      {row.timeOfInjury || "N/A"}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="space-y-1">
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-[72rem] w-full text-left text-sm">
+                <thead className="border-b border-border/70 bg-cream/40 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
+                  <tr>
+                    {searchTableHeaders.map((label) => (
+                      <th key={label} className="px-4 py-3">
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      onClick={() => openEmployee(row)}
+                      className="cursor-pointer bg-white transition hover:bg-cream/40"
+                    >
+                      <td className="px-4 py-3.5 font-semibold text-ink">
+                        {row.employeeName}
+                      </td>
+                      <td className="px-4 py-3.5 tabular-nums text-muted">
+                        {row.accountNo}
+                      </td>
+                      <td className="px-4 py-3.5 text-ink">{row.employerName}</td>
+                      <td className="max-w-[10rem] truncate px-4 py-3.5 text-ink">
+                        {row.insuranceCompany}
+                      </td>
+                      <td className="px-4 py-3.5">
                         <Badge
                           className={
-                            workStatusStyles[row.workStatus] ||
-                            "bg-stone-100 text-stone-600"
+                            reportBadgeStyles[row.reportType] ||
+                            "bg-stone-100 text-stone-700"
                           }
                         >
-                          {row.workStatus}
+                          {row.reportType}
                         </Badge>
-                        {row.disabilityStatus &&
-                        row.disabilityStatus !== "None" ? (
-                          <p className="text-xs text-muted">
-                            {row.disabilityStatus}
-                          </p>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 tabular-nums text-ink">
-                        <FileText className="h-4 w-4 text-muted" />
-                        {row.unreadReportCount}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 tabular-nums text-ink">
-                        <CalendarDays className="h-4 w-4 text-muted" />
-                        {row.appointmentCount}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-ink">{row.date}</td>
+                      <td className="px-4 py-3.5 tabular-nums text-muted">
+                        {row.incidentNumber}
+                      </td>
+                      <td className="px-4 py-3.5 text-ink">
+                        {row.dateOfInjury || "N/A"}
+                      </td>
+                      <td className="px-4 py-3.5 text-ink">
+                        {row.timeOfInjury || "N/A"}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="space-y-1">
+                          <Badge
+                            className={
+                              workStatusStyles[row.workStatus] ||
+                              "bg-stone-100 text-stone-600"
+                            }
+                          >
+                            {row.workStatus}
+                          </Badge>
+                          {row.disabilityStatus &&
+                          row.disabilityStatus !== "None" ? (
+                            <p className="text-xs text-muted">
+                              {row.disabilityStatus}
+                            </p>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center gap-1.5 tabular-nums text-ink">
+                          <FileText className="h-4 w-4 text-muted" />
+                          {row.unreadReportCount}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center gap-1.5 tabular-nums text-ink">
+                          <CalendarDays className="h-4 w-4 text-muted" />
+                          {row.appointmentCount}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              alwaysShow
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onChange={setPage}
+            />
+          </>
         )}
       </Card>
     </div>
@@ -302,7 +395,16 @@ export function EmployerEmployeeSearchView() {
   return (
     <Suspense
       fallback={
-        <div className="text-sm text-muted">Loading employee search…</div>
+        <div className="space-y-4">
+          <PageHeader title="Employee Search" className="mb-1" />
+          <Card className="overflow-hidden">
+            <TableSkeleton
+              headers={searchTableHeaders}
+              rows={PAGE_SIZE}
+              minWidthClass="min-w-[72rem]"
+            />
+          </Card>
+        </div>
       }
     >
       <EmployeeSearchContent />

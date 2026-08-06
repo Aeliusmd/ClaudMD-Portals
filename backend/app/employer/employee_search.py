@@ -60,6 +60,8 @@ def search_employees(
         search=search,
         category=category,
         patient_id=patient_id,
+        user_id=profile.user_id,
+        email=profile.email,
     )
     total_pages = max(1, ceil(total / page_size)) if total else 1
     if total and page > total_pages:
@@ -75,6 +77,8 @@ def search_employees(
             search=search,
             category=category,
             patient_id=patient_id,
+            user_id=profile.user_id,
+            email=profile.email,
         )
 
     return EmployeeSearchResponse(
@@ -117,8 +121,12 @@ def _fetch_employee_rows(
     search: str | None,
     category: str | None,
     patient_id: int | None,
+    user_id: int | None = None,
+    email: str | None = None,
 ) -> tuple[int, list[EmployeeSearchRow]]:
     """Read-only: unique patients (one row each) with latest matching check-in in range."""
+    from app.employer.notifications import unread_shared_report_counts_by_patient
+
     q = (search or "").strip()
     search_like = f"%{q.lower()}%"
     category_sql, _ = _category_sql_clause(category)
@@ -263,7 +271,22 @@ def _fetch_employee_rows(
         columns = [col[0] for col in cursor.description]
         db_rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-    items = [_map_employee_row(row, organization) for row in db_rows]
+    patient_ids = [int(row["PatientId"]) for row in db_rows if row.get("PatientId") is not None]
+    unread_by_patient = unread_shared_report_counts_by_patient(
+        clinic,
+        employer_id=employer_id,
+        patient_ids=patient_ids,
+        user_id=user_id,
+        email=email,
+    )
+    items = [
+        _map_employee_row(
+            row,
+            organization,
+            unread_report_count=unread_by_patient.get(int(row["PatientId"]), 0),
+        )
+        for row in db_rows
+    ]
 
     if patient_id is not None and total == 0:
         fallback = _fetch_appointment_only_patient(
@@ -401,7 +424,12 @@ def _fetch_appointment_only_patient(
     )
 
 
-def _map_employee_row(row: dict, organization: str | None) -> EmployeeSearchRow:
+def _map_employee_row(
+    row: dict,
+    organization: str | None,
+    *,
+    unread_report_count: int = 0,
+) -> EmployeeSearchRow:
     patient_id = int(row["PatientId"])
     check_in_id = int(row["CheckInId"])
     account_no = row.get("AccountNumber")
@@ -468,7 +496,7 @@ def _map_employee_row(row: dict, organization: str | None) -> EmployeeSearchRow:
         time_of_injury=_format_time_display(row.get("InjuryTime")),
         work_status=shift_type_label(current_shift),
         disability_status=shift_type_label(next_shift),
-        unread_report_count=0,
+        unread_report_count=int(unread_report_count or 0),
         appointment_count=0,
         date_of_birth=_format_display_date(row.get("DateOfBirth")),
         gender_id=int(row["GenderId"]) if row.get("GenderId") is not None else None,

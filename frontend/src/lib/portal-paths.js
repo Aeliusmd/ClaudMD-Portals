@@ -21,6 +21,7 @@ export const employerPaths = {
   profile: `${EMPLOYER_PORTAL_BASE}/profile`,
   sharedDocuments: `${EMPLOYER_PORTAL_BASE}/shared-documents`,
   sharedDocumentsScoped: `${EMPLOYER_PORTAL_BASE}/shared-documents/scoped`,
+  notifications: `${EMPLOYER_PORTAL_BASE}/notifications`,
 };
 
 export const patientPaths = {

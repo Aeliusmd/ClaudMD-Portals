@@ -263,16 +263,24 @@ def _merge_visit_records(
     check_in_visits: list[EmployeeVisitRecord],
     upcoming_visits: list[EmployeeVisitRecord],
 ) -> list[EmployeeVisitRecord]:
-    merged = check_in_visits + upcoming_visits
-    merged.sort(
+    # Completed check-ins first (newest first) so documents from DocterPublishes
+    # are visible by default; upcoming appointments follow.
+    check_ins = sorted(
+        check_in_visits,
         key=lambda visit: (
             visit.check_in_date_value or "",
-            visit.is_upcoming,
-            visit.time or "",
+            visit.check_in_id or 0,
         ),
         reverse=True,
     )
-    return merged
+    upcoming = sorted(
+        upcoming_visits,
+        key=lambda visit: (
+            visit.check_in_date_value or "",
+            visit.time or "",
+        ),
+    )
+    return check_ins + upcoming
 
 
 _APPOINTMENT_STATUS_LABELS: dict[int, str] = {

@@ -45,6 +45,11 @@ export function PdfThumbnail({ url, badge, title, onOpen, className }) {
     let renderTask = null;
 
     async function renderFirstPage() {
+      if (!url) {
+        setStatus("error");
+        return;
+      }
+
       try {
         const pdfjs = await loadPdfjs();
         const pdf = await loadDocument(pdfjs, url);
@@ -108,11 +113,9 @@ export function PdfThumbnail({ url, badge, title, onOpen, className }) {
       {status !== "ready" ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-foreground-500">
           <FileText className="h-6 w-6" />
-          {status === "error" ? (
-            <span className="text-[10px] font-semibold tracking-wide">
-              {badge || "PDF"}
-            </span>
-          ) : null}
+          <span className="text-[10px] font-semibold tracking-wide">
+            {badge || "PDF"}
+          </span>
         </div>
       ) : null}
 

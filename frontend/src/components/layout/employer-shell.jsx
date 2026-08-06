@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
-import { employerNotifications } from "@/data/employer";
 import {
   employerNavItems,
   employerScopedShareNavItems,
@@ -13,6 +12,7 @@ import {
   findSecureShare,
   isSecureShareExpired,
 } from "@/data/secure-shares";
+import { useEmployerNotifications } from "@/hooks/use-employer-notifications";
 import { useEmployerProfile } from "@/hooks/use-employer-profile";
 import { clearAuthSession, getAuthSession } from "@/lib/auth-session";
 import {
@@ -65,6 +65,14 @@ export function EmployerShell({ children }) {
     () => null
   );
   const { profile, loading: profileLoading } = useEmployerProfile();
+  const {
+    items: notificationItems,
+    markAsRead,
+    total: notificationTotal,
+    unreadCount: notificationUnread,
+  } = useEmployerNotifications({
+    enabled: !scopedSession,
+  });
 
   const profileUser = useMemo(() => {
     const typeLabel = resolveUserTypeLabel(profile) || sessionTypeLabel;
@@ -141,7 +149,13 @@ export function EmployerShell({ children }) {
               ? employerPaths.sharedDocumentsScoped
               : employerPaths.profile
           }
-          notifications={scopedSession ? [] : employerNotifications}
+          notifications={scopedSession ? [] : notificationItems}
+          notificationsViewAllHref={
+            scopedSession ? undefined : employerPaths.notifications
+          }
+          onNotificationsOpen={scopedSession ? undefined : markAsRead}
+          notificationsTotalCount={scopedSession ? 0 : notificationTotal}
+          notificationsUnreadCount={scopedSession ? 0 : notificationUnread}
           showSearch={false}
         />
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6">

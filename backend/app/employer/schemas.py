@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EmployerProfileResponse(BaseModel):
@@ -238,3 +238,43 @@ class AppointmentPrepareResponse(BaseModel):
     recurring_id: int | None = None
     appointment_id: int | None = None
     schedule_id: int | None = None
+
+
+class OrganizationUserRow(BaseModel):
+    id: str
+    contact_id: int
+    user_id: int | None = None
+    full_name: str
+    email: str | None = None
+    title: str | None = None
+    login_id: str | None = None
+    type_id: int | None = None
+    type_label: str | None = None
+    role: str
+    access_level: str
+    active: bool = True
+    contact_type: str | None = None
+    service_type: str | None = None
+    has_portal_access_row: bool = False
+
+
+class OrganizationUsersResponse(BaseModel):
+    employer_id: int | None = None
+    organization: str | None = None
+    items: list[OrganizationUserRow] = []
+    total: int = 0
+    can_manage_access: bool = False
+
+
+class OrganizationUserAccessUpdateRequest(BaseModel):
+    """Grant / modify / revoke portal access for an employer contact."""
+
+    access_level: str = Field(
+        ...,
+        description="Portal Access or No Access",
+    )
+
+
+class OrganizationUserAccessUpdateResponse(BaseModel):
+    item: OrganizationUserRow
+    can_manage_access: bool = False

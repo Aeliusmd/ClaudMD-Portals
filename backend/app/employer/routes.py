@@ -23,6 +23,10 @@ from app.employer.employee_search import (
     default_search_date_range,
     search_employees,
 )
+from app.employer.permissions import (
+    get_organization_users,
+    update_organization_user_access,
+)
 from app.employer.schemas import (
     AppointmentLocationOption,
     AppointmentPatientOption,
@@ -35,6 +39,9 @@ from app.employer.schemas import (
     EmployeeSearchResponse,
     EmployeeVisitsResponse,
     EmployerProfileResponse,
+    OrganizationUserAccessUpdateRequest,
+    OrganizationUserAccessUpdateResponse,
+    OrganizationUsersResponse,
     UpcomingAppointmentsResponse,
 )
 from app.employer.service import get_dashboard_summary, get_employer_profile
@@ -50,6 +57,39 @@ def employer_profile_endpoint(
     return get_employer_profile(current_user)
 
 
+@router.get("/organization-users", response_model=OrganizationUsersResponse)
+def employer_organization_users_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Display-only list of organization contacts with roles from UserType enum.
+    """
+    return get_organization_users(current_user)
+
+
+@router.patch(
+    "/organization-users/{contact_id}/access",
+    response_model=OrganizationUserAccessUpdateResponse,
+)
+def employer_organization_user_access_endpoint(
+    contact_id: int,
+    payload: OrganizationUserAccessUpdateRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Grant / modify / revoke portal access for an organization contact.
+
+    Allowed for Super Admin (TypeId 0) only.
+    Updates EmployerContacts.IsAllowPortalAccess (+ portal-access row).
+    Audit log writes are NOT implemented yet.
+    """
+    return update_organization_user_access(
+        current_user,
+        contact_id,
+        payload.access_level,
+    )
+
+
 @router.get("/dashboard/summary", response_model=DashboardSummaryResponse)
 def employer_dashboard_summary_endpoint(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -59,6 +99,7 @@ def employer_dashboard_summary_endpoint(
       injury      → VisitTypes.CategoryId = 1
       physicals   → VisitTypes.CategoryId = 2 AND Code <> 'PDS'
       drugScreens → VisitTypes.Code = 'PDS'
+    Also returns upcoming-appointment count for this employer.
     """
     return get_dashboard_summary(current_user)
 

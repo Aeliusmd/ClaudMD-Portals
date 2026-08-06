@@ -27,11 +27,12 @@ export const employerNavItems = [
     label: "Dashboard",
     icon: "LayoutDashboard",
   },
-  {
-    href: employerPaths.authorizations,
-    label: "Authorizations",
-    icon: "ClipboardCheck",
-  },
+  // TEMP: hide Authorizations tab for all employer portal users.
+  // {
+  //   href: employerPaths.authorizations,
+  //   label: "Authorizations",
+  //   icon: "ClipboardCheck",
+  // },
   {
     href: employerPaths.profile,
     label: "Profile / Security",

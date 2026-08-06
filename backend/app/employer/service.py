@@ -5,8 +5,32 @@ from fastapi import HTTPException, status
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
 from app.employer.appointments import appointment_count_upcoming
-from app.employer.profile import fetch_profile_from_clinic
-from app.employer.schemas import DashboardSummaryResponse, EmployerProfileResponse
+from app.employer.notifications import count_unread_notifications
+from app.employer.profile import fetch_profile_from_clinic, update_profile_in_clinic
+from app.employer.schemas import (
+    DashboardSummaryResponse,
+    EmployerProfileResponse,
+    EmployerProfileUpdateRequest,
+)
+
+
+def _to_profile_response(profile) -> EmployerProfileResponse:
+    return EmployerProfileResponse(
+        user_id=profile.user_id,
+        employer_id=profile.employer_id,
+        employer_contact_id=profile.employer_contact_id,
+        full_name=profile.full_name,
+        first_name=profile.first_name,
+        last_name=profile.last_name,
+        title=profile.title,
+        email=profile.email,
+        phone=profile.phone,
+        organization=profile.organization,
+        address=profile.address,
+        login_id=profile.login_id,
+        type_id=profile.type_id,
+        type_label=profile.type_label,
+    )
 
 
 def get_employer_profile(current_user: CurrentUser) -> EmployerProfileResponse:
@@ -18,20 +42,30 @@ def get_employer_profile(current_user: CurrentUser) -> EmployerProfileResponse:
         )
 
     profile = fetch_profile_from_clinic(clinic, current_user)
-    return EmployerProfileResponse(
-        user_id=profile.user_id,
-        employer_id=profile.employer_id,
-        employer_contact_id=profile.employer_contact_id,
-        full_name=profile.full_name,
-        title=profile.title,
-        email=profile.email,
-        phone=profile.phone,
-        organization=profile.organization,
-        address=profile.address,
-        login_id=profile.login_id,
-        type_id=profile.type_id,
-        type_label=profile.type_label,
+    return _to_profile_response(profile)
+
+
+def update_employer_profile(
+    current_user: CurrentUser,
+    payload: EmployerProfileUpdateRequest,
+) -> EmployerProfileResponse:
+    clinic = get_clinic_by_activation_key(current_user.activation_key)
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found for this session.",
+        )
+
+    profile = update_profile_in_clinic(
+        clinic,
+        current_user,
+        first_name=payload.first_name,
+        last_name=payload.last_name or "",
+        title=payload.title,
+        email=payload.email,
+        phone=payload.phone,
     )
+    return _to_profile_response(profile)
 
 
 def get_dashboard_summary(current_user: CurrentUser) -> DashboardSummaryResponse:
@@ -51,11 +85,13 @@ def get_dashboard_summary(current_user: CurrentUser) -> DashboardSummaryResponse
 
     counts = _fetch_checkin_counts(clinic, profile.employer_id)
     appointments = appointment_count_upcoming(clinic, profile.employer_id)
+    unread_reports = count_unread_notifications(clinic, profile)
     return DashboardSummaryResponse(
         injury=counts["injury"],
         physicals=counts["physicals"],
         drug_screens=counts["drug_screens"],
         appointments=appointments,
+        unread_reports=unread_reports,
         days=30,
         employer_id=profile.employer_id,
     )

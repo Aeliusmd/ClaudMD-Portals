@@ -32,9 +32,12 @@ async function employerFetch(
     const detail =
       (data && (data.detail || data.message)) || fallbackMessage;
     const error = new Error(
-      typeof detail === "string" ? detail : fallbackMessage
+      typeof detail === "string"
+        ? detail
+        : detail?.message || fallbackMessage
     );
     error.status = response.status;
+    error.detail = detail;
     throw error;
   }
 
@@ -48,8 +51,54 @@ export async function fetchEmployerProfile(accessToken) {
     "Unable to load employer profile."
   );
 
+  let firstName = data.first_name || "";
+  let lastName = data.last_name || "";
+  if (!firstName && !lastName && data.full_name) {
+    const parts = String(data.full_name).trim().split(/\s+/).filter(Boolean);
+    firstName = parts[0] || "";
+    lastName = parts.slice(1).join(" ");
+  }
+
   return {
     fullName: data.full_name,
+    firstName,
+    lastName,
+    title: data.title || "",
+    role: data.type_label || null,
+    jobTitle: data.title || null,
+    email: data.email || "",
+    phone: data.phone || "",
+    organization: data.organization || "",
+    address: data.address || "",
+    employerId: data.employer_id,
+    userId: data.user_id,
+    loginId: data.login_id,
+    typeId: data.type_id,
+    typeLabel: data.type_label,
+  };
+}
+
+export async function updateEmployerProfile(accessToken, payload) {
+  const data = await employerFetch(
+    "/api/employer/me",
+    accessToken,
+    "Unable to update employer profile.",
+    {
+      method: "PATCH",
+      body: {
+        first_name: payload.firstName,
+        last_name: payload.lastName ?? "",
+        title: payload.title || null,
+        email: payload.email,
+        phone: payload.phone || null,
+      },
+    }
+  );
+
+  return {
+    fullName: data.full_name,
+    firstName: data.first_name || "",
+    lastName: data.last_name || "",
     title: data.title || "",
     role: data.type_label || null,
     jobTitle: data.title || null,
@@ -77,7 +126,56 @@ export async function fetchEmployerDashboardSummary(accessToken) {
     physicals: data.physicals ?? 0,
     drugScreens: data.drug_screens ?? 0,
     appointments: data.appointments ?? 0,
+    unreadReports: data.unread_reports ?? 0,
     days: data.days ?? 30,
+    employerId: data.employer_id,
+  };
+}
+
+export async function fetchEmployerNotifications(
+  accessToken,
+  { page = 1, pageSize = 10 } = {}
+) {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+  const data = await employerFetch(
+    `/api/employer/notifications?${params.toString()}`,
+    accessToken,
+    "Unable to load notifications."
+  );
+
+  return {
+    items: (data.items || []).map((row) => ({
+      id: row.id,
+      message: row.message,
+      timeAgo: row.time_ago || "",
+      unread: Boolean(row.unread),
+      href: row.href || null,
+      source: row.source,
+      sourceId: row.source_id,
+      createdAt: row.created_at,
+    })),
+    total: data.total ?? 0,
+    unreadCount: data.unread_count ?? 0,
+    page: data.page ?? page,
+    pageSize: data.page_size ?? pageSize,
+    totalPages: data.total_pages ?? 1,
+    days: data.days ?? 30,
+    employerId: data.employer_id,
+  };
+}
+
+export async function markEmployerNotificationsRead(accessToken) {
+  const data = await employerFetch(
+    "/api/employer/notifications/mark-read",
+    accessToken,
+    "Unable to mark notifications as read.",
+    { method: "POST" }
+  );
+
+  return {
+    updatedCount: data.updated_count ?? 0,
     employerId: data.employer_id,
   };
 }
@@ -253,6 +351,11 @@ export async function bookAppointment(accessToken, payload) {
               ssn: payload.newPatient.ssn,
               account_no: payload.newPatient.accountNo,
               phone: payload.newPatient.phone,
+              address1: payload.newPatient.address1,
+              address2: payload.newPatient.address2,
+              city: payload.newPatient.city,
+              state: payload.newPatient.state,
+              zip_code: payload.newPatient.zipCode,
             }
           : null,
         location_id: payload.locationId,
@@ -491,23 +594,29 @@ export async function fetchEmployeeVisits(
       status: visit.status,
       durationMinutes: visit.duration_minutes,
       note: visit.note,
-      documents: (visit.documents || []).map((doc) => ({
-        id: String(doc.id),
-        documentId: String(doc.id),
-        checkInId: doc.check_in_id,
-        reportId: doc.report_id,
-        title: doc.report_name || doc.name,
-        name: doc.name,
-        documentType: doc.report_name,
-        previewBadge: doc.preview_badge,
-        previewLabel: doc.preview_label || doc.preview_badge,
-        badgeLabel: doc.report_name,
-        path: doc.path,
-        url: doc.path || null,
-        visitDate: visit.check_in_date,
-        reportDate: visit.check_in_date,
-        isCompleted: doc.is_completed,
-      })),
+      documents: (visit.documents || []).map((doc) => {
+        const path = (doc.path || "").trim();
+        const isHttpUrl = /^https?:\/\//i.test(path) || path.startsWith("/");
+        return {
+          id: String(doc.id),
+          documentId: String(doc.id),
+          checkInId: doc.check_in_id,
+          reportId: doc.report_id,
+          title: doc.report_name || doc.name,
+          name: doc.name,
+          documentType: doc.report_name,
+          previewBadge: doc.preview_badge,
+          previewLabel: doc.preview_label || doc.preview_badge,
+          badgeLabel: doc.report_name,
+          path: path || null,
+          // Browser can only preview HTTP(S) or site-relative paths; file/UNC
+          // paths from DocterPublishes fall back to the sample PDF for UI.
+          url: isHttpUrl ? path : "/sample.pdf",
+          visitDate: visit.check_in_date,
+          reportDate: visit.check_in_date,
+          isCompleted: doc.is_completed,
+        };
+      }),
     })),
   };
 }

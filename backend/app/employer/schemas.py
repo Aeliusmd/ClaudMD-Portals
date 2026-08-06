@@ -6,6 +6,8 @@ class EmployerProfileResponse(BaseModel):
     employer_id: int | None = None
     employer_contact_id: int | None = None
     full_name: str
+    first_name: str | None = None
+    last_name: str | None = None
     title: str | None = None
     email: str | None = None
     phone: str | None = None
@@ -16,12 +18,50 @@ class EmployerProfileResponse(BaseModel):
     type_label: str | None = None
 
 
+class EmployerProfileUpdateRequest(BaseModel):
+    """Editable UserProfiles / EmployerContacts fields only (not org address)."""
+
+    first_name: str = Field(..., min_length=1, max_length=50)
+    last_name: str = Field(default="", max_length=50)
+    title: str | None = Field(default=None, max_length=100)
+    email: str = Field(..., min_length=1, max_length=100)
+    phone: str | None = Field(default=None, max_length=20)
+
+
 class DashboardSummaryResponse(BaseModel):
     injury: int = 0
     physicals: int = 0
     drug_screens: int = 0
     appointments: int = 0
+    unread_reports: int = 0
     days: int = 30
+    employer_id: int | None = None
+
+
+class NotificationItem(BaseModel):
+    id: str
+    message: str
+    created_at: str | None = None
+    time_ago: str = ""
+    unread: bool = False
+    href: str | None = None
+    source: str
+    source_id: int
+
+
+class NotificationsResponse(BaseModel):
+    items: list[NotificationItem] = []
+    total: int = 0
+    unread_count: int = 0
+    page: int = 1
+    page_size: int = 10
+    total_pages: int = 1
+    days: int = 30
+    employer_id: int | None = None
+
+
+class MarkNotificationsReadResponse(BaseModel):
+    updated_count: int = 0
     employer_id: int | None = None
 
 
@@ -203,6 +243,11 @@ class NewPatientPayload(BaseModel):
     ssn: str | None = None
     account_no: str | None = None
     phone: str | None = None
+    address1: str | None = None
+    address2: str | None = None
+    city: str | None = None
+    state: str | None = None
+    zip_code: str | None = None
 
 
 class AppointmentPrepareRequest(BaseModel):

@@ -9,6 +9,21 @@ import { LOGIN_PATH } from "@/lib/auth-routes";
 let cachedProfile = null;
 let cachedToken = null;
 let inflightPromise = null;
+const listeners = new Set();
+
+function notifyProfileListeners() {
+  listeners.forEach((listener) => listener());
+}
+
+export function clearEmployerProfileCache() {
+  cachedProfile = null;
+  cachedToken = null;
+  inflightPromise = null;
+  notifyProfileListeners();
+}
+
+// Drop stale in-memory profile cache after profile-field shape changes.
+clearEmployerProfileCache();
 
 export function useEmployerProfile() {
   const router = useRouter();
@@ -16,6 +31,15 @@ export function useEmployerProfile() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [cacheVersion, setCacheVersion] = useState(0);
+
+  useEffect(() => {
+    const onCacheChange = () => setCacheVersion((version) => version + 1);
+    listeners.add(onCacheChange);
+    return () => {
+      listeners.delete(onCacheChange);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +95,15 @@ export function useEmployerProfile() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, cacheVersion]);
 
-  return { profile, loading, error };
+  function setCachedProfile(next) {
+    cachedProfile = next;
+    cachedToken = getAccessToken();
+    inflightPromise = null;
+    setProfile(next);
+    notifyProfileListeners();
+  }
+
+  return { profile, loading, error, setCachedProfile };
 }

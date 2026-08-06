@@ -91,11 +91,15 @@ def get_clinic_by_activation_key(activation_key: str) -> ClinicConnectionInfo | 
     return clinic
 
 
-def get_clinic_connection(clinic: ClinicConnectionInfo) -> pyodbc.Connection:
+def get_clinic_connection(
+    clinic: ClinicConnectionInfo,
+    *,
+    autocommit: bool = True,
+) -> pyodbc.Connection:
     conn_str = build_mssql_connection_string(
         server=clinic.database_server,
         database=clinic.database_name,
         username=clinic.database_user,
         password=clinic.database_password,
     )
-    return pyodbc.connect(conn_str, timeout=15, autocommit=True)
+    return pyodbc.connect(conn_str, timeout=15, autocommit=autocommit)

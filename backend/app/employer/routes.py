@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.employer.appointments import (
@@ -23,6 +23,12 @@ from app.employer.employee_search import (
     default_search_date_range,
     search_employees,
 )
+from app.employer.notifications import (
+    DEFAULT_PAGE_SIZE as NOTIF_DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE as NOTIF_MAX_PAGE_SIZE,
+    list_notifications,
+    mark_notifications_read,
+)
 from app.employer.permissions import (
     get_organization_users,
     update_organization_user_access,
@@ -39,12 +45,19 @@ from app.employer.schemas import (
     EmployeeSearchResponse,
     EmployeeVisitsResponse,
     EmployerProfileResponse,
+    MarkNotificationsReadResponse,
+    NotificationsResponse,
     OrganizationUserAccessUpdateRequest,
     OrganizationUserAccessUpdateResponse,
     OrganizationUsersResponse,
     UpcomingAppointmentsResponse,
+    EmployerProfileUpdateRequest,
 )
-from app.employer.service import get_dashboard_summary, get_employer_profile
+from app.employer.service import (
+    get_dashboard_summary,
+    get_employer_profile,
+    update_employer_profile,
+)
 from app.employer.visit_documents import get_employee_visits
 
 router = APIRouter(prefix="/api/employer", tags=["employer"])
@@ -55,6 +68,19 @@ def employer_profile_endpoint(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ):
     return get_employer_profile(current_user)
+
+
+@router.patch("/me", response_model=EmployerProfileResponse)
+def employer_profile_update_endpoint(
+    payload: EmployerProfileUpdateRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Update editable profile fields on UserProfiles + EmployerContacts.
+    LoginId / TypeId / organization / address are not changed.
+    Does not write notifications or AuditLogEntries.
+    """
+    return update_employer_profile(current_user, payload)
 
 
 @router.get("/organization-users", response_model=OrganizationUsersResponse)
@@ -81,13 +107,55 @@ def employer_organization_user_access_endpoint(
 
     Allowed for Super Admin (TypeId 0) only.
     Updates EmployerContacts.IsAllowPortalAccess (+ portal-access row).
-    Audit log writes are NOT implemented yet.
+    AuditLogEntries writes are NOT implemented yet (permissions activity log only;
+    never used as the in-app notification feed).
     """
     return update_organization_user_access(
         current_user,
         contact_id,
         payload.access_level,
     )
+
+
+@router.get("/notifications", response_model=NotificationsResponse)
+def employer_notifications_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(
+        default=NOTIF_DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=NOTIF_MAX_PAGE_SIZE,
+        alias="pageSize",
+    ),
+):
+    """
+    In-app notification feed (SELECT only) for the last 30 days, paginated.
+    Sources: SharedDocuments, employer appointments, EHRWorkStatuses.
+    Does not read AuditLogEntries or dbo.Notification.
+    """
+    return list_notifications(current_user, page=page, page_size=page_size)
+
+
+@router.post(
+    "/notifications/mark-read",
+    response_model=MarkNotificationsReadResponse,
+)
+def employer_notifications_mark_read_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Mark SharedDocuments.IsViewed = 1 for shares addressed to the current user.
+    Call when the notification dropdown (or View all page) is opened.
+    """
+    try:
+        return mark_notifications_read(current_user)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"mark-read failed: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummaryResponse)
@@ -99,7 +167,7 @@ def employer_dashboard_summary_endpoint(
       injury      → VisitTypes.CategoryId = 1
       physicals   → VisitTypes.CategoryId = 2 AND Code <> 'PDS'
       drugScreens → VisitTypes.Code = 'PDS'
-    Also returns upcoming-appointment count for this employer.
+    Also returns upcoming-appointment count and unread notification count.
     """
     return get_dashboard_summary(current_user)
 

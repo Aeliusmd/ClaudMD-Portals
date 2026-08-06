@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Shield, UserRound } from "lucide-react";
+import { Check, Lock, Shield, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -10,7 +10,10 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonBlock, TableSkeleton } from "@/components/ui/skeleton";
 import { useEmployerProfile } from "@/hooks/use-employer-profile";
 import { changePassword } from "@/lib/api/auth";
-import { fetchEmployerOrganizationUsers } from "@/lib/api/employer";
+import {
+  fetchEmployerOrganizationUsers,
+  updateEmployerProfile,
+} from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { LOGIN_PATH } from "@/lib/auth-routes";
 import { cn } from "@/lib/utils";
@@ -23,6 +26,11 @@ const profileTabs = [
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_DIGITS_MIN = 10;
+// Match dbo.UserProfiles / EmployerContacts column lengths.
+const NAME_MAX = 50;
+const TITLE_MAX = 100;
+const EMAIL_MAX = 100;
+const PHONE_MAX = 20;
 
 function ProfileTabBar({ value, onChange }) {
   return (
@@ -105,6 +113,40 @@ function StatusBanner({ tone = "success", children }) {
   );
 }
 
+function SuccessToast({ message, title, onDismiss }) {
+  useEffect(() => {
+    if (!message) return undefined;
+    const timer = window.setTimeout(() => {
+      onDismiss?.();
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [message, onDismiss]);
+
+  if (!message) return null;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed top-20 right-4 z-[60] w-[min(22rem,calc(100vw-2rem))] sm:right-6"
+    >
+      <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-white px-4 py-3.5 shadow-[0_12px_32px_rgba(28,36,48,0.14)]">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+          <Check className="h-4 w-4" strokeWidth={2.5} />
+        </span>
+        <div className="min-w-0 pt-0.5">
+          <p className="font-sans text-sm font-semibold text-emerald-900">
+            {title || "Success"}
+          </p>
+          <p className="mt-0.5 font-sans text-[0.8rem] leading-snug text-emerald-800/80">
+            {message}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProfileInfoSkeleton() {
   return (
     <Card className="p-5 sm:p-6" aria-busy="true" aria-label="Loading profile">
@@ -124,16 +166,58 @@ function ProfileInfoSkeleton() {
   );
 }
 
+function splitFullName(fullName) {
+  const parts = String(fullName || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return { firstName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
 function validateProfile(profile) {
   const errors = {};
-  if (!profile.fullName.trim()) errors.fullName = "Full name is required.";
-  if (profile.email.trim() && !EMAIL_PATTERN.test(profile.email.trim())) {
+  const firstName = (profile.firstName || "").trim();
+  const lastName = (profile.lastName || "").trim();
+  const title = (profile.title || "").trim();
+  const email = (profile.email || "").trim();
+  const phone = (profile.phone || "").trim();
+
+  if (!firstName) errors.firstName = "First name is required.";
+  else if (firstName.length > NAME_MAX) {
+    errors.firstName = `First name must be at most ${NAME_MAX} characters.`;
+  }
+
+  if (lastName.length > NAME_MAX) {
+    errors.lastName = `Last name must be at most ${NAME_MAX} characters.`;
+  }
+
+  if (title.length > TITLE_MAX) {
+    errors.title = `Title must be at most ${TITLE_MAX} characters.`;
+  }
+
+  if (!email) errors.email = "Email is required.";
+  else if (email.length > EMAIL_MAX) {
+    errors.email = `Email must be at most ${EMAIL_MAX} characters.`;
+  } else if (!EMAIL_PATTERN.test(email)) {
     errors.email = "Enter a valid email address.";
   }
-  const digits = profile.phone.replace(/\D/g, "");
-  if (profile.phone.trim() && digits.length < PHONE_DIGITS_MIN) {
-    errors.phone = "Enter a valid phone number (at least 10 digits).";
+
+  if (phone) {
+    if (phone.length > PHONE_MAX) {
+      errors.phone = `Phone must be at most ${PHONE_MAX} characters.`;
+    } else {
+      const digits = phone.replace(/\D/g, "");
+      if (digits.length < PHONE_DIGITS_MIN) {
+        errors.phone = `Enter a valid phone number (at least ${PHONE_DIGITS_MIN} digits).`;
+      }
+    }
   }
+
   return errors;
 }
 
@@ -158,20 +242,45 @@ function validatePassword(form) {
   return errors;
 }
 
+function normalizeProfileSnapshot(profile) {
+  return {
+    firstName: (profile.firstName || "").trim(),
+    lastName: (profile.lastName || "").trim(),
+    title: (profile.title || "").trim(),
+    email: (profile.email || "").trim(),
+    phone: (profile.phone || "").trim(),
+  };
+}
+
+function profilesEqual(a, b) {
+  const left = normalizeProfileSnapshot(a);
+  const right = normalizeProfileSnapshot(b);
+  return (
+    left.firstName === right.firstName &&
+    left.lastName === right.lastName &&
+    left.title === right.title &&
+    left.email === right.email &&
+    left.phone === right.phone
+  );
+}
+
 export function EmployerProfileView() {
   const router = useRouter();
   const {
     profile: liveProfile,
     loading: profileLoading,
     error: profileLoadError,
+    setCachedProfile,
   } = useEmployerProfile();
 
   const [tab, setTab] = useState("profile");
   const [message, setMessage] = useState("");
+  const [successToast, setSuccessToast] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
 
   const [profile, setProfile] = useState({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     title: "",
     userType: "",
     email: "",
@@ -182,6 +291,8 @@ export function EmployerProfileView() {
   });
   const [profileErrors, setProfileErrors] = useState({});
   const [hydrated, setHydrated] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [savedProfile, setSavedProfile] = useState(null);
 
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -195,10 +306,31 @@ export function EmployerProfileView() {
   const [orgUsersLoading, setOrgUsersLoading] = useState(false);
   const [orgUsersLoaded, setOrgUsersLoaded] = useState(false);
 
+  const profileDirty = useMemo(() => {
+    if (!savedProfile) return false;
+    return !profilesEqual(profile, savedProfile);
+  }, [profile, savedProfile]);
+
+  const passwordDirty = useMemo(() => {
+    return Boolean(
+      passwordForm.currentPassword ||
+        passwordForm.newPassword ||
+        passwordForm.confirmPassword
+    );
+  }, [passwordForm]);
+
   useEffect(() => {
     if (!liveProfile) return;
-    setProfile({
-      fullName: liveProfile.fullName || "",
+    let firstName = liveProfile.firstName || "";
+    let lastName = liveProfile.lastName || "";
+    if (!firstName && !lastName && liveProfile.fullName) {
+      const split = splitFullName(liveProfile.fullName);
+      firstName = split.firstName;
+      lastName = split.lastName;
+    }
+    const next = {
+      firstName,
+      lastName,
       title: liveProfile.jobTitle || liveProfile.title || "",
       userType: liveProfile.typeLabel || "",
       email: liveProfile.email || "",
@@ -206,7 +338,9 @@ export function EmployerProfileView() {
       organization: liveProfile.organization || "",
       address: liveProfile.address || "",
       loginId: liveProfile.loginId || "",
-    });
+    };
+    setProfile(next);
+    setSavedProfile(normalizeProfileSnapshot(next));
     setHydrated(true);
   }, [liveProfile]);
 
@@ -256,6 +390,7 @@ export function EmployerProfileView() {
 
   function clearFeedback() {
     setMessage("");
+    setSuccessToast(null);
     setErrorMessage("");
   }
 
@@ -270,7 +405,8 @@ export function EmployerProfileView() {
     });
   }
 
-  function handleSaveProfile() {
+  async function handleSaveProfile() {
+    if (profileSaving || !profileDirty) return;
     clearFeedback();
     const errors = validateProfile(profile);
     setProfileErrors(errors);
@@ -278,10 +414,68 @@ export function EmployerProfileView() {
       setErrorMessage("Please fix the highlighted fields before saving.");
       return;
     }
-    setMessage("Profile details saved locally. Backend update is not enabled yet.");
+
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(LOGIN_PATH);
+      return;
+    }
+
+    setProfileSaving(true);
+    try {
+      const updated = await updateEmployerProfile(token, {
+        firstName: profile.firstName.trim(),
+        lastName: profile.lastName.trim(),
+        title: profile.title.trim(),
+        email: profile.email.trim(),
+        phone: profile.phone.trim(),
+      });
+      setCachedProfile?.(updated);
+      const next = {
+        firstName: updated.firstName || "",
+        lastName: updated.lastName || "",
+        title: updated.jobTitle || updated.title || "",
+        userType: updated.typeLabel || profile.userType,
+        email: updated.email || "",
+        phone: updated.phone || "",
+        organization: updated.organization || "",
+        address: updated.address || "",
+        loginId: updated.loginId || "",
+      };
+      setProfile(next);
+      setSavedProfile(normalizeProfileSnapshot(next));
+      setProfileErrors({});
+      setMessage("");
+      setSuccessToast({
+        title: "Profile saved",
+        message: "Your profile details were updated successfully.",
+      });
+    } catch (err) {
+      if (err?.status === 401) {
+        router.replace(LOGIN_PATH);
+        return;
+      }
+      const detail = err?.detail ?? err?.message;
+      if (detail && typeof detail === "object" && detail.errors) {
+        const mapped = {};
+        for (const [key, value] of Object.entries(detail.errors)) {
+          const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+          mapped[camel] = value;
+        }
+        setProfileErrors(mapped);
+        setErrorMessage(detail.message || "Please fix the highlighted fields.");
+      } else {
+        setErrorMessage(
+          typeof detail === "string" ? detail : "Unable to update profile."
+        );
+      }
+    } finally {
+      setProfileSaving(false);
+    }
   }
 
   async function handleUpdatePassword() {
+    if (passwordSaving || !passwordDirty) return;
     clearFeedback();
     const errors = validatePassword(passwordForm);
     setPasswordErrors(errors);
@@ -298,7 +492,7 @@ export function EmployerProfileView() {
 
     setPasswordSaving(true);
     try {
-      const result = await changePassword({
+      await changePassword({
         accessToken: token,
         currentPassword: passwordForm.currentPassword,
         newPassword: passwordForm.newPassword,
@@ -310,7 +504,11 @@ export function EmployerProfileView() {
         confirmPassword: "",
       });
       setPasswordErrors({});
-      setMessage(result?.message || "Password updated successfully.");
+      setMessage("");
+      setSuccessToast({
+        title: "Password updated",
+        message: "Your password was reset successfully. Use it the next time you sign in.",
+      });
     } catch (err) {
       if (err?.status === 401) {
         router.replace(LOGIN_PATH);
@@ -331,6 +529,11 @@ export function EmployerProfileView() {
 
   return (
     <div>
+      <SuccessToast
+        title={successToast?.title}
+        message={successToast?.message}
+        onDismiss={() => setSuccessToast(null)}
+      />
       <PageHeader title="Profile / Security" className="mb-5" />
       <ProfileTabBar value={tab} onChange={switchTab} />
 
@@ -347,12 +550,22 @@ export function EmployerProfileView() {
             </h2>
             <div className="grid gap-4 md:grid-cols-2">
               <Field
-                id="employer-full-name"
-                label="Full Name"
-                value={profile.fullName}
-                onChange={(value) => updateProfileField("fullName", value)}
-                error={profileErrors.fullName}
-                autoComplete="name"
+                id="employer-first-name"
+                label="First Name"
+                value={profile.firstName}
+                onChange={(value) => updateProfileField("firstName", value)}
+                error={profileErrors.firstName}
+                autoComplete="given-name"
+                placeholder="Up to 50 characters"
+              />
+              <Field
+                id="employer-last-name"
+                label="Last Name"
+                value={profile.lastName}
+                onChange={(value) => updateProfileField("lastName", value)}
+                error={profileErrors.lastName}
+                autoComplete="family-name"
+                placeholder="Up to 50 characters"
               />
               <Field
                 id="employer-user-type"
@@ -366,7 +579,7 @@ export function EmployerProfileView() {
                 value={profile.title}
                 onChange={(value) => updateProfileField("title", value)}
                 error={profileErrors.title}
-                placeholder="Job title (optional)"
+                placeholder="Job title (optional, up to 100)"
               />
               <Field
                 id="employer-login-id"
@@ -382,6 +595,7 @@ export function EmployerProfileView() {
                 onChange={(value) => updateProfileField("email", value)}
                 error={profileErrors.email}
                 autoComplete="email"
+                placeholder="Up to 100 characters"
               />
               <Field
                 id="employer-phone"
@@ -391,30 +605,36 @@ export function EmployerProfileView() {
                 onChange={(value) => updateProfileField("phone", value)}
                 error={profileErrors.phone}
                 autoComplete="tel"
+                placeholder="Up to 20 characters"
               />
               <div className="md:col-span-2">
                 <Field
                   id="employer-organization"
                   label="Organization"
-                  value={profile.organization}
-                  onChange={(value) => updateProfileField("organization", value)}
-                  error={profileErrors.organization}
+                  value={profile.organization || "—"}
+                  readOnly
                 />
               </div>
               <div className="md:col-span-2">
                 <Field
                   id="employer-address"
                   label="Address"
-                  value={profile.address}
-                  onChange={(value) => updateProfileField("address", value)}
-                  error={profileErrors.address}
-                  autoComplete="street-address"
-                  placeholder="Organization address"
+                  value={profile.address || "—"}
+                  readOnly
                 />
               </div>
             </div>
-            <Button className="mt-6" onClick={handleSaveProfile}>
-              Save Changes
+            <Button
+              className={cn(
+                "mt-6 min-w-[9.5rem]",
+                profileSaving &&
+                  "bg-primary/55 text-white/90 hover:bg-primary/55 shadow-none"
+              )}
+              onClick={handleSaveProfile}
+              disabled={profileSaving || !profileDirty}
+              aria-busy={profileSaving}
+            >
+              {profileSaving ? "Saving..." : "Save Changes"}
             </Button>
           </Card>
         )
@@ -476,7 +696,7 @@ export function EmployerProfileView() {
             <Button
               className="mt-6"
               onClick={handleUpdatePassword}
-              disabled={passwordSaving}
+              disabled={passwordSaving || !passwordDirty}
             >
               {passwordSaving ? "Updating…" : "Update Password"}
             </Button>

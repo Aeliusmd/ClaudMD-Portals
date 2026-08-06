@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+
+from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
 from app.auth.user_profile_type import user_type_label
 from app.db.clinic import get_clinic_connection
+
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+_NAME_MAX = 50
+_TITLE_MAX = 100
+_EMAIL_MAX = 100
+_PHONE_MAX = 20
+_PHONE_DIGITS_MIN = 10
 
 
 @dataclass(frozen=True)
@@ -13,6 +23,8 @@ class EmployerProfile:
     employer_id: int | None
     employer_contact_id: int | None
     full_name: str
+    first_name: str | None
+    last_name: str | None
     title: str | None
     email: str | None
     phone: str | None
@@ -158,6 +170,8 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> EmployerProf
         employer_id=employer_id,
         employer_contact_id=int(contact_row.ContactId) if contact_row else None,
         full_name=full_name,
+        first_name=(first_name or "").strip() or None,
+        last_name=(last_name or "").strip() or None,
         title=occupation,
         email=profile_email,
         phone=(phone or "").strip() or None,
@@ -186,3 +200,150 @@ def _format_employer_address(row) -> str | None:
         parts.append(city_line)
     formatted = ", ".join(part for part in parts if part)
     return formatted or None
+
+
+def update_profile_in_clinic(
+    clinic,
+    current_user: CurrentUser,
+    *,
+    first_name: str,
+    last_name: str,
+    title: str | None,
+    email: str,
+    phone: str | None,
+) -> EmployerProfile:
+    """
+    Update editable identity fields on UserProfiles + EmployerContacts.
+    Does not change LoginId, TypeId, organization, or employer address.
+    Does not write notifications or AuditLogEntries.
+    """
+    first = (first_name or "").strip()
+    last = (last_name or "").strip()
+    title_norm = (title or "").strip() or None
+    email_norm = (email or "").strip()
+    phone_norm = (phone or "").strip() or None
+
+    errors = _validate_profile_fields(
+        first_name=first,
+        last_name=last,
+        title=title_norm,
+        email=email_norm,
+        phone=phone_norm,
+    )
+    if errors:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"message": "Validation failed.", "errors": errors},
+        )
+
+    current = fetch_profile_from_clinic(clinic, current_user)
+    if current.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found.",
+        )
+
+    actor_id = int(current.user_id)
+
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE dbo.UserProfiles
+            SET FirstName = ?,
+                LastName = ?,
+                Title = ?,
+                Email = ?,
+                Phone = ?,
+                CellPhone = ?,
+                UpdatedDateTime = SYSUTCDATETIME(),
+                UpdatedUserId = ?
+            WHERE Id = ?
+              AND (IsDeleted = 0 OR IsDeleted IS NULL)
+              AND RecordStatusId = 1
+            """,
+            (
+                first,
+                last or None,
+                title_norm,
+                email_norm,
+                phone_norm,
+                phone_norm,
+                actor_id,
+                actor_id,
+            ),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found.",
+            )
+
+        if current.employer_contact_id is not None:
+            cursor.execute(
+                """
+                UPDATE dbo.EmployerContacts
+                SET FirstName = ?,
+                    LastName = ?,
+                    Email = ?,
+                    Phone = ?,
+                    CellPhone = ?,
+                    UpdatedDateTime = SYSUTCDATETIME(),
+                    UpdatedUserId = ?
+                WHERE Id = ?
+                  AND (IsDeleted = 0 OR IsDeleted IS NULL)
+                """,
+                (
+                    first,
+                    last or None,
+                    email_norm,
+                    phone_norm,
+                    phone_norm,
+                    actor_id,
+                    int(current.employer_contact_id),
+                ),
+            )
+
+    # Re-read after update (login_id / org unchanged).
+    return fetch_profile_from_clinic(clinic, current_user)
+
+
+def _validate_profile_fields(
+    *,
+    first_name: str,
+    last_name: str,
+    title: str | None,
+    email: str,
+    phone: str | None,
+) -> dict[str, str]:
+    errors: dict[str, str] = {}
+
+    if not first_name:
+        errors["first_name"] = "First name is required."
+    elif len(first_name) > _NAME_MAX:
+        errors["first_name"] = f"First name must be at most {_NAME_MAX} characters."
+
+    if len(last_name) > _NAME_MAX:
+        errors["last_name"] = f"Last name must be at most {_NAME_MAX} characters."
+
+    if title and len(title) > _TITLE_MAX:
+        errors["title"] = f"Title must be at most {_TITLE_MAX} characters."
+
+    if not email:
+        errors["email"] = "Email is required."
+    elif len(email) > _EMAIL_MAX:
+        errors["email"] = f"Email must be at most {_EMAIL_MAX} characters."
+    elif not _EMAIL_RE.match(email):
+        errors["email"] = "Enter a valid email address."
+
+    if phone:
+        if len(phone) > _PHONE_MAX:
+            errors["phone"] = f"Phone must be at most {_PHONE_MAX} characters."
+        else:
+            digits = "".join(ch for ch in phone if ch.isdigit())
+            if len(digits) < _PHONE_DIGITS_MIN:
+                errors["phone"] = (
+                    f"Enter a valid phone number (at least {_PHONE_DIGITS_MIN} digits)."
+                )
+
+    return errors

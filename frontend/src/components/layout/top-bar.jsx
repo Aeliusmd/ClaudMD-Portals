@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Menu, Search } from "lucide-react";
 import { NotificationsMenu } from "@/components/layout/notifications-menu";
@@ -13,6 +13,10 @@ export function TopBar({
   profileUser,
   profileHref = patientPaths.profile,
   notifications,
+  notificationsViewAllHref,
+  onNotificationsOpen,
+  notificationsTotalCount,
+  notificationsUnreadCount,
   showSearch = true,
   className,
 }) {
@@ -33,12 +37,15 @@ export function TopBar({
         >
           <Menu className="h-5 w-5" />
         </button>
-        <p className="flex min-w-0 items-center gap-3 truncate text-sm text-[#6b7280]">
-          <span>{portalLabel}</span>
+        <p className="truncate text-sm text-[#6b7280]">
+          {portalLabel}
           {organizationLabel ? (
-            <span className="truncate font-bold tracking-wide text-ink uppercase">
-              {organizationLabel}
-            </span>
+            <>
+              {" "}
+              <span className="font-bold tracking-wide text-ink uppercase">
+                {organizationLabel}
+              </span>
+            </>
           ) : null}
         </p>
       </div>
@@ -58,8 +65,15 @@ export function TopBar({
         <div className="min-w-0 flex-1" />
       )}
 
-      <div className="flex shrink-0 items-center gap-3 sm:gap-4">
-        <NotificationsMenu items={notifications} variant={showSearch ? "soft" : "ghost"} />
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <NotificationsMenu
+          items={notifications}
+          variant={showSearch ? "soft" : "ghost"}
+          viewAllHref={notificationsViewAllHref}
+          onOpen={onNotificationsOpen}
+          totalCount={notificationsTotalCount}
+          unreadCount={notificationsUnreadCount}
+        />
         <span className="hidden text-sm text-[#9ca3af] sm:inline">Welcome</span>
         <ProfileMenu user={profileUser} profileHref={profileHref} />
       </div>

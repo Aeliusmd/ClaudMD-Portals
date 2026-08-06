@@ -11,15 +11,20 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PAGE_SIZE, Pagination } from "@/components/ui/pagination";
 import { KpiSkeletonStrip, TableSkeleton } from "@/components/ui/skeleton";
 import { CreateAppointmentModal } from "@/features/employer/dashboard/create-appointment-modal";
-import { employerDashboardSummary } from "@/data/employer";
 import {
   fetchEmployerDashboardSummary,
   fetchEmployerEmployeeSearch,
+  fetchEmployerNotifications,
   fetchEmployerUpcomingAppointments,
 } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { LOGIN_PATH } from "@/lib/auth-routes";
 import { employerPaths } from "@/lib/portal-paths";
+import {
+  applyNotificationReadState,
+  countUnreadNotifications,
+  getNotificationsLastOpenedAt,
+} from "@/lib/notification-read-state";
 import {
   appointmentStatusStyles,
   categoryStyles,
@@ -37,6 +42,22 @@ function formatLocalIso(date) {
 
 function todayIso() {
   return formatLocalIso(new Date());
+}
+
+async function resolveUnreadReports(accessToken, fallback = 0) {
+  const openedAt = getNotificationsLastOpenedAt();
+  if (!openedAt) return fallback;
+  try {
+    const notif = await fetchEmployerNotifications(accessToken, {
+      page: 1,
+      pageSize: 50,
+    });
+    return countUnreadNotifications(
+      applyNotificationReadState(notif.items || [], openedAt)
+    );
+  } catch {
+    return fallback;
+  }
 }
 
 function daysAgoIso(today, days) {
@@ -87,6 +108,7 @@ const emptyCounts = {
   physicals: 0,
   drugScreens: 0,
   appointments: 0,
+  unreadReports: 0,
 };
 
 const employeeTableHeaders = [
@@ -169,12 +191,17 @@ export function EmployerDashboardView() {
       setLoadingSummary(true);
       try {
         const data = await fetchEmployerDashboardSummary(token);
+        const unreadReports = await resolveUnreadReports(
+          token,
+          data.unreadReports ?? 0
+        );
         if (!cancelled) {
           setSummaryCounts({
             injury: data.injury,
             physicals: data.physicals,
             drugScreens: data.drugScreens,
             appointments: data.appointments,
+            unreadReports,
           });
           setApptCount(data.appointments ?? 0);
         }
@@ -333,7 +360,7 @@ export function EmployerDashboardView() {
     injury: summaryCounts?.injury ?? 0,
     physicals: summaryCounts?.physicals ?? 0,
     drugScreens: summaryCounts?.drugScreens ?? 0,
-    unreadReports: employerDashboardSummary.last30Days.unreadReports,
+    unreadReports: summaryCounts?.unreadReports ?? 0,
     // Live upcoming appointments (same source as the Upcoming Appointments list).
     appointments: appointmentTotal || summaryCounts?.appointments || apptCount || 0,
   };
@@ -397,6 +424,10 @@ export function EmployerDashboardView() {
         physicals: summary.physicals,
         drugScreens: summary.drugScreens,
         appointments: summary.appointments,
+        unreadReports: await resolveUnreadReports(
+          token,
+          summary.unreadReports ?? 0
+        ),
       });
       setApptCount(summary.appointments ?? 0);
     } catch {
@@ -428,26 +459,20 @@ export function EmployerDashboardView() {
             const isTopRowMobile = index < 3;
             const isNotLastInRowMobile = index % 3 !== 2;
             const isNotLastDesktop = index < kpiItems.length - 1;
+            const clickable = item.filter !== "unreadReports";
+            const cellClassName = cn(
+              "relative px-3 py-4 text-center transition sm:px-4 sm:py-5 lg:px-5",
+              clickable && "cursor-pointer",
+              clickable && active ? "bg-primary-700" : null,
+              clickable && !active ? "hover:bg-white/5" : null,
+              !clickable && "cursor-default",
+              isTopRowMobile && "border-b border-white/10 lg:border-b-0",
+              isNotLastInRowMobile && "border-r border-white/10 lg:border-r-0",
+              isNotLastDesktop && "lg:border-r lg:border-white/10"
+            );
 
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={(event) => {
-                  if (item.showAdd && event.target.closest("[data-kpi-add]")) {
-                    handleKpiClick(item.filter, true);
-                    return;
-                  }
-                  handleKpiClick(item.filter, false);
-                }}
-                className={cn(
-                  "relative cursor-pointer px-3 py-4 text-center transition sm:px-4 sm:py-5 lg:px-5",
-                  active ? "bg-primary-700" : "hover:bg-white/5",
-                  isTopRowMobile && "border-b border-white/10 lg:border-b-0",
-                  isNotLastInRowMobile && "border-r border-white/10 lg:border-r-0",
-                  isNotLastDesktop && "lg:border-r lg:border-white/10"
-                )}
-              >
+            const content = (
+              <>
                 <div className="flex items-center justify-center gap-1.5">
                   <p className="text-[10px] font-semibold tracking-[0.12em] text-white/70 uppercase sm:text-[11px] sm:tracking-[0.14em]">
                     {item.label}
@@ -478,6 +503,35 @@ export function EmployerDashboardView() {
                 <p className="mt-3 font-sans text-4xl font-semibold tabular-nums leading-none sm:text-5xl lg:text-[3.25rem]">
                   {stats[item.key] ?? 0}
                 </p>
+              </>
+            );
+
+            if (!clickable) {
+              return (
+                <div
+                  key={item.key}
+                  className={cellClassName}
+                  aria-label={`${item.label}: ${stats[item.key] ?? 0}`}
+                >
+                  {content}
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={(event) => {
+                  if (item.showAdd && event.target.closest("[data-kpi-add]")) {
+                    handleKpiClick(item.filter, true);
+                    return;
+                  }
+                  handleKpiClick(item.filter, false);
+                }}
+                className={cellClassName}
+              >
+                {content}
               </button>
             );
           })}

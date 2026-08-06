@@ -1,8 +1,7 @@
+/** Visits and appointments are surfaced on the dashboard itself, so they are not separate nav items. */
 export const patientNavItems = [
   { href: "/patient/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
   { href: "/patient/my-information", label: "My Information", icon: "User" },
-  { href: "/patient/visits", label: "Visits / Check-ins", icon: "ClipboardList" },
-  { href: "/patient/appointments", label: "Appointments", icon: "CalendarDays" },
   { href: "/patient/profile", label: "Profile / Security", icon: "Shield" },
 ];
 

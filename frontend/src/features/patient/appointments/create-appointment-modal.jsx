@@ -3,20 +3,41 @@
 import { useEffect, useId, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DownwardSelect } from "@/components/ui/downward-select";
+import {
+  appointmentLocations,
+  appointmentProviders,
+  appointmentTypes,
+} from "@/data/appointments";
+import { toDisplayDate, toDisplayTime } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 const emptyForm = {
-  doctor: "",
-  specialty: "",
-  type: "",
   date: "",
   time: "",
+  type: "Follow-up",
+  provider: "",
   location: "",
   notes: "",
 };
 
 const fieldClass =
-  "w-full rounded-xl border border-[#e6ded5] bg-[#fef9f3] px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-[#b0a89e] focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15";
+  "w-full rounded-xl border border-[#e6ded5] bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-[#b0a89e] focus:border-primary focus:ring-2 focus:ring-primary/15";
+
+const typeOptions = appointmentTypes.map((type) => ({
+  value: type,
+  label: type,
+}));
+
+const providerOptions = appointmentProviders.map((provider) => ({
+  value: provider.name,
+  label: `${provider.name} — ${provider.specialty}`,
+}));
+
+const locationOptions = appointmentLocations.map((location) => ({
+  value: location,
+  label: location,
+}));
 
 function FieldLabel({ htmlFor, children }) {
   return (
@@ -75,14 +96,20 @@ export function CreatePatientAppointmentModal({ open, onClose, onCreate }) {
 
   function validate() {
     const next = {};
-    if (!form.doctor.trim()) next.doctor = "Doctor is required.";
-    if (!form.specialty.trim()) next.specialty = "Specialty is required.";
-    if (!form.type.trim()) next.type = "Appointment type is required.";
-    if (!form.date.trim()) next.date = "Date is required.";
-    if (!form.time.trim()) next.time = "Time is required.";
-    if (!form.location.trim()) next.location = "Location is required.";
+    if (!form.date) next.date = "Date is required.";
+    if (!form.time) next.time = "Time is required.";
+    if (!form.type) next.type = "Appointment type is required.";
+    if (!form.provider) next.provider = "Provider is required.";
+    if (!form.location) next.location = "Location is required.";
     return next;
   }
+
+  const isComplete =
+    Boolean(form.date) &&
+    Boolean(form.time) &&
+    Boolean(form.type) &&
+    Boolean(form.provider) &&
+    Boolean(form.location);
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -90,14 +117,18 @@ export function CreatePatientAppointmentModal({ open, onClose, onCreate }) {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
+    const provider = appointmentProviders.find(
+      (item) => item.name === form.provider
+    );
+
     onCreate?.({
-      id: `apt-${Date.now()}`,
-      doctor: form.doctor.trim(),
-      specialty: form.specialty.trim(),
-      type: form.type.trim(),
-      location: form.location.trim(),
-      date: form.date.trim(),
-      time: form.time.trim(),
+      id: `apt-${form.date}-${form.time}-${form.provider}`,
+      doctor: form.provider,
+      specialty: provider?.specialty || "General",
+      type: form.type,
+      location: form.location,
+      date: toDisplayDate(form.date),
+      time: toDisplayTime(form.time),
       notes: form.notes.trim(),
       status: "Pending",
     });
@@ -119,20 +150,15 @@ export function CreatePatientAppointmentModal({ open, onClose, onCreate }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 my-4 flex max-h-[min(92dvh,44rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[#ece7df] bg-white shadow-xl"
+        className="relative z-10 my-4 flex max-h-[min(92dvh,50rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[#ece7df] bg-white shadow-xl"
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#f0ebe3] px-5 py-4 sm:px-6">
-          <div className="min-w-0">
-            <h2
-              id={titleId}
-              className="text-lg font-semibold text-ink sm:text-xl"
-            >
-              Create Appointment
-            </h2>
-            <p className="mt-1 text-sm text-muted">
-              Schedule a new appointment with your provider
-            </p>
-          </div>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#f0ebe3] px-5 py-4 sm:px-6">
+          <h2
+            id={titleId}
+            className="text-lg font-semibold text-ink sm:text-xl"
+          >
+            Create Appointment
+          </h2>
           <button
             type="button"
             aria-label="Close"
@@ -145,104 +171,88 @@ export function CreatePatientAppointmentModal({ open, onClose, onCreate }) {
 
         <form
           onSubmit={handleSubmit}
-          className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
         >
-          <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <FieldLabel htmlFor="patient-appt-doctor">Doctor</FieldLabel>
-                <input
-                  id="patient-appt-doctor"
-                  value={form.doctor}
-                  onChange={(e) => updateField("doctor", e.target.value)}
-                  placeholder="e.g. Dr. Sarah Williams"
-                  className={cn(fieldClass, errors.doctor && "border-rose-300")}
-                />
-                <FieldError message={errors.doctor} />
-              </div>
-              <div>
-                <FieldLabel htmlFor="patient-appt-specialty">
-                  Specialty
-                </FieldLabel>
-                <input
-                  id="patient-appt-specialty"
-                  value={form.specialty}
-                  onChange={(e) => updateField("specialty", e.target.value)}
-                  placeholder="e.g. Primary Care"
-                  className={cn(
-                    fieldClass,
-                    errors.specialty && "border-rose-300"
-                  )}
-                />
-                <FieldError message={errors.specialty} />
-              </div>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
+            <div>
+              <FieldLabel htmlFor="patient-appt-date">Date</FieldLabel>
+              <input
+                id="patient-appt-date"
+                type="date"
+                value={form.date}
+                onChange={(event) => updateField("date", event.target.value)}
+                className={cn(fieldClass, errors.date && "border-rose-300")}
+              />
+              <FieldError message={errors.date} />
             </div>
 
             <div>
-              <FieldLabel htmlFor="patient-appt-type">
-                Appointment Type
-              </FieldLabel>
+              <FieldLabel htmlFor="patient-appt-time">Time</FieldLabel>
               <input
+                id="patient-appt-time"
+                type="time"
+                value={form.time}
+                onChange={(event) => updateField("time", event.target.value)}
+                className={cn(fieldClass, errors.time && "border-rose-300")}
+              />
+              <FieldError message={errors.time} />
+            </div>
+
+            <div>
+              <FieldLabel htmlFor="patient-appt-type">Type</FieldLabel>
+              <DownwardSelect
                 id="patient-appt-type"
                 value={form.type}
-                onChange={(e) => updateField("type", e.target.value)}
-                placeholder="e.g. Annual Physical, Follow-up"
-                className={cn(fieldClass, errors.type && "border-rose-300")}
+                onChange={(value) => updateField("type", value)}
+                options={typeOptions}
+                placeholder="Select type..."
+                error={Boolean(errors.type)}
               />
               <FieldError message={errors.type} />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <FieldLabel htmlFor="patient-appt-date">Date</FieldLabel>
-                <input
-                  id="patient-appt-date"
-                  value={form.date}
-                  onChange={(e) => updateField("date", e.target.value)}
-                  placeholder="e.g. Aug 15, 2026"
-                  className={cn(fieldClass, errors.date && "border-rose-300")}
-                />
-                <FieldError message={errors.date} />
-              </div>
-              <div>
-                <FieldLabel htmlFor="patient-appt-time">Time</FieldLabel>
-                <input
-                  id="patient-appt-time"
-                  value={form.time}
-                  onChange={(e) => updateField("time", e.target.value)}
-                  placeholder="e.g. 10:30 AM"
-                  className={cn(fieldClass, errors.time && "border-rose-300")}
-                />
-                <FieldError message={errors.time} />
-              </div>
+            <div>
+              <FieldLabel htmlFor="patient-appt-provider">Provider</FieldLabel>
+              <DownwardSelect
+                id="patient-appt-provider"
+                value={form.provider}
+                onChange={(value) => updateField("provider", value)}
+                options={providerOptions}
+                placeholder="Select provider..."
+                error={Boolean(errors.provider)}
+              />
+              <FieldError message={errors.provider} />
             </div>
 
             <div>
               <FieldLabel htmlFor="patient-appt-location">Location</FieldLabel>
-              <input
+              <DownwardSelect
                 id="patient-appt-location"
                 value={form.location}
-                onChange={(e) => updateField("location", e.target.value)}
-                placeholder="e.g. Downtown Clinic"
-                className={cn(fieldClass, errors.location && "border-rose-300")}
+                onChange={(value) => updateField("location", value)}
+                options={locationOptions}
+                placeholder="Select location..."
+                error={Boolean(errors.location)}
               />
               <FieldError message={errors.location} />
             </div>
 
             <div>
-              <FieldLabel htmlFor="patient-appt-notes">Notes</FieldLabel>
+              <FieldLabel htmlFor="patient-appt-notes">
+                Notes (Optional)
+              </FieldLabel>
               <textarea
                 id="patient-appt-notes"
                 rows={4}
                 value={form.notes}
-                onChange={(e) => updateField("notes", e.target.value)}
-                placeholder="Any special instructions or notes..."
-                className={cn(fieldClass, "resize-y min-h-[6.5rem]")}
+                onChange={(event) => updateField("notes", event.target.value)}
+                placeholder="Any special instructions..."
+                className={cn(fieldClass, "min-h-[6.5rem] resize-y")}
               />
             </div>
           </div>
 
-          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+          <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[#f0ebe3] px-5 py-4 sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
             <Button
               type="button"
               variant="outline"
@@ -251,7 +261,9 @@ export function CreatePatientAppointmentModal({ open, onClose, onCreate }) {
             >
               Cancel
             </Button>
-            <Button type="submit">Schedule Appointment</Button>
+            <Button type="submit" disabled={!isComplete}>
+              Create Appointment
+            </Button>
           </div>
         </form>
       </div>

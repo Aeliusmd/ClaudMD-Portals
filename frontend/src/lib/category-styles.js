@@ -16,6 +16,19 @@ export const appointmentStatusStyles = {
   Completed: "bg-background-100 text-foreground-700",
 };
 
+export const specialtyStyles = {
+  "Primary Care": "bg-secondary-100 text-secondary-700",
+  Cardiology: "bg-accent-50 text-accent-700",
+  Dermatology: "bg-accent-50 text-accent-700",
+  Orthopedics: "bg-primary-100 text-primary-700",
+  "Physical Therapy": "bg-amber-50 text-amber-700",
+  "Urgent Care": "bg-amber-50 text-amber-800",
+};
+
+export function specialtyStyle(specialty) {
+  return specialtyStyles[specialty] || "bg-background-100 text-foreground-700";
+}
+
 export const visitStatusStyles = {
   Completed: "bg-secondary-100 text-secondary-700",
 };

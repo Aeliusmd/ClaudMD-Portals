@@ -63,10 +63,12 @@ const tabs = [
       { key: "workStatus", label: "Work Status", variant: "workStatus" },
     ],
   },
+  /** Read-only counter — the tile does not switch the table. */
   {
     key: "unreadReports",
     label: "Unread Reports",
     title: "Unread Reports",
+    readOnly: true,
     rows: unreadInsuranceReports,
     count: insuranceDashboardSummary.unreadReports,
     dateKey: "receivedValue",
@@ -161,7 +163,7 @@ function InsuranceDashboardContent() {
   return (
     <div className="space-y-4 sm:space-y-5">
       <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-        Overview
+        Last 30 Days
       </h1>
 
       <div className="overflow-hidden rounded-2xl bg-primary-800 text-white shadow-sm">
@@ -169,24 +171,45 @@ function InsuranceDashboardContent() {
           {tabs.map((item, index) => {
             const active = item.key === activeTab;
 
-            return (
-              <button
-                key={item.key}
-                type="button"
-                aria-pressed={active}
-                onClick={() => selectTab(item.key)}
-                className={cn(
-                  "cursor-pointer px-3 py-4 text-center transition sm:px-4 sm:py-5 lg:px-5",
-                  active ? "bg-primary-700" : "hover:bg-white/5",
-                  index < tabs.length - 1 && "border-r border-white/10"
-                )}
-              >
+            const cellClass = cn(
+              "px-3 py-4 text-center transition sm:px-4 sm:py-5 lg:px-5",
+              item.readOnly
+                ? "cursor-default"
+                : cn(
+                    "cursor-pointer",
+                    active ? "bg-primary-700" : "hover:bg-white/5"
+                  ),
+              index < tabs.length - 1 && "border-r border-white/10"
+            );
+
+            const cellContent = (
+              <>
                 <p className="text-[10px] font-semibold tracking-[0.12em] text-white/70 uppercase sm:text-[11px] sm:tracking-[0.14em]">
                   {item.label}
                 </p>
                 <p className="mt-3 font-sans text-4xl leading-none font-semibold tabular-nums sm:text-5xl lg:text-[3.25rem]">
                   {item.count}
                 </p>
+              </>
+            );
+
+            if (item.readOnly) {
+              return (
+                <div key={item.key} className={cellClass}>
+                  {cellContent}
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={item.key}
+                type="button"
+                aria-pressed={active}
+                onClick={() => selectTab(item.key)}
+                className={cellClass}
+              >
+                {cellContent}
               </button>
             );
           })}

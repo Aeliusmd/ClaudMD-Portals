@@ -1,3 +1,30 @@
+export const appointmentTypes = [
+  "Follow-up",
+  "Annual Physical",
+  "Urgent Care Visit",
+  "Consultation",
+  "Lab Results Review",
+  "Skin Check",
+  "Therapy Session",
+];
+
+export const appointmentProviders = [
+  { name: "Dr. Sarah Williams", specialty: "Primary Care" },
+  { name: "Dr. Michael Park", specialty: "Cardiology" },
+  { name: "Dr. Lisa Thompson", specialty: "Dermatology" },
+  { name: "Dr. Emily Carter", specialty: "Urgent Care" },
+  { name: "Dr. James Rivera", specialty: "Orthopedics" },
+  { name: "PT Lisa Adams", specialty: "Physical Therapy" },
+];
+
+export const appointmentLocations = [
+  "Downtown Clinic",
+  "Urgent Care West",
+  "Cardiac Center",
+  "City Orthopedics",
+  "Westside Rehab",
+];
+
 export const appointments = [
   {
     id: "apt-001",

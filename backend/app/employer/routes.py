@@ -9,6 +9,14 @@ from app.employer.appointments import (
     MAX_PAGE_SIZE as APPT_MAX_PAGE_SIZE,
     list_upcoming_appointments,
 )
+from app.employer.booking import (
+    book_appointment,
+    list_available_slots,
+    list_booking_locations,
+    list_booking_patients,
+    list_booking_visit_types,
+    list_providers_for_date,
+)
 from app.employer.employee_search import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -16,6 +24,13 @@ from app.employer.employee_search import (
     search_employees,
 )
 from app.employer.schemas import (
+    AppointmentLocationOption,
+    AppointmentPatientOption,
+    AppointmentPrepareRequest,
+    AppointmentPrepareResponse,
+    AppointmentProviderOption,
+    AppointmentSlotsResponse,
+    AppointmentVisitTypeOption,
     DashboardSummaryResponse,
     EmployeeSearchResponse,
     EmployeeVisitsResponse,
@@ -122,3 +137,102 @@ def employer_upcoming_appointments_endpoint(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get(
+    "/appointments/locations",
+    response_model=list[AppointmentLocationOption],
+)
+def employer_appointment_locations_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """Clinic locations for booking (SELECT only)."""
+    return list_booking_locations(current_user)
+
+
+@router.get(
+    "/appointments/visit-types",
+    response_model=list[AppointmentVisitTypeOption],
+)
+def employer_appointment_visit_types_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """Visit types for booking (SELECT only)."""
+    return list_booking_visit_types(current_user)
+
+
+@router.get(
+    "/appointments/patients",
+    response_model=list[AppointmentPatientOption],
+)
+def employer_appointment_patients_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    search: str | None = Query(default=None),
+):
+    """Patients/employees already linked to this employer (SELECT only)."""
+    return list_booking_patients(current_user, search=search)
+
+
+@router.get(
+    "/appointments/providers",
+    response_model=list[AppointmentProviderOption],
+)
+def employer_appointment_providers_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    location_id: int = Query(alias="locationId"),
+    on_date: date = Query(alias="date"),
+):
+    """
+    Providers/resources with shifts on the selected date + location (SELECT only).
+    Uses AppointmentResources + AppointmentResourceShifts.
+    """
+    return list_providers_for_date(
+        current_user,
+        location_id=location_id,
+        on_date=on_date,
+    )
+
+
+@router.get(
+    "/appointments/slots",
+    response_model=AppointmentSlotsResponse,
+)
+def employer_appointment_slots_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    location_id: int = Query(alias="locationId"),
+    resource_id: int = Query(alias="resourceId"),
+    on_date: date = Query(alias="date"),
+    duration_minutes: int = Query(default=15, ge=1, le=480, alias="durationMinutes"),
+):
+    """
+    Available start slots for a provider on a date (SELECT only).
+    Honors working hours, TimeSlot size, NumberOfPatientsPerSlot, and existing bookings.
+    Duration longer than one slot requires contiguous free neighbor slots.
+    """
+    return list_available_slots(
+        current_user,
+        location_id=location_id,
+        resource_id=resource_id,
+        on_date=on_date,
+        duration_minutes=duration_minutes,
+    )
+
+
+@router.post(
+    "/appointments/book",
+    response_model=AppointmentPrepareResponse,
+)
+@router.post(
+    "/appointments/prepare",
+    response_model=AppointmentPrepareResponse,
+)
+def employer_appointment_book_endpoint(
+    payload: AppointmentPrepareRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Book an appointment: SELECT validation, then INSERT into existing tables only
+    (Patients optional, AppointmentRecurrings, Appointments, AppointmentSchedules).
+    No schema changes.
+    """
+    return book_appointment(current_user, payload)

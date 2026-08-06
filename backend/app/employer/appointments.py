@@ -22,8 +22,8 @@ _APPOINTMENT_STATUS_LABELS: dict[int, str] = {
 }
 
 
-def appointment_count_last_30_days(clinic, employer_id: int) -> int:
-    """Read-only count of scheduled appointments in the last 30 days."""
+def appointment_count_upcoming(clinic, employer_id: int) -> int:
+    """Read-only count of upcoming (now-or-future) schedules for this employer."""
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -35,12 +35,23 @@ def appointment_count_last_30_days(clinic, employer_id: int) -> int:
             WHERE (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
               AND COALESCE(a.EmployerId, ch.EmployerId) = ?
               AND s.Date IS NOT NULL
-              AND s.Date >= DATEADD(day, -30, CAST(GETDATE() AS date))
-              AND s.Date <= CAST(GETDATE() AS date)
+              AND s.StartTime IS NOT NULL
+              AND (
+                    s.Date > CAST(GETDATE() AS date)
+                 OR (
+                        s.Date = CAST(GETDATE() AS date)
+                    AND s.StartTime >= CAST(GETDATE() AS time)
+                    )
+              )
             """,
             (employer_id,),
         )
         return int(cursor.fetchone()[0])
+
+
+def appointment_count_last_30_days(clinic, employer_id: int) -> int:
+    """Backward-compatible alias — dashboard appointments KPI uses upcoming count. """
+    return appointment_count_upcoming(clinic, employer_id)
 
 
 def list_upcoming_appointments(
@@ -101,7 +112,14 @@ def _count_upcoming(clinic, employer_id: int) -> int:
             WHERE (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
               AND COALESCE(a.EmployerId, ch.EmployerId) = ?
               AND s.Date IS NOT NULL
-              AND s.Date >= CAST(GETDATE() AS date)
+              AND s.StartTime IS NOT NULL
+              AND (
+                    s.Date > CAST(GETDATE() AS date)
+                 OR (
+                        s.Date = CAST(GETDATE() AS date)
+                    AND s.StartTime >= CAST(GETDATE() AS time)
+                    )
+              )
             """,
             (employer_id,),
         )
@@ -144,7 +162,14 @@ def _fetch_upcoming_rows(
             WHERE (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
               AND COALESCE(a.EmployerId, ch.EmployerId) = ?
               AND s.Date IS NOT NULL
-              AND s.Date >= CAST(GETDATE() AS date)
+              AND s.StartTime IS NOT NULL
+              AND (
+                    s.Date > CAST(GETDATE() AS date)
+                 OR (
+                        s.Date = CAST(GETDATE() AS date)
+                    AND s.StartTime >= CAST(GETDATE() AS time)
+                    )
+              )
             ORDER BY s.Date ASC, s.StartTime ASC
             OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
             """,

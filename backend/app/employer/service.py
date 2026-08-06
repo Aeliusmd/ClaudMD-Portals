@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
-from app.employer.appointments import appointment_count_last_30_days
+from app.employer.appointments import appointment_count_upcoming
 from app.employer.profile import fetch_profile_from_clinic
 from app.employer.schemas import DashboardSummaryResponse, EmployerProfileResponse
 
@@ -50,7 +50,7 @@ def get_dashboard_summary(current_user: CurrentUser) -> DashboardSummaryResponse
         )
 
     counts = _fetch_checkin_counts(clinic, profile.employer_id)
-    appointments = appointment_count_last_30_days(clinic, profile.employer_id)
+    appointments = appointment_count_upcoming(clinic, profile.employer_id)
     return DashboardSummaryResponse(
         injury=counts["injury"],
         physicals=counts["physicals"],

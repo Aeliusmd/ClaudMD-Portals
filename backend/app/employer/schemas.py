@@ -110,12 +110,23 @@ class EmployeeVisitDocument(BaseModel):
 
 
 class EmployeeVisitRecord(BaseModel):
-    check_in_id: int
+    visit_id: str
+    check_in_id: int | None = None
+    is_upcoming: bool = False
     check_in_date: str | None = None
     check_in_date_value: str | None = None
     visit_label: str | None = None
     category: str | None = None
     documents: list[EmployeeVisitDocument] = []
+    schedule_id: int | None = None
+    appointment_id: int | None = None
+    time: str | None = None
+    end_time: str | None = None
+    provider: str | None = None
+    clinic: str | None = None
+    status: str | None = None
+    duration_minutes: int | None = None
+    note: str | None = None
 
 
 class EmployeeVisitsResponse(BaseModel):
@@ -124,3 +135,106 @@ class EmployeeVisitsResponse(BaseModel):
     from_date: str
     to_date: str
     visits: list[EmployeeVisitRecord] = []
+
+
+class AppointmentLocationOption(BaseModel):
+    id: int
+    name: str
+    short_name: str | None = None
+
+
+class AppointmentVisitTypeOption(BaseModel):
+    id: int
+    code: str | None = None
+    name: str
+    category_id: int | None = None
+
+
+class AppointmentPatientOption(BaseModel):
+    id: int
+    name: str
+    first_name: str | None = None
+    last_name: str | None = None
+    account_no: str | None = None
+    ssn: str | None = None
+    date_of_birth: str | None = None
+    gender_id: int | None = None
+    gender: str | None = None
+    phone: str | None = None
+    location_id: int | None = None
+
+
+class AppointmentProviderOption(BaseModel):
+    resource_id: int
+    provider_id: int | None = None
+    name: str
+    resource_name: str | None = None
+    provider_name: str | None = None
+    location_id: int
+    time_slot_minutes: float = 15
+    patients_per_slot: int = 1
+    shifts: list[dict] = []
+
+
+class AppointmentSlotOption(BaseModel):
+    start: str
+    end: str
+    label: str
+    slots_used: int = 1
+
+
+class AppointmentSlotsResponse(BaseModel):
+    date: str
+    location_id: int
+    resource_id: int
+    duration_minutes: int
+    time_slot_minutes: int
+    patients_per_slot: int
+    slots_needed: int
+    items: list[AppointmentSlotOption] = []
+
+
+class NewPatientPayload(BaseModel):
+    first_name: str
+    last_name: str
+    date_of_birth: str
+    gender: str | None = None
+    gender_id: int | None = None
+    ssn: str | None = None
+    account_no: str | None = None
+    phone: str | None = None
+
+
+class AppointmentPrepareRequest(BaseModel):
+    patient_id: int | None = None
+    new_patient: NewPatientPayload | None = None
+    location_id: int
+    resource_id: int
+    visit_type_id: int
+    date: str
+    start_time: str
+    duration_minutes: int
+    appointment_status_id: int | None = 4
+    schedule_type_id: int | None = 1
+    note: str | None = None
+
+
+class AppointmentPrepareResponse(BaseModel):
+    executed: bool = False
+    message: str
+    sql_script: str | None = None
+    draft_file: str | None = None
+    employer_id: int | None = None
+    location_id: int | None = None
+    resource_id: int | None = None
+    date: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    duration_minutes: int | None = None
+    slots_needed: int | None = None
+    time_slot_minutes: int | None = None
+    warnings: list[str] = []
+    patient_id: int | None = None
+    recurring_id: int | None = None
+    appointment_id: int | None = None
+    schedule_id: int | None = None

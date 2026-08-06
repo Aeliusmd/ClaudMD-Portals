@@ -276,7 +276,7 @@ function InsuranceDashboardContent() {
                       key={row.id}
                       onClick={
                         tab.rowsAreLinked
-                          ? () => router.push(`/insurance/patients/${row.id}`)
+                          ? () => router.push(`/insuranceportal/patients/${row.id}`)
                           : undefined
                       }
                       className={cn(

@@ -37,6 +37,7 @@ export function Sidebar({
   onClose,
   items = patientNavItems,
   onLogout,
+  loginHref = LOGIN_PATH,
 }) {
   const pathname = usePathname();
 
@@ -112,7 +113,7 @@ export function Sidebar({
 
         <div className="mt-auto shrink-0 border-t border-white/10 px-3 py-4">
           <Link
-            href={LOGIN_PATH}
+            href={loginHref}
             onClick={handleLogoutClick}
             className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/5 hover:text-white"
           >

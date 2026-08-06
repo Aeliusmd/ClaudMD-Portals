@@ -3,10 +3,12 @@
 export const EMPLOYER_PORTAL_BASE = "/employerportal";
 /** Chanuka patient portal keeps the /patient prefix (dummy data UI). */
 export const PATIENT_PORTAL_BASE = "/patient";
+export const INSURANCE_PORTAL_BASE = "/insuranceportal";
 
 export const EMPLOYER_LOGIN_PATH = `${EMPLOYER_PORTAL_BASE}/authentication/login`;
 /** Patient auth pages live under patientportal (from main); portal UI stays on /patient. */
 export const PATIENT_LOGIN_PATH = `/patientportal/authentication/login`;
+export const INSURANCE_LOGIN_PATH = `${INSURANCE_PORTAL_BASE}/authentication/login`;
 
 /** Default login used by shared entry points (root, /login, logout). */
 export const LOGIN_PATH = EMPLOYER_LOGIN_PATH;
@@ -35,13 +37,25 @@ export const patientPaths = {
   profile: `${PATIENT_PORTAL_BASE}/profile`,
 };
 
+export const insurancePaths = {
+  base: INSURANCE_PORTAL_BASE,
+  login: INSURANCE_LOGIN_PATH,
+  dashboard: `${INSURANCE_PORTAL_BASE}/dashboard`,
+  profile: `${INSURANCE_PORTAL_BASE}/profile`,
+  notifications: `${INSURANCE_PORTAL_BASE}/notifications`,
+};
+
 export function getLoginHref({
   portal = "employer",
   activationKey,
   share,
 } = {}) {
   const base =
-    portal === "patient" ? PATIENT_LOGIN_PATH : EMPLOYER_LOGIN_PATH;
+    portal === "patient"
+      ? PATIENT_LOGIN_PATH
+      : portal === "insurance"
+        ? INSURANCE_LOGIN_PATH
+        : EMPLOYER_LOGIN_PATH;
   const params = new URLSearchParams();
   if (activationKey) params.set("activationkey", activationKey);
   if (share) params.set("share", share);
@@ -51,5 +65,6 @@ export function getLoginHref({
 
 export function resolvePortalDestination(portal) {
   if (portal === "patient") return patientPaths.dashboard;
+  if (portal === "insurance") return insurancePaths.dashboard;
   return employerPaths.dashboard;
 }

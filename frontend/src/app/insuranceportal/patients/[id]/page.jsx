@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { InsurancePatientDetailView } from "@/features/insurance/patient-detail/view";
 import { findInsurancePatient, insurancePatients } from "@/data/insurance";
+import { insurancePaths } from "@/lib/portal-paths";
 
 const backHrefByCoverage = {
-  "Workers Comp": "/insurance/dashboard?tab=workersComp",
-  "Private Insurance": "/insurance/dashboard?tab=privateInsurance",
+  "Workers Comp": `${insurancePaths.dashboard}?tab=workersComp`,
+  "Private Insurance": `${insurancePaths.dashboard}?tab=privateInsurance`,
 };
 
 export function generateStaticParams() {
@@ -20,7 +21,7 @@ export default async function Page({ params }) {
   return (
     <InsurancePatientDetailView
       patient={patient}
-      backHref={backHrefByCoverage[patient.coverage] || "/insurance/dashboard"}
+      backHref={backHrefByCoverage[patient.coverage] || insurancePaths.dashboard}
     />
   );
 }

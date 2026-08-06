@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, time
 
 from fastapi import HTTPException, status
 
@@ -13,7 +13,7 @@ from app.employer.schemas import (
     EmployeeVisitRecord,
     EmployeeVisitsResponse,
 )
-from app.employer.service import _fetch_profile_from_clinic
+from app.employer.profile import fetch_profile_from_clinic
 
 
 def get_employee_visits(
@@ -30,7 +30,7 @@ def get_employee_visits(
             detail="Clinic not found for this session.",
         )
 
-    profile = _fetch_profile_from_clinic(clinic, current_user)
+    profile = fetch_profile_from_clinic(clinic, current_user)
     if profile.employer_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -53,6 +53,12 @@ def get_employee_visits(
         from_date=start,
         to_date=end,
     )
+    upcoming = _fetch_upcoming_appointments_for_patient(
+        clinic=clinic,
+        employer_id=profile.employer_id,
+        patient_id=int(patient_id),
+    )
+    visits = _merge_visit_records(visits, upcoming)
 
     return EmployeeVisitsResponse(
         patient_id=int(patient_id),
@@ -159,6 +165,7 @@ def _fetch_visits_with_documents(
         )
         visits.append(
             EmployeeVisitRecord(
+                visit_id=f"checkin-{check_in_id}",
                 check_in_id=check_in_id,
                 check_in_date=_format_display_date(row.get("CheckInDate")),
                 check_in_date_value=_format_date_iso(row.get("CheckInDate")),
@@ -168,6 +175,133 @@ def _fetch_visits_with_documents(
             )
         )
     return visits
+
+
+def _fetch_upcoming_appointments_for_patient(
+    *,
+    clinic,
+    employer_id: int,
+    patient_id: int,
+) -> list[EmployeeVisitRecord]:
+    sql = """
+        SELECT
+            s.Id AS ScheduleId,
+            s.Date,
+            s.StartTime,
+            s.EndTime,
+            s.Duration,
+            s.Note,
+            s.AppointmentStatusId,
+            COALESCE(a.Id, s.AppointmentId) AS AppointmentId,
+            a.VisitTypeId AS VisitTypeId,
+            vt.Description AS VisitTypeDescription,
+            vt.Code AS VisitTypeCode,
+            vt.CategoryId AS VisitCategoryId,
+            ar.Name AS ResourceName,
+            loc.Name AS LocationName
+        FROM dbo.AppointmentSchedules s
+        LEFT JOIN dbo.Appointments a ON a.Id = s.AppointmentId
+        LEFT JOIN dbo.VisitTypes vt ON vt.Id = a.VisitTypeId
+        LEFT JOIN dbo.AppointmentResources ar ON ar.Id = s.ResourceId
+        LEFT JOIN dbo.Locations loc ON loc.Id = s.LocationId
+        WHERE (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
+          AND a.PatientId = ?
+          AND a.EmployerId = ?
+          AND s.Date IS NOT NULL
+          AND s.StartTime IS NOT NULL
+          AND (
+                s.Date > CAST(GETDATE() AS date)
+             OR (
+                    s.Date = CAST(GETDATE() AS date)
+                AND s.StartTime >= CAST(GETDATE() AS time)
+                )
+          )
+        ORDER BY s.Date ASC, s.StartTime ASC
+    """
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(sql, (patient_id, employer_id))
+        columns = [col[0] for col in cursor.description]
+        rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    visits: list[EmployeeVisitRecord] = []
+    for row in rows:
+        schedule_id = int(row["ScheduleId"])
+        category = _visit_category(row.get("VisitCategoryId"), row.get("VisitTypeCode"))
+        label = (
+            row.get("VisitTypeDescription")
+            or row.get("VisitTypeCode")
+            or category
+            or "Appointment"
+        )
+        appointment_id = row.get("AppointmentId")
+        duration = row.get("Duration")
+        visits.append(
+            EmployeeVisitRecord(
+                visit_id=f"appt-{schedule_id}",
+                is_upcoming=True,
+                schedule_id=schedule_id,
+                appointment_id=int(appointment_id) if appointment_id is not None else None,
+                check_in_date=_format_display_date(row.get("Date")),
+                check_in_date_value=_format_date_iso(row.get("Date")),
+                visit_label=label,
+                category=category,
+                documents=[],
+                time=_format_time_display(row.get("StartTime")),
+                end_time=_format_time_display(row.get("EndTime")),
+                provider=(row.get("ResourceName") or "").strip() or None,
+                clinic=(row.get("LocationName") or "").strip() or None,
+                status=_appointment_status_label(row.get("AppointmentStatusId")),
+                duration_minutes=int(duration) if duration is not None else None,
+                note=(row.get("Note") or "").strip() or None,
+            )
+        )
+    return visits
+
+
+def _merge_visit_records(
+    check_in_visits: list[EmployeeVisitRecord],
+    upcoming_visits: list[EmployeeVisitRecord],
+) -> list[EmployeeVisitRecord]:
+    merged = check_in_visits + upcoming_visits
+    merged.sort(
+        key=lambda visit: (
+            visit.check_in_date_value or "",
+            visit.is_upcoming,
+            visit.time or "",
+        ),
+        reverse=True,
+    )
+    return merged
+
+
+_APPOINTMENT_STATUS_LABELS: dict[int, str] = {
+    1: "Confirmed",
+    2: "Scheduled",
+    3: "Cancelled",
+    4: "Pending",
+    5: "Completed",
+}
+
+
+def _appointment_status_label(status_id) -> str:
+    if status_id is None:
+        return "Scheduled"
+    try:
+        key = int(status_id)
+    except (TypeError, ValueError):
+        return "Scheduled"
+    return _APPOINTMENT_STATUS_LABELS.get(key, "Scheduled")
+
+
+def _format_time_display(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        value = value.time()
+    if isinstance(value, time):
+        return value.strftime("%I:%M %p").lstrip("0")
+    return str(value)
 
 
 def _preview_badge(report_id, report_name: str) -> str:

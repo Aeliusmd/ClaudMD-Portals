@@ -4,13 +4,37 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.auth.dependencies import CurrentUser, get_current_user
+from app.employer.appointments import (
+    DEFAULT_PAGE_SIZE as APPT_DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE as APPT_MAX_PAGE_SIZE,
+    list_upcoming_appointments,
+)
+from app.employer.booking import (
+    book_appointment,
+    list_available_slots,
+    list_booking_locations,
+    list_booking_patients,
+    list_booking_visit_types,
+    list_providers_for_date,
+)
 from app.employer.employee_search import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
     default_search_date_range,
     search_employees,
 )
+from app.employer.permissions import (
+    get_organization_users,
+    update_organization_user_access,
+)
 from app.employer.schemas import (
+    AppointmentLocationOption,
+    AppointmentPatientOption,
+    AppointmentPrepareRequest,
+    AppointmentPrepareResponse,
+    AppointmentProviderOption,
+    AppointmentSlotsResponse,
+    AppointmentVisitTypeOption,
     DashboardSummaryResponse,
     EmployeeSearchResponse,
     EmployeeVisitsResponse,
@@ -18,12 +42,9 @@ from app.employer.schemas import (
     OrganizationUserAccessUpdateRequest,
     OrganizationUserAccessUpdateResponse,
     OrganizationUsersResponse,
+    UpcomingAppointmentsResponse,
 )
 from app.employer.service import get_dashboard_summary, get_employer_profile
-from app.employer.permissions import (
-    get_organization_users,
-    update_organization_user_access,
-)
 from app.employer.visit_documents import get_employee_visits
 
 router = APIRouter(prefix="/api/employer", tags=["employer"])
@@ -78,6 +99,7 @@ def employer_dashboard_summary_endpoint(
       injury      → VisitTypes.CategoryId = 1
       physicals   → VisitTypes.CategoryId = 2 AND Code <> 'PDS'
       drugScreens → VisitTypes.Code = 'PDS'
+    Also returns upcoming-appointment count for this employer.
     """
     return get_dashboard_summary(current_user)
 
@@ -134,3 +156,124 @@ def employer_employee_search_endpoint(
         category=category,
         patient_id=patient_id,
     )
+
+
+@router.get("/appointments/upcoming", response_model=UpcomingAppointmentsResponse)
+def employer_upcoming_appointments_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(
+        default=APPT_DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=APPT_MAX_PAGE_SIZE,
+        alias="pageSize",
+    ),
+):
+    """
+    Upcoming appointments (SELECT only): AppointmentSchedules from today onward
+    for this employer via Appointments.EmployerId or CheckInsHeader.EmployerId.
+    """
+    return list_upcoming_appointments(
+        current_user,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get(
+    "/appointments/locations",
+    response_model=list[AppointmentLocationOption],
+)
+def employer_appointment_locations_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """Clinic locations for booking (SELECT only)."""
+    return list_booking_locations(current_user)
+
+
+@router.get(
+    "/appointments/visit-types",
+    response_model=list[AppointmentVisitTypeOption],
+)
+def employer_appointment_visit_types_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """Visit types for booking (SELECT only)."""
+    return list_booking_visit_types(current_user)
+
+
+@router.get(
+    "/appointments/patients",
+    response_model=list[AppointmentPatientOption],
+)
+def employer_appointment_patients_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    search: str | None = Query(default=None),
+):
+    """Patients/employees already linked to this employer (SELECT only)."""
+    return list_booking_patients(current_user, search=search)
+
+
+@router.get(
+    "/appointments/providers",
+    response_model=list[AppointmentProviderOption],
+)
+def employer_appointment_providers_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    location_id: int = Query(alias="locationId"),
+    on_date: date = Query(alias="date"),
+):
+    """
+    Providers/resources with shifts on the selected date + location (SELECT only).
+    Uses AppointmentResources + AppointmentResourceShifts.
+    """
+    return list_providers_for_date(
+        current_user,
+        location_id=location_id,
+        on_date=on_date,
+    )
+
+
+@router.get(
+    "/appointments/slots",
+    response_model=AppointmentSlotsResponse,
+)
+def employer_appointment_slots_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    location_id: int = Query(alias="locationId"),
+    resource_id: int = Query(alias="resourceId"),
+    on_date: date = Query(alias="date"),
+    duration_minutes: int = Query(default=15, ge=1, le=480, alias="durationMinutes"),
+):
+    """
+    Available start slots for a provider on a date (SELECT only).
+    Honors working hours, TimeSlot size, NumberOfPatientsPerSlot, and existing bookings.
+    Duration longer than one slot requires contiguous free neighbor slots.
+    """
+    return list_available_slots(
+        current_user,
+        location_id=location_id,
+        resource_id=resource_id,
+        on_date=on_date,
+        duration_minutes=duration_minutes,
+    )
+
+
+@router.post(
+    "/appointments/book",
+    response_model=AppointmentPrepareResponse,
+)
+@router.post(
+    "/appointments/prepare",
+    response_model=AppointmentPrepareResponse,
+)
+def employer_appointment_book_endpoint(
+    payload: AppointmentPrepareRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Book an appointment: SELECT validation, then INSERT into existing tables only
+    (Patients optional, AppointmentRecurrings, Appointments, AppointmentSchedules).
+    No schema changes.
+    """
+    return book_appointment(current_user, payload)

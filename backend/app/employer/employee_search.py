@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
 from app.employer.schemas import EmployeeSearchResponse, EmployeeSearchRow
-from app.employer.service import _fetch_profile_from_clinic
+from app.employer.profile import fetch_profile_from_clinic
 from app.employer.shift_type import shift_type_label
 
 DEFAULT_PAGE_SIZE = 10
@@ -42,7 +42,7 @@ def search_employees(
             detail="Clinic not found for this session.",
         )
 
-    profile = _fetch_profile_from_clinic(clinic, current_user)
+    profile = fetch_profile_from_clinic(clinic, current_user)
     if profile.employer_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -264,7 +264,141 @@ def _fetch_employee_rows(
         db_rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     items = [_map_employee_row(row, organization) for row in db_rows]
+
+    if patient_id is not None and total == 0:
+        fallback = _fetch_appointment_only_patient(
+            clinic=clinic,
+            employer_id=employer_id,
+            patient_id=int(patient_id),
+            organization=organization,
+        )
+        if fallback is not None:
+            return 1, [fallback]
+
     return total, items
+
+
+def _fetch_appointment_only_patient(
+    *,
+    clinic,
+    employer_id: int,
+    patient_id: int,
+    organization: str | None,
+) -> EmployeeSearchRow | None:
+    """Patients booked via appointments only (no check-ins yet) for this employer."""
+    sql = """
+        SELECT TOP 1
+            p.Id AS PatientId,
+            p.AccountNumber,
+            p.SSN,
+            p.LastName,
+            p.FirstName,
+            p.DateOfBirth,
+            p.GenderId,
+            p.CellPhone,
+            p.HomePhone,
+            p.WorkPhone,
+            p.Email,
+            p.Address1,
+            p.Address2,
+            p.City,
+            p.State,
+            p.ZipCode,
+            a.Id AS AppointmentId,
+            vt.Description AS VisitTypeDescription,
+            vt.Code AS VisitTypeCode,
+            vt.CategoryId AS VisitCategoryId,
+            emp.Name AS EmployerName
+        FROM dbo.Patients p
+        INNER JOIN dbo.Appointments a
+            ON a.PatientId = p.Id
+           AND a.EmployerId = ?
+           AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+        LEFT JOIN dbo.VisitTypes vt ON vt.Id = a.VisitTypeId
+        LEFT JOIN dbo.Employers emp ON emp.Id = a.EmployerId
+        WHERE p.Id = ?
+          AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
+        ORDER BY a.Id DESC
+    """
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(sql, (employer_id, patient_id))
+        columns = [col[0] for col in cursor.description]
+        row = cursor.fetchone()
+        if not row:
+            return None
+        data = dict(zip(columns, row))
+
+    pid = int(data["PatientId"])
+    appointment_id = int(data["AppointmentId"])
+    account_no = data.get("AccountNumber")
+    account_str = str(account_no) if account_no is not None else None
+
+    first = (data.get("FirstName") or "").strip()
+    last = (data.get("LastName") or "").strip()
+    full_name = " ".join(part for part in [first, last] if part).strip() or "Unknown"
+
+    ssn = (data.get("SSN") or "").strip() or None
+    ssn_digits = "".join(ch for ch in ssn if ch.isdigit()) if ssn else ""
+    ssn_last4 = ssn_digits[-4:] if len(ssn_digits) >= 4 else None
+
+    category = _visit_category(data.get("VisitCategoryId"), data.get("VisitTypeCode"))
+    report_type = (
+        data.get("VisitTypeDescription")
+        or data.get("VisitTypeCode")
+        or category
+        or "Appointment"
+    )
+
+    phone = (
+        (data.get("CellPhone") or "").strip()
+        or (data.get("HomePhone") or "").strip()
+        or (data.get("WorkPhone") or "").strip()
+        or None
+    )
+
+    address_parts = [
+        (data.get("Address1") or "").strip(),
+        (data.get("Address2") or "").strip(),
+        (data.get("City") or "").strip(),
+        (data.get("State") or "").strip(),
+        (data.get("ZipCode") or "").strip(),
+    ]
+    address = ", ".join(part for part in address_parts if part) or None
+
+    return EmployeeSearchRow(
+        id=f"{pid}-appt-{appointment_id}",
+        patient_id=pid,
+        check_in_id=0,
+        employee_id=str(pid),
+        employee_name=full_name,
+        account_no=account_str,
+        ssn=ssn,
+        ssn_last4=ssn_last4,
+        employer_name=data.get("EmployerName") or organization,
+        insurance_company=None,
+        report_type=report_type,
+        category=category,
+        check_in_date=None,
+        check_in_date_value=None,
+        incident_id=None,
+        incident_number="N/A",
+        date_of_injury=None,
+        time_of_injury=None,
+        work_status="—",
+        disability_status=None,
+        unread_report_count=0,
+        appointment_count=1,
+        date_of_birth=_format_display_date(data.get("DateOfBirth")),
+        gender_id=int(data["GenderId"]) if data.get("GenderId") is not None else None,
+        gender=_gender_label(data.get("GenderId")),
+        phone=phone,
+        email=(data.get("Email") or "").strip() or None,
+        address=address,
+        city=(data.get("City") or "").strip() or None,
+        state=(data.get("State") or "").strip() or None,
+        zip_code=(data.get("ZipCode") or "").strip() or None,
+    )
 
 
 def _map_employee_row(row: dict, organization: str | None) -> EmployeeSearchRow:

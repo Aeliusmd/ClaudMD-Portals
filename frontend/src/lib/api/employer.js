@@ -275,3 +275,82 @@ export async function fetchEmployeeVisits(
     })),
   };
 }
+
+export async function fetchEmployerOrganizationUsers(accessToken) {
+  const data = await employerFetch(
+    "/api/employer/organization-users",
+    accessToken,
+    "Unable to load organization users."
+  );
+
+  return {
+    employerId: data.employer_id,
+    organization: data.organization || "",
+    total: data.total ?? 0,
+    canManageAccess: Boolean(data.can_manage_access),
+    items: (data.items || []).map((row) => mapOrganizationUser(row)),
+  };
+}
+
+function mapOrganizationUser(row) {
+  return {
+    id: row.id,
+    contactId: row.contact_id,
+    userId: row.user_id,
+    fullName: row.full_name,
+    email: row.email || "",
+    title: row.title || "",
+    loginId: row.login_id || "",
+    typeId: row.type_id,
+    typeLabel: row.type_label,
+    role: row.role || row.type_label || "—",
+    accessLevel: row.access_level,
+    active: Boolean(row.active),
+    contactType: row.contact_type || "",
+    serviceType: row.service_type || "",
+  };
+}
+
+export async function updateEmployerOrganizationUserAccess(
+  accessToken,
+  contactId,
+  accessLevel
+) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/employer/organization-users/${encodeURIComponent(
+      contactId
+    )}/access`,
+    {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ access_level: accessLevel }),
+    }
+  );
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const detail =
+      (data && (data.detail || data.message)) ||
+      "Unable to update portal access.";
+    const error = new Error(
+      typeof detail === "string" ? detail : "Unable to update portal access."
+    );
+    error.status = response.status;
+    throw error;
+  }
+
+  return {
+    canManageAccess: Boolean(data.can_manage_access),
+    item: mapOrganizationUser(data.item),
+  };
+}

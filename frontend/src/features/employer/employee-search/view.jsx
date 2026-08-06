@@ -302,7 +302,7 @@ function EmployeeSearchContent() {
             onChange={(e) => setDraftToDate(e.target.value)}
           />
           <Button
-            type="button"
+              type="button"
             onClick={applyFilters}
             className="h-[2.625rem] shrink-0 gap-1.5 rounded-xl px-3.5 py-0 text-sm"
             aria-label="Apply filters"
@@ -335,18 +335,18 @@ function EmployeeSearchContent() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
+          <div className="overflow-x-auto">
               <table className="min-w-[72rem] w-full text-left text-sm">
-                <thead className="border-b border-border/70 bg-cream/40 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
-                  <tr>
+              <thead className="border-b border-border/70 bg-cream/40 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
+                <tr>
                     {searchTableHeaders.map((label) => (
                       <th key={label} className="px-4 py-3">
                         {label}
                       </th>
                     ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
                   {rows.map((row) => (
                     <tr
                       key={row.id}
@@ -385,14 +385,14 @@ function EmployeeSearchContent() {
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="space-y-1">
-                          <Badge
-                            className={
-                              workStatusStyles[row.workStatus] ||
+                        <Badge
+                          className={
+                            workStatusStyles[row.workStatus] ||
                               "bg-stone-100 text-stone-600"
-                            }
-                          >
-                            {row.workStatus}
-                          </Badge>
+                          }
+                        >
+                          {row.workStatus}
+                        </Badge>
                           {row.disabilityStatus &&
                           row.disabilityStatus !== "None" ? (
                             <p className="text-xs text-muted">
@@ -415,9 +415,9 @@ function EmployeeSearchContent() {
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
+          </div>
             <Pagination
               alwaysShow
               page={page}

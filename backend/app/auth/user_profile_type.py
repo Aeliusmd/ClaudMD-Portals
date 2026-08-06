@@ -31,6 +31,7 @@ USER_TYPE_LABELS: dict[UserType, str] = {
 }
 
 USER_TYPE_PORTAL: dict[UserType, str] = {
+    UserType.SuperAdmin: "employer",
     UserType.EmployerUser: "employer",
     UserType.PatientUser: "patient",
 }
@@ -53,7 +54,11 @@ def user_type_label(type_id: int | None) -> str | None:
 
 
 def portal_for_type_id(type_id: int | None) -> str | None:
-    """Return 'employer' / 'patient' for a portal-enabled TypeId, else None."""
+    """Return 'employer' / 'patient' for a portal-enabled TypeId, else None.
+
+    Super Admin and Employer User → employer portal.
+    Patient User → patient portal.
+    """
     if type_id is None:
         return None
     try:

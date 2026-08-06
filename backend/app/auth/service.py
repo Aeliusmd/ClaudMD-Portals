@@ -7,10 +7,19 @@ from app.auth.identity import (
     decode_access_token_claims,
     request_password_token,
 )
-from app.auth.schemas import ClinicInfo, LoginRequest, LoginResponse, UserInfo
+from app.auth.password_hasher import hash_password, verify_password
+from app.auth.schemas import (
+    ChangePasswordRequest,
+    ChangePasswordResponse,
+    ClinicInfo,
+    LoginRequest,
+    LoginResponse,
+    UserInfo,
+)
 from app.auth.user_profile_type import UserType, portal_for_type_id, user_type_label
 from app.config import get_settings
 from app.db.clinic import ClinicConnectionInfo, get_clinic_by_activation_key, get_clinic_connection
+from app.auth.dependencies import CurrentUser
 
 
 def resolve_clinic(activation_key: str) -> ClinicConnectionInfo:
@@ -120,6 +129,194 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
     )
 
 
+def change_password(
+    current_user: CurrentUser,
+    payload: ChangePasswordRequest,
+) -> ChangePasswordResponse:
+    """
+    Change password using existing dbo.UserProfiles.Password / IsPasswordChanged only.
+
+    1) Confirm current password via IdentityServer password grant (login source of truth).
+    2) Write new ASP.NET Identity V3 hash into UserProfiles.Password.
+    No new tables/columns.
+    """
+    current_password = payload.current_password or ""
+    new_password = payload.new_password or ""
+    confirm_password = payload.confirm_password or ""
+
+    if len(new_password) < 4:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 4 characters.",
+        )
+    if new_password != confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password and confirmation do not match.",
+        )
+    if current_password == new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from the current password.",
+        )
+
+    activation_key = (current_user.activation_key or "").strip()
+    login_id = (current_user.login_id or current_user.email or "").strip()
+    if not activation_key or not login_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+        )
+
+    # Prove the current password is valid for Identity login.
+    request_password_token(
+        username=login_id,
+        password=current_password,
+        activation_key=activation_key,
+    )
+
+    clinic = get_clinic_by_activation_key(activation_key)
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found for this session.",
+        )
+
+    profile_id = _resolve_profile_id_for_password(
+        clinic,
+        user_id=current_user.user_id,
+        login_id=login_id,
+        email=current_user.email or login_id,
+    )
+
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT TOP 1 Id, Password
+            FROM dbo.UserProfiles
+            WHERE Id = ?
+              AND (IsDeleted = 0 OR IsDeleted IS NULL)
+              AND RecordStatusId = 1
+            """,
+            (profile_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found.",
+            )
+
+        stored = row.Password
+        # Prefer Identity grant as source of truth; also reject obvious local mismatch.
+        if stored and not verify_password(str(stored), current_password):
+            # Some legacy rows may not verify locally but still authenticate via Identity.
+            # Identity grant already succeeded above, so continue.
+            pass
+
+        new_hash = hash_password(new_password)
+        cursor.execute(
+            """
+            UPDATE dbo.UserProfiles
+            SET Password = ?,
+                IsPasswordChanged = 1,
+                UpdatedDateTime = SYSDATETIMEOFFSET(),
+                UpdatedUserId = ?
+            WHERE Id = ?
+              AND (IsDeleted = 0 OR IsDeleted IS NULL)
+            """,
+            (new_hash, profile_id, profile_id),
+        )
+        if cursor.rowcount < 1:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Password could not be updated.",
+            )
+
+    # Confirm the new password works with Identity before returning success.
+    try:
+        request_password_token(
+            username=login_id,
+            password=new_password,
+            activation_key=activation_key,
+        )
+    except HTTPException:
+        # Roll back to previous hash if Identity still rejects the new password.
+        with get_clinic_connection(clinic) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE dbo.UserProfiles
+                SET Password = ?,
+                    IsPasswordChanged = 0,
+                    UpdatedDateTime = SYSDATETIMEOFFSET(),
+                    UpdatedUserId = ?
+                WHERE Id = ?
+                """,
+                (stored, profile_id, profile_id),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Password was written locally but IdentityServer still rejects the "
+                "new password. Previous password was restored. Contact support."
+            ),
+        )
+
+    return ChangePasswordResponse(
+        message="Password updated successfully.",
+    )
+
+
+def _resolve_profile_id_for_password(
+    clinic: ClinicConnectionInfo,
+    *,
+    user_id: int | None,
+    login_id: str,
+    email: str,
+) -> int:
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        if user_id is not None:
+            cursor.execute(
+                """
+                SELECT TOP 1 Id
+                FROM dbo.UserProfiles
+                WHERE Id = ?
+                  AND (IsDeleted = 0 OR IsDeleted IS NULL)
+                  AND RecordStatusId = 1
+                """,
+                (int(user_id),),
+            )
+            row = cursor.fetchone()
+            if row:
+                return int(row.Id)
+
+        cursor.execute(
+            """
+            SELECT TOP 1 Id
+            FROM dbo.UserProfiles
+            WHERE (IsDeleted = 0 OR IsDeleted IS NULL)
+              AND RecordStatusId = 1
+              AND (
+                    LOWER(LTRIM(RTRIM(LoginId))) = LOWER(?)
+                 OR LOWER(LTRIM(RTRIM(Email))) = LOWER(?)
+              )
+            ORDER BY Id DESC
+            """,
+            (login_id.strip(), (email or login_id).strip()),
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found.",
+        )
+    return int(row.Id)
+
+
 def _try_resolve_clinic(activation_key: str) -> ClinicConnectionInfo | None:
     settings = get_settings()
     if not settings.master_db_configured:
@@ -189,12 +386,13 @@ def _fetch_user_profile_type(
                      OR LOWER(LTRIM(RTRIM(Email))) = LOWER(?)
                   )
                 ORDER BY
-                    CASE WHEN TypeId IN (?, ?) THEN 0 ELSE 1 END,
+                    CASE WHEN TypeId IN (?, ?, ?) THEN 0 ELSE 1 END,
                     Id DESC
                 """,
                 (
                     login_id.strip(),
                     (email or login_id).strip(),
+                    int(UserType.SuperAdmin),
                     int(UserType.EmployerUser),
                     int(UserType.PatientUser),
                 ),

@@ -57,3 +57,17 @@ class ClinicResolveResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, alias="currentPassword")
+    new_password: str = Field(..., min_length=1, alias="newPassword")
+    confirm_password: str = Field(..., min_length=1, alias="confirmPassword")
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class ChangePasswordResponse(BaseModel):
+    message: str

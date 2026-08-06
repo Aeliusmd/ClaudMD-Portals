@@ -1,4 +1,9 @@
-"""Organization users / portal access for Permissions tab."""
+"""Organization users / portal access for Permissions tab.
+
+AuditLogEntries is reserved for a future Permissions activity log (allowlisted
+Actions such as UPDATE_EMPLOYERCONTACT / CREATE_EMPLOYER_CONTACT / PORTAL_*).
+It must not feed the in-app notification bell — see employer/notifications.py.
+"""
 
 from __future__ import annotations
 
@@ -21,6 +26,16 @@ ALLOWED_ACCESS_LEVELS = {ACCESS_PORTAL, ACCESS_NONE}
 MANAGE_ACCESS_TYPE_IDS = {int(UserType.SuperAdmin)}
 # Kept for PATCH (unused by display-only Permissions tab).
 EMPLOYER_PORTAL_TYPE_IDS = {int(UserType.SuperAdmin), int(UserType.EmployerUser)}
+
+# Future Permissions activity log: allowlisted AuditLogEntries.Action values only.
+# Do not surface these (or any audit rows) in the notification bell.
+PERMISSIONS_AUDIT_ACTIONS = frozenset(
+    {
+        "UPDATE_EMPLOYERCONTACT",
+        "CREATE_EMPLOYER_CONTACT",
+        "CREATE_EMPLOYER_USER",
+    }
+)
 
 
 def get_organization_users(current_user: CurrentUser) -> OrganizationUsersResponse:
@@ -57,7 +72,8 @@ def update_organization_user_access(
     Grant / modify / revoke portal access (EmployerContacts.IsAllowPortalAccess).
 
     Allowed callers: Super Admin (0) only.
-    Does not write AuditLogEntries yet (audit wiring deferred).
+    Does not write AuditLogEntries yet (deferred). When wired, AuditLogEntries
+    is for a Permissions activity log only — not the in-app notification bell.
     """
     normalized = (access_level or "").strip()
     if normalized not in ALLOWED_ACCESS_LEVELS:

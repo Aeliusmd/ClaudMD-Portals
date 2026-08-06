@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileText, UserRound } from "lucide-react";
+import { UserRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
+import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { SkeletonBlock } from "@/components/ui/skeleton";
 import { employees as mockEmployees } from "@/data/employer";
 import { fetchEmployeeVisits } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
+import { SAMPLE_DOCUMENT_URL } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
 function shortDocLabel(doc) {
@@ -32,7 +34,6 @@ function shortDocLabel(doc) {
 
 function docCaption(doc, selectedVisit) {
   const date = doc.visitDate || selectedVisit?.date || "";
-  if (doc.previewLabel) return `${date} ${doc.previewLabel}`.trim();
   const label = shortDocLabel(doc);
   return `${date} ${label}`.trim();
 }
@@ -52,22 +53,23 @@ function formatDob(value) {
 }
 
 function VisitDocumentThumb({ doc, selectedVisit, onPreview }) {
-  const label = shortDocLabel(doc);
+  const badge = shortDocLabel(doc);
+  const url = doc.url || SAMPLE_DOCUMENT_URL;
 
   return (
-    <div className="min-w-0 w-full">
-      <button
-        type="button"
-        onClick={() => onPreview(doc)}
-        className="flex aspect-[3/4] w-full max-h-72 cursor-pointer flex-col items-center justify-center rounded-xl bg-white shadow-sm transition hover:ring-2 hover:ring-primary-400/50 sm:max-h-80"
-      >
-        <div className="flex h-14 w-12 flex-col items-center justify-center rounded-md bg-background-100 text-foreground-700">
-          <FileText className="h-5 w-5" />
-          <span className="mt-1 text-[10px] font-bold tracking-wide">
-            {label}
-          </span>
-        </div>
-      </button>
+    <div className="w-[8.5rem] shrink-0 sm:w-40">
+      <PdfThumbnail
+        url={url}
+        badge={badge}
+        title={doc.title || doc.name || "Document"}
+        onOpen={() =>
+          onPreview({
+            ...doc,
+            url,
+            previewBadge: badge,
+          })
+        }
+      />
       <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
         {docCaption(doc, selectedVisit)}
       </p>
@@ -183,10 +185,16 @@ export function EmployeeRecordSkeleton({
           </div>
         </Card>
 
-        <div className="flex min-h-[22rem] flex-col rounded-2xl bg-foreground-900 p-4 shadow-sm sm:p-5 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:min-h-0 xl:self-stretch">
-          <div className="mx-auto flex w-full max-w-[12rem] flex-1 flex-col items-center justify-center gap-3">
-            <div className="aspect-[3/4] w-full animate-pulse rounded-xl bg-white/20" />
-            <div className="h-4 w-28 animate-pulse rounded bg-white/20" />
+        <div className="min-h-[18rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[22rem] sm:p-5 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:min-h-full">
+          <div className="flex flex-wrap gap-4">
+            <div className="w-[8.5rem] shrink-0 sm:w-40">
+              <div className="aspect-[17/22] w-full animate-pulse rounded-xl bg-white/20" />
+              <div className="mx-auto mt-2.5 h-4 w-24 animate-pulse rounded bg-white/20" />
+            </div>
+            <div className="w-[8.5rem] shrink-0 sm:w-40">
+              <div className="aspect-[17/22] w-full animate-pulse rounded-xl bg-white/20" />
+              <div className="mx-auto mt-2.5 h-4 w-24 animate-pulse rounded bg-white/20" />
+            </div>
           </div>
         </div>
       </div>
@@ -312,7 +320,15 @@ export function EmployeeRecordView({
   }, [profile]);
 
   useEffect(() => {
-    setSelectedVisitId(visits[0]?.id || null);
+    if (!visits.length) {
+      setSelectedVisitId(null);
+      return;
+    }
+    const preferred =
+      visits.find((visit) => !visit.isUpcoming && (visit.documents || []).length > 0) ||
+      visits.find((visit) => !visit.isUpcoming) ||
+      visits[0];
+    setSelectedVisitId(preferred?.id || null);
   }, [profile?.id, visits]);
 
   const selectedVisit =
@@ -360,123 +376,129 @@ export function EmployeeRecordView({
         </div>
       </Card>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <Card className="p-5 xl:col-start-1 xl:row-start-1">
-          <h2 className="mb-4 text-[11px] font-bold tracking-[0.1em] text-foreground-500 uppercase">
-            Employee Demographics
-          </h2>
-          <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
-            <div className="space-y-2.5">
-              <p className="font-bold tabular-nums text-foreground-900">
-                {profile.accountNo || "—"}
-              </p>
-              <p className="font-bold text-foreground-900">{profile.name}</p>
-              <p className="font-normal text-foreground-900">
-                {profile.address || "Address not on file"}
-              </p>
-              <p className="font-normal tabular-nums text-foreground-900">
-                {profile.phone || "—"}
-              </p>
+      <div className="grid items-start gap-5 xl:grid-cols-2">
+        <div className="min-w-0 space-y-5">
+          <Card className="p-5">
+            <h2 className="mb-4 text-[11px] font-bold tracking-[0.1em] text-foreground-500 uppercase">
+              Employee Demographics
+            </h2>
+            <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
+              <div className="space-y-2.5">
+                <p className="font-bold tabular-nums text-foreground-900">
+                  {profile.accountNo || "—"}
+                </p>
+                <p className="font-bold text-foreground-900">{profile.name}</p>
+                <p className="font-normal text-foreground-900">
+                  {profile.address || "Address not on file"}
+                </p>
+                <p className="font-normal tabular-nums text-foreground-900">
+                  {profile.phone || "—"}
+                </p>
+              </div>
+              <div className="space-y-2.5">
+                <p className="font-normal tabular-nums text-foreground-900">
+                  {formatDob(profile.dateOfBirth)}
+                </p>
+                <p className="font-normal text-foreground-900">
+                  {profile.gender || "—"}
+                </p>
+              </div>
             </div>
-            <div className="space-y-2.5">
-              <p className="font-normal tabular-nums text-foreground-900">
-                {formatDob(profile.dateOfBirth)}
-              </p>
-              <p className="font-normal text-foreground-900">
-                {profile.gender || "—"}
-              </p>
-            </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="overflow-hidden p-0 xl:col-start-1 xl:row-start-2">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-background-200 bg-background-50 text-[11px] font-bold tracking-[0.08em] text-foreground-500 uppercase">
-                <tr>
-                  <th className="px-5 py-3 font-bold">Date</th>
-                  <th className="px-5 py-3 font-bold">Visit</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-background-200">
-                {loadingVisits && !apiVisits ? (
+          <Card className="overflow-hidden p-0">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-background-200 bg-background-50 text-[11px] font-bold tracking-[0.08em] text-foreground-500 uppercase">
                   <tr>
-                    <td colSpan={2} className="px-5 py-4 text-muted">
-                      Loading visits…
-                    </td>
+                    <th className="px-5 py-3 font-bold">Date</th>
+                    <th className="px-5 py-3 font-bold">Visit</th>
                   </tr>
-                ) : visits.length === 0 ? (
-                  <tr>
-                    <td colSpan={2} className="px-5 py-4 text-muted">
-                      No visits found.
-                    </td>
-                  </tr>
-                ) : (
-                  visits.map((visit) => {
-                    const selected = visit.id === selectedVisit?.id;
-                    return (
-                      <tr
-                        key={visit.id}
-                        onClick={() => setSelectedVisitId(visit.id)}
-                        className={cn(
-                          "cursor-pointer transition",
-                          selected
-                            ? "border-l-4 border-l-primary-500 bg-primary-50"
-                            : "border-l-4 border-l-transparent bg-white hover:bg-background-50"
-                        )}
-                      >
-                        <td
+                </thead>
+                <tbody className="divide-y divide-background-200">
+                  {loadingVisits && !apiVisits ? (
+                    <tr>
+                      <td colSpan={2} className="px-5 py-4 text-muted">
+                        Loading visits…
+                      </td>
+                    </tr>
+                  ) : visits.length === 0 ? (
+                    <tr>
+                      <td colSpan={2} className="px-5 py-4 text-muted">
+                        No visits found.
+                      </td>
+                    </tr>
+                  ) : (
+                    visits.map((visit) => {
+                      const selected = visit.id === selectedVisit?.id;
+                      return (
+                        <tr
+                          key={visit.id}
+                          onClick={() => setSelectedVisitId(visit.id)}
                           className={cn(
-                            "px-5 py-3.5 tabular-nums text-foreground-900",
-                            selected ? "font-bold" : "font-normal"
-                          )}
-                        >
-                          {visit.date}
-                        </td>
-                        <td
-                          className={cn(
-                            "px-5 py-3.5",
+                            "cursor-pointer transition",
                             selected
-                              ? "font-bold text-primary-600"
-                              : "font-normal text-foreground-900"
+                              ? "border-l-4 border-l-primary-500 bg-primary-50"
+                              : "border-l-4 border-l-transparent bg-white hover:bg-background-50"
                           )}
                         >
-                          {visit.label || "Visit"}
-                          {visit.isUpcoming ? (
-                            <span className="ml-2 text-[10px] font-bold tracking-[0.08em] text-primary-500 uppercase">
-                              Upcoming
-                            </span>
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                          <td
+                            className={cn(
+                              "px-5 py-3.5 tabular-nums text-foreground-900",
+                              selected ? "font-bold" : "font-normal"
+                            )}
+                          >
+                            {visit.date}
+                          </td>
+                          <td
+                            className={cn(
+                              "px-5 py-3.5",
+                              selected
+                                ? "font-bold text-primary-600"
+                                : "font-normal text-foreground-900"
+                            )}
+                          >
+                            {visit.label || "Visit"}
+                            {visit.isUpcoming ? (
+                              <span className="ml-2 text-[10px] font-bold tracking-[0.08em] text-primary-500 uppercase">
+                                Upcoming
+                              </span>
+                            ) : null}
+                            {!visit.isUpcoming && (visit.documents || []).length > 0 ? (
+                              <span className="ml-2 text-[10px] font-semibold tracking-[0.06em] text-foreground-500 uppercase">
+                                {(visit.documents || []).length} doc
+                                {(visit.documents || []).length === 1 ? "" : "s"}
+                              </span>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
 
-        {selectedVisit?.isUpcoming ? (
-          <div className="xl:col-start-1 xl:row-start-3">
+          {selectedVisit?.isUpcoming ? (
             <UpcomingAppointmentDetails visit={selectedVisit} />
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
-        <div className="flex min-h-[22rem] flex-col rounded-2xl bg-foreground-900 p-4 shadow-sm sm:p-5 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:min-h-0 xl:self-stretch">
-          {visitDocs.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">
-              No documents for this visit.
+        {/* Documents from DocterPublishes for the selected visit (half screen) */}
+        <div className="min-h-[18rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[22rem] sm:p-5 xl:min-h-full">
+          {selectedVisit?.isUpcoming ? (
+            <div className="flex h-full min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">
+              Documents appear after the visit is completed.
+            </div>
+          ) : visitDocs.length === 0 ? (
+            <div className="flex h-full min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">
+              {loadingVisits && !apiVisits
+                ? "Loading documents…"
+                : "No documents for this visit."}
             </div>
           ) : (
-            <div
-              className={cn(
-                "grid flex-1 content-start gap-4",
-                visitDocs.length === 1 && "mx-auto max-w-[12rem] grid-cols-1",
-                visitDocs.length === 2 && "grid-cols-2",
-                visitDocs.length >= 3 && "grid-cols-2 sm:grid-cols-3"
-              )}
-            >
+            <div className="flex flex-wrap gap-4">
               {visitDocs.map((doc) => (
                 <VisitDocumentThumb
                   key={doc.id}

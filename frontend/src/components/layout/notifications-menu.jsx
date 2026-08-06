@@ -6,11 +6,25 @@ import { NotificationsCard } from "@/components/layout/notifications-card";
 import { notifications as defaultNotifications } from "@/data/notifications";
 import { cn } from "@/lib/utils";
 
-export function NotificationsMenu({ items, variant = "soft" }) {
+const PREVIEW_LIMIT = 3;
+
+export function NotificationsMenu({
+  items,
+  variant = "soft",
+  viewAllHref,
+  onOpen,
+  previewLimit = PREVIEW_LIMIT,
+  totalCount,
+  unreadCount: unreadCountProp,
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
+  const markedOnOpenRef = useRef(false);
   const list = items ?? defaultNotifications;
-  const unreadCount = list.filter((item) => item.unread).length;
+  const unreadCount =
+    unreadCountProp != null
+      ? unreadCountProp
+      : list.filter((item) => item.unread).length;
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -32,6 +46,20 @@ export function NotificationsMenu({ items, variant = "soft" }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!open) {
+      markedOnOpenRef.current = false;
+      return;
+    }
+    if (markedOnOpenRef.current) return;
+    markedOnOpenRef.current = true;
+    onOpen?.();
+  }, [open, onOpen]);
+
+  function handleToggle() {
+    setOpen((prev) => !prev);
+  }
+
   return (
     <div className="relative" ref={rootRef}>
       <button
@@ -39,7 +67,7 @@ export function NotificationsMenu({ items, variant = "soft" }) {
         aria-label="Notifications"
         aria-expanded={open}
         aria-haspopup="dialog"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={handleToggle}
         className={cn(
           "relative flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-[#6b7280] transition hover:text-ink",
           variant === "soft"
@@ -55,7 +83,15 @@ export function NotificationsMenu({ items, variant = "soft" }) {
         ) : null}
       </button>
 
-      {open ? <NotificationsCard notifications={list} /> : null}
+      {open ? (
+        <NotificationsCard
+          notifications={list}
+          previewLimit={previewLimit}
+          viewAllHref={viewAllHref}
+          totalCount={totalCount}
+          onNavigate={() => setOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

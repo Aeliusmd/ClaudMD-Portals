@@ -1,8 +1,13 @@
 import { cn } from "@/lib/utils";
 
-export function NotificationItem({ notification }) {
+export function NotificationItem({ notification, className }) {
   return (
-    <div className="flex items-start gap-3 px-5 py-3.5">
+    <div
+      className={cn(
+        "flex items-start gap-3 px-5 py-3.5 transition hover:bg-[#faf8f5]",
+        className
+      )}
+    >
       <span
         className={cn(
           "mt-1.5 h-2 w-2 shrink-0 rounded-full",

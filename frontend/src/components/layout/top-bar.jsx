@@ -13,6 +13,10 @@ export function TopBar({
   profileUser,
   profileHref = patientPaths.profile,
   notifications,
+  notificationsViewAllHref,
+  onNotificationsOpen,
+  notificationsTotalCount,
+  notificationsUnreadCount,
   showSearch = true,
   className,
 }) {
@@ -62,7 +66,14 @@ export function TopBar({
       )}
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-        <NotificationsMenu items={notifications} variant={showSearch ? "soft" : "ghost"} />
+        <NotificationsMenu
+          items={notifications}
+          variant={showSearch ? "soft" : "ghost"}
+          viewAllHref={notificationsViewAllHref}
+          onOpen={onNotificationsOpen}
+          totalCount={notificationsTotalCount}
+          unreadCount={notificationsUnreadCount}
+        />
         <span className="hidden text-sm text-[#9ca3af] sm:inline">Welcome</span>
         <ProfileMenu user={profileUser} profileHref={profileHref} />
       </div>

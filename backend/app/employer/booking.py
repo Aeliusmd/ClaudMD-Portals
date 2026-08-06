@@ -25,11 +25,15 @@ from app.employer.schemas import (
     AppointmentSlotOption,
     AppointmentSlotsResponse,
     AppointmentVisitTypeOption,
+    NewPatientPayload,
 )
 
 # Status ids observed / aligned with portal labels.
 # 3 = Cancelled — does not block availability.
 CANCELLED_STATUS_IDS = {3}
+
+# Employer portal booking durations (minutes).
+ALLOWED_DURATION_MINUTES = {15, 30, 45, 60}
 
 
 def _clinic_and_employer(current_user: CurrentUser):
@@ -282,10 +286,10 @@ def list_available_slots(
 ) -> AppointmentSlotsResponse:
     clinic, _profile = _clinic_and_employer(current_user)
     _ensure_booking_date_not_past(clinic, on_date)
-    if duration_minutes <= 0:
+    if duration_minutes not in ALLOWED_DURATION_MINUTES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Duration must be greater than zero.",
+            detail="Duration must be 15, 30, 45, or 60 minutes.",
         )
 
     work_day = _work_day_monday_first(on_date)
@@ -375,8 +379,11 @@ def book_appointment(
     on_date = date.fromisoformat(payload.date)
     _ensure_booking_date_not_past(clinic, on_date)
     duration = int(payload.duration_minutes)
-    if duration <= 0:
-        raise HTTPException(status_code=400, detail="Duration must be greater than zero.")
+    if duration not in ALLOWED_DURATION_MINUTES:
+        raise HTTPException(
+            status_code=400,
+            detail="Duration must be 15, 30, 45, or 60 minutes.",
+        )
 
     start_time = _parse_time(payload.start_time)
     if start_time is None:
@@ -428,27 +435,7 @@ def book_appointment(
         raise HTTPException(status_code=400, detail="Select an existing patient or add a new one.")
 
     if new_patient is not None:
-        if (
-            not new_patient.first_name.strip()
-            or not new_patient.last_name.strip()
-            or not new_patient.date_of_birth
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail="New patient requires first name, last name, and date of birth.",
-            )
-        try:
-            dob = date.fromisoformat(str(new_patient.date_of_birth)[:10])
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=400,
-                detail="New patient date of birth is invalid.",
-            ) from exc
-        if dob > date.today():
-            raise HTTPException(
-                status_code=400,
-                detail="Date of birth cannot be in the future.",
-            )
+        _validate_new_patient_payload(new_patient)
 
     recurring_id = None
     appointment_id = None
@@ -462,8 +449,13 @@ def book_appointment(
                     gender_id = int(
                         new_patient.gender_id
                         or _gender_id_from_code(new_patient.gender)
-                        or 1
+                        or 0
                     )
+                    if gender_id <= 0:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Gender is required for new patients.",
+                        )
                     if (new_patient.account_no or "").strip().isdigit():
                         account_no = int(new_patient.account_no.strip())
                     else:
@@ -481,20 +473,26 @@ def book_appointment(
                         INSERT INTO dbo.Patients (
                             LocationId, AccountNumber, SSN, LastName, FirstName,
                             DateOfBirth, GenderId, CellPhone,
+                            Address1, Address2, City, State, ZipCode,
                             CreatedUserId, CreatedDateTime, RecordStatusId, IsDeleted
                         )
                         OUTPUT INSERTED.Id
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, SYSDATETIMEOFFSET(), 1, 0)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSDATETIMEOFFSET(), 1, 0)
                         """,
                         (
                             location_id,
                             account_no,
-                            (new_patient.ssn or "").strip() or None,
+                            (new_patient.ssn or "").strip(),
                             new_patient.last_name.strip(),
                             new_patient.first_name.strip(),
                             new_patient.date_of_birth,
                             gender_id,
-                            (new_patient.phone or "").strip() or None,
+                            (new_patient.phone or "").strip(),
+                            (new_patient.address1 or "").strip(),
+                            (new_patient.address2 or "").strip() or None,
+                            (new_patient.city or "").strip(),
+                            (new_patient.state or "").strip(),
+                            (new_patient.zip_code or "").strip(),
                             created_user_id,
                         ),
                     )
@@ -829,6 +827,42 @@ def _gender_label(gender_id: int | None) -> str | None:
     if gender_id is None:
         return None
     return "O"
+
+
+def _validate_new_patient_payload(new_patient: NewPatientPayload) -> None:
+    if not new_patient.first_name.strip():
+        raise HTTPException(status_code=400, detail="First name is required.")
+    if not new_patient.last_name.strip():
+        raise HTTPException(status_code=400, detail="Last name is required.")
+    if not new_patient.date_of_birth:
+        raise HTTPException(status_code=400, detail="Date of birth is required.")
+    try:
+        dob = date.fromisoformat(str(new_patient.date_of_birth)[:10])
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="New patient date of birth is invalid.",
+        ) from exc
+    if dob > date.today():
+        raise HTTPException(
+            status_code=400,
+            detail="Date of birth cannot be in the future.",
+        )
+    if not (new_patient.ssn or "").strip():
+        raise HTTPException(status_code=400, detail="SSN is required.")
+    if not (new_patient.phone or "").strip():
+        raise HTTPException(status_code=400, detail="Cell phone is required.")
+    gender_id = new_patient.gender_id or _gender_id_from_code(new_patient.gender)
+    if gender_id is None:
+        raise HTTPException(status_code=400, detail="Gender is required.")
+    if not (new_patient.address1 or "").strip():
+        raise HTTPException(status_code=400, detail="Address 1 is required.")
+    if not (new_patient.city or "").strip():
+        raise HTTPException(status_code=400, detail="City is required.")
+    if not (new_patient.state or "").strip():
+        raise HTTPException(status_code=400, detail="State is required.")
+    if not (new_patient.zip_code or "").strip():
+        raise HTTPException(status_code=400, detail="Zip is required.")
 
 
 def _gender_id_from_code(code: str | None) -> int | None:

@@ -243,6 +243,11 @@ class NewPatientPayload(BaseModel):
     ssn: str | None = None
     account_no: str | None = None
     phone: str | None = None
+    address1: str | None = None
+    address2: str | None = None
+    city: str | None = None
+    state: str | None = None
+    zip_code: str | None = None
 
 
 class AppointmentPrepareRequest(BaseModel):

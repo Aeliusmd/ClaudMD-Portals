@@ -351,6 +351,11 @@ export async function bookAppointment(accessToken, payload) {
               ssn: payload.newPatient.ssn,
               account_no: payload.newPatient.accountNo,
               phone: payload.newPatient.phone,
+              address1: payload.newPatient.address1,
+              address2: payload.newPatient.address2,
+              city: payload.newPatient.city,
+              state: payload.newPatient.state,
+              zip_code: payload.newPatient.zipCode,
             }
           : null,
         location_id: payload.locationId,

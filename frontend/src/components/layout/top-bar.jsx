@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Menu, Search } from "lucide-react";
 import { NotificationsMenu } from "@/components/layout/notifications-menu";

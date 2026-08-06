@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Check, Lock, Shield, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,6 +23,8 @@ const profileTabs = [
   { id: "security", label: "Security", icon: Shield },
   { id: "permissions", label: "Permissions", icon: Lock },
 ];
+
+const VALID_PROFILE_TABS = new Set(profileTabs.map((tab) => tab.id));
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_DIGITS_MIN = 10;
@@ -268,7 +270,27 @@ function profilesEqual(a, b) {
 }
 
 export function InsuranceProfileView() {
+  return (
+    <Suspense
+      fallback={
+        <div>
+          <PageHeader title="Profile / Security" className="mb-5" />
+          <div className="space-y-4">
+            <SkeletonBlock className="h-10 w-full max-w-md" />
+            <SkeletonBlock className="h-64 w-full" />
+          </div>
+        </div>
+      }
+    >
+      <InsuranceProfileContent />
+    </Suspense>
+  );
+}
+
+function InsuranceProfileContent() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const {
     profile: liveProfile,
     loading: profileLoading,
@@ -276,7 +298,10 @@ export function InsuranceProfileView() {
     setCachedProfile,
   } = useInsuranceProfile();
 
-  const [tab, setTab] = useState("profile");
+  const tabFromUrl = searchParams.get("tab");
+  const initialTab =
+    tabFromUrl && VALID_PROFILE_TABS.has(tabFromUrl) ? tabFromUrl : "profile";
+  const [tab, setTab] = useState(initialTab);
   const [message, setMessage] = useState("");
   const [successToast, setSuccessToast] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -527,7 +552,21 @@ export function InsuranceProfileView() {
   function switchTab(nextTab) {
     clearFeedback();
     setTab(nextTab);
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextTab === "profile") {
+      params.delete("tab");
+    } else {
+      params.set("tab", nextTab);
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
+
+  useEffect(() => {
+    const nextTab =
+      tabFromUrl && VALID_PROFILE_TABS.has(tabFromUrl) ? tabFromUrl : "profile";
+    setTab((current) => (current === nextTab ? current : nextTab));
+  }, [tabFromUrl]);
 
   const showProfileSkeleton = profileLoading && !hydrated;
 

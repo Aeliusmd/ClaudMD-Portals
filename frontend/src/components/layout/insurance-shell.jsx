@@ -80,6 +80,7 @@ export function InsuranceShell({ children }) {
           organizationLabel={profile?.organization}
           profileUser={profileUser}
           profileHref={insurancePaths.profile}
+          settingsHref={insurancePaths.profilePermissions}
           notifications={notificationItems}
           notificationsViewAllHref={insurancePaths.notifications}
           onNotificationsOpen={markAsRead}

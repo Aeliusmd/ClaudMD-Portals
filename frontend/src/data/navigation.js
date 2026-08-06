@@ -1,19 +1,34 @@
+import { employerPaths, patientPaths } from "@/lib/portal-paths";
+
 /** Visits and appointments are surfaced on the dashboard itself, so they are not separate nav items. */
 export const patientNavItems = [
-  { href: "/patient/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
-  { href: "/patient/my-information", label: "My Information", icon: "User" },
-  { href: "/patient/profile", label: "Profile / Security", icon: "Shield" },
+  { href: patientPaths.dashboard, label: "Dashboard", icon: "LayoutDashboard" },
+  {
+    href: patientPaths.myInformation,
+    label: "My Information",
+    icon: "User",
+  },
+  { href: patientPaths.profile, label: "Profile / Security", icon: "Shield" },
 ];
 
 /** Primary nav matches current wireframe (https://lgcoqk.readdy.co/). Extra routes remain available via dashboard deep-links. */
 export const employerNavItems = [
-  { href: "/employer/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
   {
-    href: "/employer/authorizations",
-    label: "Authorizations",
-    icon: "ClipboardCheck",
+    href: employerPaths.dashboard,
+    label: "Dashboard",
+    icon: "LayoutDashboard",
   },
-  { href: "/employer/profile", label: "Profile / Security", icon: "Shield" },
+  // TEMP: hide Authorizations tab for all employer portal users.
+  // {
+  //   href: employerPaths.authorizations,
+  //   label: "Authorizations",
+  //   icon: "ClipboardCheck",
+  // },
+  {
+    href: employerPaths.profile,
+    label: "Profile / Security",
+    icon: "Shield",
+  },
 ];
 
 export const insuranceNavItems = [
@@ -24,7 +39,7 @@ export const insuranceNavItems = [
 /** Epic 4 scoped session — only Shared Documents (secure email link). */
 export const employerScopedShareNavItems = [
   {
-    href: "/employer/shared-documents/scoped",
+    href: employerPaths.sharedDocumentsScoped,
     label: "Shared Documents",
     icon: "FileText",
   },

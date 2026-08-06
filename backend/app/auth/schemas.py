@@ -5,6 +5,11 @@ class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, description="Email or login id")
     password: str = Field(..., min_length=1)
     activation_key: str = Field(..., min_length=1, alias="activationKey")
+    """Optional portal the user is signing into (employer | patient)."""
+    portal: str | None = Field(
+        default=None,
+        description="Expected portal from the login page: employer or patient.",
+    )
 
     model_config = {
         "populate_by_name": True,
@@ -19,6 +24,8 @@ class UserInfo(BaseModel):
     last_name: str | None = None
     name: str | None = None
     portal: str = "employer"
+    type_id: int | None = None
+    type_label: str | None = None
     activation_key: str | None = None
 
 
@@ -50,3 +57,17 @@ class ClinicResolveResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, alias="currentPassword")
+    new_password: str = Field(..., min_length=1, alias="newPassword")
+    confirm_password: str = Field(..., min_length=1, alias="confirmPassword")
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class ChangePasswordResponse(BaseModel):
+    message: str

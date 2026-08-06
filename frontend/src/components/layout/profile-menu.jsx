@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, UserRound } from "lucide-react";
 import { ProfileDropdownCard } from "@/components/layout/profile-dropdown-card";
 import { currentPatient } from "@/data/patient";
+import { patientPaths } from "@/lib/portal-paths";
 
 export function ProfileMenu({
   user = currentPatient,
-  profileHref = "/patient/profile",
+  profileHref = patientPaths.profile,
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);

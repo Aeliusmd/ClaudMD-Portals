@@ -41,11 +41,12 @@ Hostnames for ClaudMD Portals (patient vs employer) by environment:
 | QA | `qapatientportal` | `qaemployerportal` |
 | Production | `patientportal` | `employerportal` |
 
-Locally both portals run in one app (`/patient/*` and `/employer/*`). Deployed hosts above should map each subdomain/app to the matching portal experience.
+Locally both portals run in one app (`/patientportal/*` and `/employerportal/*`). Deployed hosts above should map each subdomain/app to the matching portal experience. Legacy `/patient/*` and `/employer/*` URLs redirect to the unified prefixes.
 
 ## Structure
 
-- `src/app/patient/*` and `src/app/employer/*` — App Router URLs (thin `page.jsx` files only)
+- `src/app/patientportal/*` and `src/app/employerportal/*` — App Router URLs (`authentication/login` + `(portal)` app shell)
+- `src/lib/portal-paths.js` — single source of truth for portal URL prefixes
 - `src/features/patient/{route}/view.jsx` — patient screen UI (folder name matches URL segment)
 - `src/features/employer/{route}/view.jsx` — employer screen UI
 - `src/features/auth` — shared login / password flows
@@ -54,4 +55,4 @@ Locally both portals run in one app (`/patient/*` and `/employer/*`). Deployed h
 - `src/features/{patient|employer}/{route}/` — screen `view.jsx` plus route-specific components (e.g. `employee-detail-panel.jsx`)
 - `src/data` — mock data
 
-Example: `/employer/appointments` → `app/employer/appointments/page.jsx` imports `@/features/employer/appointments/view`.
+Example: `/employerportal/appointments` → `app/employerportal/(portal)/appointments/page.jsx` imports `@/features/employer/appointments/view`.

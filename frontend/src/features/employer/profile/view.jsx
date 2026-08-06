@@ -1,17 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, Lock, Shield, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Lock, Shield, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { ToggleRow } from "@/components/ui/toggle-row";
-import {
-  currentEmployer,
-  employerAccessLevels,
-  employerOrgUsers,
-  employerPermissionAuditSeed,
-} from "@/data/employer";
+import { SkeletonBlock, TableSkeleton } from "@/components/ui/skeleton";
+import { useEmployerProfile } from "@/hooks/use-employer-profile";
+import { changePassword } from "@/lib/api/auth";
+import { fetchEmployerOrganizationUsers } from "@/lib/api/employer";
+import { getAccessToken } from "@/lib/auth-session";
+import { LOGIN_PATH } from "@/lib/auth-routes";
 import { cn } from "@/lib/utils";
 
 const profileTabs = [
@@ -59,6 +60,7 @@ function Field({
   error,
   placeholder,
   autoComplete,
+  readOnly = false,
 }) {
   return (
     <label className="block space-y-1.5" htmlFor={id}>
@@ -71,10 +73,12 @@ function Field({
         value={value}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        onChange={(event) => onChange(event.target.value)}
+        readOnly={readOnly}
+        onChange={(event) => onChange?.(event.target.value)}
         className={cn(
           "w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm font-medium text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15",
-          error ? "border-rose-300" : "border-border/80"
+          error ? "border-rose-300" : "border-border/80",
+          readOnly && "cursor-default bg-cream/60 text-foreground-700"
         )}
       />
       {error ? (
@@ -101,31 +105,35 @@ function StatusBanner({ tone = "success", children }) {
   );
 }
 
-function formatNow() {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date());
+function ProfileInfoSkeleton() {
+  return (
+    <Card className="p-5 sm:p-6" aria-busy="true" aria-label="Loading profile">
+      <SkeletonBlock className="mb-5 h-6 w-48" />
+      <div className="grid gap-4 md:grid-cols-2">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div
+            key={index}
+            className={cn("space-y-2", index >= 4 && "md:col-span-2")}
+          >
+            <SkeletonBlock className="h-3 w-20" />
+            <SkeletonBlock className="h-10 w-full" />
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
 }
 
 function validateProfile(profile) {
   const errors = {};
   if (!profile.fullName.trim()) errors.fullName = "Full name is required.";
-  if (!profile.title.trim()) errors.title = "Title is required.";
-  if (!EMAIL_PATTERN.test(profile.email.trim())) {
+  if (profile.email.trim() && !EMAIL_PATTERN.test(profile.email.trim())) {
     errors.email = "Enter a valid email address.";
   }
   const digits = profile.phone.replace(/\D/g, "");
-  if (digits.length < PHONE_DIGITS_MIN) {
+  if (profile.phone.trim() && digits.length < PHONE_DIGITS_MIN) {
     errors.phone = "Enter a valid phone number (at least 10 digits).";
   }
-  if (!profile.organization.trim()) {
-    errors.organization = "Organization is required.";
-  }
-  if (!profile.address.trim()) errors.address = "Address is required.";
   return errors;
 }
 
@@ -134,8 +142,8 @@ function validatePassword(form) {
   if (!form.currentPassword) {
     errors.currentPassword = "Enter your current password.";
   }
-  if (form.newPassword.length < 8) {
-    errors.newPassword = "New password must be at least 8 characters.";
+  if ((form.newPassword || "").length < 4) {
+    errors.newPassword = "New password must be at least 4 characters.";
   }
   if (form.newPassword !== form.confirmPassword) {
     errors.confirmPassword = "Passwords do not match.";
@@ -151,19 +159,29 @@ function validatePassword(form) {
 }
 
 export function EmployerProfileView() {
+  const router = useRouter();
+  const {
+    profile: liveProfile,
+    loading: profileLoading,
+    error: profileLoadError,
+  } = useEmployerProfile();
+
   const [tab, setTab] = useState("profile");
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   const [profile, setProfile] = useState({
-    fullName: currentEmployer.fullName,
-    title: currentEmployer.title,
-    email: currentEmployer.email,
-    phone: currentEmployer.phone,
-    organization: currentEmployer.organization,
-    address: currentEmployer.address,
+    fullName: "",
+    title: "",
+    userType: "",
+    email: "",
+    phone: "",
+    organization: "",
+    address: "",
+    loginId: "",
   });
   const [profileErrors, setProfileErrors] = useState({});
+  const [hydrated, setHydrated] = useState(false);
 
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -171,36 +189,74 @@ export function EmployerProfileView() {
     confirmPassword: "",
   });
   const [passwordErrors, setPasswordErrors] = useState({});
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
-  const [orgUsers, setOrgUsers] = useState(employerOrgUsers);
-  const [auditLog, setAuditLog] = useState(employerPermissionAuditSeed);
+  const [orgUsers, setOrgUsers] = useState([]);
+  const [orgUsersLoading, setOrgUsersLoading] = useState(false);
+  const [orgUsersLoaded, setOrgUsersLoaded] = useState(false);
 
-  const activeUsers = useMemo(
-    () => orgUsers.filter((user) => user.active),
-    [orgUsers]
-  );
-  const revokedUsers = useMemo(
-    () => orgUsers.filter((user) => !user.active),
-    [orgUsers]
-  );
+  useEffect(() => {
+    if (!liveProfile) return;
+    setProfile({
+      fullName: liveProfile.fullName || "",
+      title: liveProfile.jobTitle || liveProfile.title || "",
+      userType: liveProfile.typeLabel || "",
+      email: liveProfile.email || "",
+      phone: liveProfile.phone || "",
+      organization: liveProfile.organization || "",
+      address: liveProfile.address || "",
+      loginId: liveProfile.loginId || "",
+    });
+    setHydrated(true);
+  }, [liveProfile]);
+
+  useEffect(() => {
+    if (profileLoadError) {
+      setErrorMessage(profileLoadError);
+    }
+  }, [profileLoadError]);
+
+  useEffect(() => {
+    if (tab !== "permissions" || orgUsersLoaded) return undefined;
+
+    let cancelled = false;
+
+    async function loadOrgUsers() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(LOGIN_PATH);
+        return;
+      }
+
+      setOrgUsersLoading(true);
+      try {
+        const data = await fetchEmployerOrganizationUsers(token);
+        if (!cancelled) {
+          setOrgUsers(data.items);
+          setOrgUsersLoaded(true);
+          setErrorMessage("");
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(LOGIN_PATH);
+          return;
+        }
+        setErrorMessage(err?.message || "Unable to load organization users.");
+      } finally {
+        if (!cancelled) setOrgUsersLoading(false);
+      }
+    }
+
+    loadOrgUsers();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, orgUsersLoaded, router]);
 
   function clearFeedback() {
     setMessage("");
     setErrorMessage("");
-  }
-
-  function pushAudit(action, detail) {
-    setAuditLog((prev) => [
-      {
-        id: `pal-${Date.now()}`,
-        at: formatNow(),
-        actor: profile.fullName || currentEmployer.fullName,
-        action,
-        detail,
-      },
-      ...prev,
-    ]);
   }
 
   function updateProfileField(field, value) {
@@ -222,10 +278,10 @@ export function EmployerProfileView() {
       setErrorMessage("Please fix the highlighted fields before saving.");
       return;
     }
-    setMessage("Organization profile updated successfully.");
+    setMessage("Profile details saved locally. Backend update is not enabled yet.");
   }
 
-  function handleUpdatePassword() {
+  async function handleUpdatePassword() {
     clearFeedback();
     const errors = validatePassword(passwordForm);
     setPasswordErrors(errors);
@@ -233,62 +289,45 @@ export function EmployerProfileView() {
       setErrorMessage("Please fix the password fields before updating.");
       return;
     }
-    setPasswordForm({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
-    setPasswordErrors({});
-    setMessage("Password updated successfully.");
-  }
 
-  function handleToggleTwoFactor() {
-    clearFeedback();
-    setTwoFactorEnabled((prev) => {
-      const next = !prev;
-      setMessage(
-        next
-          ? "Two-factor authentication enabled."
-          : "Two-factor authentication disabled."
-      );
-      return next;
-    });
-  }
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(LOGIN_PATH);
+      return;
+    }
 
-  function handleAccessChange(userId, accessLevel) {
-    clearFeedback();
-    setOrgUsers((prev) =>
-      prev.map((user) => {
-        if (user.id !== userId) return user;
-        const nextActive = accessLevel !== "No Access";
-        return {
-          ...user,
-          accessLevel,
-          role: accessLevel === "No Access" ? user.role : accessLevel,
-          active: nextActive,
-        };
-      })
-    );
-    const user = orgUsers.find((item) => item.id === userId);
-    pushAudit(
-      accessLevel === "No Access" ? "Revoked access" : "Updated access level",
-      `${user?.fullName || "User"} → ${accessLevel}`
-    );
-    setMessage(
-      accessLevel === "No Access"
-        ? `Access revoked for ${user?.fullName || "user"}.`
-        : `Access updated for ${user?.fullName || "user"}.`
-    );
-  }
-
-  function handleRestoreAccess(userId) {
-    handleAccessChange(userId, "HR Viewer");
+    setPasswordSaving(true);
+    try {
+      const result = await changePassword({
+        accessToken: token,
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword,
+      });
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setPasswordErrors({});
+      setMessage(result?.message || "Password updated successfully.");
+    } catch (err) {
+      if (err?.status === 401) {
+        router.replace(LOGIN_PATH);
+        return;
+      }
+      setErrorMessage(err?.message || "Unable to update password.");
+    } finally {
+      setPasswordSaving(false);
+    }
   }
 
   function switchTab(nextTab) {
     clearFeedback();
     setTab(nextTab);
   }
+
+  const showProfileSkeleton = profileLoading && !hydrated;
 
   return (
     <div>
@@ -299,68 +338,86 @@ export function EmployerProfileView() {
       <StatusBanner tone="error">{errorMessage}</StatusBanner>
 
       {tab === "profile" ? (
-        <Card className="p-5 sm:p-6">
-          <h2 className="mb-5 text-lg font-semibold text-ink">
-            Organization Profile
-          </h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field
-              id="employer-full-name"
-              label="Full Name"
-              value={profile.fullName}
-              onChange={(value) => updateProfileField("fullName", value)}
-              error={profileErrors.fullName}
-              autoComplete="name"
-            />
-            <Field
-              id="employer-title"
-              label="Title"
-              value={profile.title}
-              onChange={(value) => updateProfileField("title", value)}
-              error={profileErrors.title}
-            />
-            <Field
-              id="employer-email"
-              label="Email"
-              type="email"
-              value={profile.email}
-              onChange={(value) => updateProfileField("email", value)}
-              error={profileErrors.email}
-              autoComplete="email"
-            />
-            <Field
-              id="employer-phone"
-              label="Phone"
-              type="tel"
-              value={profile.phone}
-              onChange={(value) => updateProfileField("phone", value)}
-              error={profileErrors.phone}
-              autoComplete="tel"
-            />
-            <div className="md:col-span-2">
+        showProfileSkeleton ? (
+          <ProfileInfoSkeleton />
+        ) : (
+          <Card className="p-5 sm:p-6">
+            <h2 className="mb-5 text-lg font-semibold text-ink">
+              Profile Info
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2">
               <Field
-                id="employer-organization"
-                label="Organization"
-                value={profile.organization}
-                onChange={(value) => updateProfileField("organization", value)}
-                error={profileErrors.organization}
+                id="employer-full-name"
+                label="Full Name"
+                value={profile.fullName}
+                onChange={(value) => updateProfileField("fullName", value)}
+                error={profileErrors.fullName}
+                autoComplete="name"
               />
-            </div>
-            <div className="md:col-span-2">
               <Field
-                id="employer-address"
-                label="Address"
-                value={profile.address}
-                onChange={(value) => updateProfileField("address", value)}
-                error={profileErrors.address}
-                autoComplete="street-address"
+                id="employer-user-type"
+                label="User Type"
+                value={profile.userType || "—"}
+                readOnly
               />
+              <Field
+                id="employer-title"
+                label="Title"
+                value={profile.title}
+                onChange={(value) => updateProfileField("title", value)}
+                error={profileErrors.title}
+                placeholder="Job title (optional)"
+              />
+              <Field
+                id="employer-login-id"
+                label="Login ID"
+                value={profile.loginId || "—"}
+                readOnly
+              />
+              <Field
+                id="employer-email"
+                label="Email"
+                type="email"
+                value={profile.email}
+                onChange={(value) => updateProfileField("email", value)}
+                error={profileErrors.email}
+                autoComplete="email"
+              />
+              <Field
+                id="employer-phone"
+                label="Phone"
+                type="tel"
+                value={profile.phone}
+                onChange={(value) => updateProfileField("phone", value)}
+                error={profileErrors.phone}
+                autoComplete="tel"
+              />
+              <div className="md:col-span-2">
+                <Field
+                  id="employer-organization"
+                  label="Organization"
+                  value={profile.organization}
+                  onChange={(value) => updateProfileField("organization", value)}
+                  error={profileErrors.organization}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Field
+                  id="employer-address"
+                  label="Address"
+                  value={profile.address}
+                  onChange={(value) => updateProfileField("address", value)}
+                  error={profileErrors.address}
+                  autoComplete="street-address"
+                  placeholder="Organization address"
+                />
+              </div>
             </div>
-          </div>
-          <Button className="mt-6" onClick={handleSaveProfile}>
-            Save Changes
-          </Button>
-        </Card>
+            <Button className="mt-6" onClick={handleSaveProfile}>
+              Save Changes
+            </Button>
+          </Card>
+        )
       ) : null}
 
       {tab === "security" ? (
@@ -416,47 +473,59 @@ export function EmployerProfileView() {
                 autoComplete="new-password"
               />
             </div>
-            <Button className="mt-6" onClick={handleUpdatePassword}>
-              Update Password
+            <Button
+              className="mt-6"
+              onClick={handleUpdatePassword}
+              disabled={passwordSaving}
+            >
+              {passwordSaving ? "Updating…" : "Update Password"}
             </Button>
           </Card>
 
+          {/* Two-Factor Authentication — hidden for now (no 2FA in clinic DB)
           <Card className="p-5 sm:p-6">
             <h2 className="mb-4 text-lg font-semibold text-ink">
               Two-Factor Authentication
             </h2>
-            <ToggleRow
-              title="Authenticator app / SMS codes"
-              description="Require a second factor when signing in to the Employer Portal."
-              checked={twoFactorEnabled}
-              onChange={handleToggleTwoFactor}
-            />
+            <p className="text-sm text-muted">
+              Two-factor authentication is not available in the current clinic
+              database (no 2FA tables or columns). No action is available here.
+            </p>
           </Card>
+          */}
         </div>
       ) : null}
 
       {tab === "permissions" ? (
-        <div className="space-y-5">
-          <Card className="overflow-hidden p-0">
-            <div className="border-b border-border/60 px-5 py-4 sm:px-6">
-              <h2 className="text-lg font-semibold text-ink">
-                Organization Users & Access
-              </h2>
-              <p className="mt-1 text-sm text-muted">
-                Grant, change, or revoke portal access for your team. Changes are
-                demo-only until backend wiring.
-              </p>
-            </div>
+        <Card className="overflow-hidden p-0">
+          <div className="border-b border-border/60 px-5 py-4 sm:px-6">
+            <h2 className="text-lg font-semibold text-ink">
+              Organization Users
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              Users linked to this organization and their system roles.
+            </p>
+          </div>
 
+          {orgUsersLoading ? (
+            <div className="px-5 py-5 sm:px-6">
+              <TableSkeleton rows={4} columns={3} />
+            </div>
+          ) : orgUsers.length === 0 ? (
+            <div className="px-5 py-8 sm:px-6">
+              <EmptyState
+                title="No organization users found"
+                description="No contacts are linked to this organization yet."
+              />
+            </div>
+          ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-[48rem] w-full text-left text-sm">
+              <table className="min-w-[36rem] w-full text-left text-sm">
                 <thead className="border-b border-border/70 bg-cream/50 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
                   <tr>
                     <th className="px-5 py-3">User</th>
                     <th className="px-5 py-3">Role</th>
                     <th className="px-5 py-3">Access Level</th>
-                    <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -464,105 +533,34 @@ export function EmployerProfileView() {
                     <tr key={user.id} className="bg-white">
                       <td className="px-5 py-4">
                         <p className="font-semibold text-ink">{user.fullName}</p>
-                        <p className="mt-0.5 text-xs text-muted">{user.email}</p>
-                        <p className="mt-0.5 text-xs text-muted">{user.title}</p>
+                        <p className="mt-0.5 text-xs text-muted">
+                          {user.email || "—"}
+                        </p>
+                        {user.title ? (
+                          <p className="mt-0.5 text-xs text-muted">{user.title}</p>
+                        ) : null}
                       </td>
                       <td className="px-5 py-4 text-ink">{user.role}</td>
-                      <td className="px-5 py-4">
-                        <select
-                          aria-label={`Access level for ${user.fullName}`}
-                          value={user.active ? user.accessLevel : "No Access"}
-                          onChange={(event) =>
-                            handleAccessChange(user.id, event.target.value)
-                          }
-                          disabled={user.id === "ou-001"}
-                          className="w-full max-w-[13rem] cursor-pointer rounded-lg border border-border/80 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {employerAccessLevels.map((level) => (
-                            <option key={level} value={level}>
-                              {level}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
-                            user.active
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-stone-100 text-stone-600"
-                          )}
-                        >
-                          {user.active ? (
-                            <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                          ) : null}
-                          {user.active ? "Active" : "Revoked"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        {user.id === "ou-001" ? (
-                          <span className="text-xs text-muted">Current admin</span>
-                        ) : user.active ? (
-                          <Button
-                            variant="outline"
-                            className="px-3 py-1.5 text-xs"
-                            onClick={() =>
-                              handleAccessChange(user.id, "No Access")
-                            }
-                          >
-                            Revoke
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="secondary"
-                            className="px-3 py-1.5 text-xs"
-                            onClick={() => handleRestoreAccess(user.id)}
-                          >
-                            Grant access
-                          </Button>
-                        )}
-                      </td>
+                      <td className="px-5 py-4 text-ink">{user.accessLevel}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          )}
 
-            <div className="border-t border-border/60 bg-cream-deep/70 px-5 py-3.5 sm:px-6">
-              <p className="text-sm font-medium text-ink">
-                Active users:{" "}
-                <span className="font-semibold">{activeUsers.length}</span>
-                {" · "}
-                Revoked:{" "}
-                <span className="font-semibold">{revokedUsers.length}</span>
-                {" · "}
-                Account ID:{" "}
-                <span className="font-semibold">{currentEmployer.accountId}</span>
-              </p>
-            </div>
-          </Card>
-
-          <Card className="p-5 sm:p-6">
-            <h2 className="mb-4 text-lg font-semibold text-ink">
-              Permission Audit Log
-            </h2>
-            <ul className="divide-y divide-border/60">
-              {auditLog.map((entry) => (
-                <li key={entry.id} className="py-3 first:pt-0 last:pb-0">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-sm font-semibold text-ink">
-                      {entry.action}
-                    </p>
-                    <p className="text-xs tabular-nums text-muted">{entry.at}</p>
-                  </div>
-                  <p className="mt-1 text-sm text-ink">{entry.detail}</p>
-                  <p className="mt-0.5 text-xs text-muted">By {entry.actor}</p>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
+          <div className="border-t border-border/60 bg-cream-deep/70 px-5 py-3.5 sm:px-6">
+            <p className="text-sm font-medium text-ink">
+              Users:{" "}
+              <span className="font-semibold">{orgUsers.length}</span>
+              {" · "}
+              Employer ID:{" "}
+              <span className="font-semibold">
+                {liveProfile?.employerId ?? "—"}
+              </span>
+            </p>
+          </div>
+        </Card>
       ) : null}
     </div>
   );

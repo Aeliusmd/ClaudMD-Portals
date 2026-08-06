@@ -5,6 +5,7 @@ export async function loginWithCredentials({
   username,
   password,
   activationKey,
+  portal,
 }) {
   const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
     method: "POST",
@@ -16,6 +17,7 @@ export async function loginWithCredentials({
       username,
       password,
       activationKey,
+      ...(portal ? { portal } : {}),
     }),
   });
 
@@ -40,8 +42,48 @@ export async function loginWithCredentials({
   return data;
 }
 
-export function resolvePortalDestination(portal) {
-  if (portal === "employer") return "/employer/dashboard";
-  if (portal === "patient") return "/patient/dashboard";
-  return "/employer/dashboard";
+export async function changePassword({
+  accessToken,
+  currentPassword,
+  newPassword,
+  confirmPassword,
+}) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      currentPassword,
+      newPassword,
+      confirmPassword,
+    }),
+  });
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const detail =
+      (data && (data.detail || data.message)) ||
+      "Unable to update password. Please try again.";
+    const error = new Error(
+      typeof detail === "string"
+        ? detail
+        : "Unable to update password. Please try again."
+    );
+    error.status = response.status;
+    throw error;
+  }
+
+  return data;
 }
+
+export { resolvePortalDestination } from "@/lib/portal-paths";
+

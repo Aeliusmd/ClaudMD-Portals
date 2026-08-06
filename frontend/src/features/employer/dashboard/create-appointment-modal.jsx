@@ -30,6 +30,15 @@ const GENDER_OPTIONS = [
   { value: "O", label: "Other" },
 ];
 
+const US_STATE_OPTIONS = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+  "DC", "PR",
+].map((code) => ({ value: code, label: code }));
+
 const emptyForm = {
   patientId: "",
   accountNo: "",
@@ -57,6 +66,11 @@ const emptyNewPatient = {
   gender: "",
   accountNo: "",
   phone: "",
+  address1: "",
+  address2: "",
+  city: "",
+  state: "",
+  zipCode: "",
 };
 
 function FieldError({ message }) {
@@ -406,6 +420,13 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
     } else if (newPatient.dateOfBirth > todayIsoLocal()) {
       next.dateOfBirth = "Date of birth cannot be in the future.";
     }
+    if (!newPatient.ssn.trim()) next.ssn = "Enter SSN.";
+    if (!newPatient.gender) next.gender = "Select gender.";
+    if (!newPatient.address1.trim()) next.address1 = "Enter address 1.";
+    if (!newPatient.city.trim()) next.city = "Enter city.";
+    if (!newPatient.state) next.state = "Select state.";
+    if (!newPatient.zipCode.trim()) next.zipCode = "Enter zip.";
+    if (!newPatient.phone.trim()) next.phone = "Enter cell phone.";
     return next;
   }
 
@@ -495,9 +516,14 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
               lastName: newPatient.lastName.trim(),
               dateOfBirth: newPatient.dateOfBirth,
               gender: newPatient.gender,
-              ssn: newPatient.ssn.trim() || null,
+              ssn: newPatient.ssn.trim(),
               accountNo: newPatient.accountNo.trim() || null,
-              phone: newPatient.phone.trim() || null,
+              phone: newPatient.phone.trim(),
+              address1: newPatient.address1.trim(),
+              address2: newPatient.address2.trim() || null,
+              city: newPatient.city.trim(),
+              state: newPatient.state,
+              zipCode: newPatient.zipCode.trim(),
             }
           : null,
         locationId: Number(form.locationId),
@@ -587,7 +613,7 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
     : "";
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+    <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto p-4 sm:items-center sm:p-6">
       <button
         type="button"
         aria-label="Close create appointment dialog"
@@ -599,56 +625,69 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 my-4 w-full max-w-2xl overflow-visible rounded-2xl border border-border/70 bg-white shadow-xl"
+        className="relative z-10 my-2 flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border/70 bg-white shadow-xl sm:my-4 max-h-[min(92vh,880px)]"
       >
-        <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
           <h2 id={titleId} className="text-lg font-semibold text-ink">
-            Create Appointment
+            {bookResult ? "Appointment Booked" : "Create Appointment"}
           </h2>
           <button
             type="button"
             aria-label="Close"
             onClick={resetAndClose}
-            className="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-cream-deep hover:text-ink"
+            className="shrink-0 cursor-pointer rounded-lg p-2 text-muted transition hover:bg-cream-deep hover:text-ink"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {submitError ? (
-          <div className="border-b border-rose-200 bg-rose-50 px-5 py-3">
-            <p className="text-sm text-rose-800">{submitError}</p>
+          <div className="shrink-0 px-5 pt-4">
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              {submitError}
+            </div>
           </div>
         ) : null}
 
         {bookResult ? (
-          <div className="space-y-2 border-b border-emerald-200 bg-emerald-50 px-5 py-3 text-sm text-emerald-900">
-            <p className="font-semibold">Appointment booked successfully.</p>
-            <p>
-              Reference #:{" "}
-              {bookResult.scheduleId || bookResult.appointmentId || "—"}
-            </p>
-            <p>
-              {bookResult.patientName} · {bookResult.visitTypeName} ·{" "}
-              {bookResult.locationName}
-            </p>
-            <p>
-              {bookResult.displayDate} · {bookResult.displayTime}
-              {bookResult.providerName && bookResult.providerName !== "—"
-                ? ` · ${bookResult.providerName}`
-                : ""}
-            </p>
-            {bookResult.patientWasCreated ? (
-              <p className="font-medium">Patient created successfully.</p>
-            ) : null}
-          </div>
-        ) : null}
-
-        <form onSubmit={handleSubmit} className="overflow-visible">
-          <div className="max-h-[min(78vh,740px)] space-y-4 overflow-y-auto px-5 py-5 pb-6">
-            {loadingMeta ? (
-              <p className="text-sm text-muted">Loading booking options…</p>
-            ) : null}
+          <>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+                <p className="font-semibold">Appointment booked successfully.</p>
+                <p>
+                  Reference #:{" "}
+                  {bookResult.scheduleId || bookResult.appointmentId || "—"}
+                </p>
+                <p>
+                  {bookResult.patientName} · {bookResult.visitTypeName} ·{" "}
+                  {bookResult.locationName}
+                </p>
+                <p>
+                  {bookResult.displayDate} · {bookResult.displayTime}
+                  {bookResult.providerName && bookResult.providerName !== "—"
+                    ? ` · ${bookResult.providerName}`
+                    : ""}
+                </p>
+                {bookResult.patientWasCreated ? (
+                  <p className="font-medium">Patient created successfully.</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-border/70 px-5 py-4">
+              <Button type="button" variant="outline" onClick={resetAndClose}>
+                Close
+              </Button>
+            </div>
+          </>
+        ) : (
+          <form
+            onSubmit={handleSubmit}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              {loadingMeta ? (
+                <p className="text-sm text-muted">Loading booking options…</p>
+              ) : null}
 
             <div>
               <FieldLabel htmlFor="appt-employer">Employer</FieldLabel>
@@ -780,26 +819,36 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                     <FieldError message={patientErrors.dateOfBirth} />
                   </div>
                   <div>
-                    <FieldLabel htmlFor="new-gender">Gender</FieldLabel>
+                    <FieldLabel htmlFor="new-gender" required>
+                      Gender
+                    </FieldLabel>
                     <DownwardSelect
                       id="new-gender"
                       value={newPatient.gender}
                       onChange={(value) => setPatientField("gender", value)}
                       options={GENDER_OPTIONS}
                       placeholder="Select gender..."
+                      error={Boolean(patientErrors.gender)}
                     />
+                    <FieldError message={patientErrors.gender} />
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <FieldLabel htmlFor="new-ssn">SSN #</FieldLabel>
+                    <FieldLabel htmlFor="new-ssn" required>
+                      SSN #
+                    </FieldLabel>
                     <input
                       id="new-ssn"
                       type="text"
                       value={newPatient.ssn}
                       onChange={(e) => setPatientField("ssn", e.target.value)}
-                      className={cn(controlClass, "border-border")}
+                      className={cn(
+                        controlClass,
+                        patientErrors.ssn ? "border-rose-400" : "border-border"
+                      )}
                     />
+                    <FieldError message={patientErrors.ssn} />
                   </div>
                   <div>
                     <FieldLabel htmlFor="new-account">Account #</FieldLabel>
@@ -814,14 +863,94 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                   </div>
                 </div>
                 <div>
-                  <FieldLabel htmlFor="new-phone">Cell Phone</FieldLabel>
+                  <FieldLabel htmlFor="new-address1" required>
+                    Address 1
+                  </FieldLabel>
+                  <input
+                    id="new-address1"
+                    type="text"
+                    value={newPatient.address1}
+                    onChange={(e) => setPatientField("address1", e.target.value)}
+                    className={cn(
+                      controlClass,
+                      patientErrors.address1 ? "border-rose-400" : "border-border"
+                    )}
+                  />
+                  <FieldError message={patientErrors.address1} />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="new-address2">Address 2</FieldLabel>
+                  <input
+                    id="new-address2"
+                    type="text"
+                    value={newPatient.address2}
+                    onChange={(e) => setPatientField("address2", e.target.value)}
+                    className={cn(controlClass, "border-border")}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <FieldLabel htmlFor="new-zip" required>
+                      Zip
+                    </FieldLabel>
+                    <input
+                      id="new-zip"
+                      type="text"
+                      value={newPatient.zipCode}
+                      onChange={(e) => setPatientField("zipCode", e.target.value)}
+                      className={cn(
+                        controlClass,
+                        patientErrors.zipCode ? "border-rose-400" : "border-border"
+                      )}
+                    />
+                    <FieldError message={patientErrors.zipCode} />
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="new-city" required>
+                      City
+                    </FieldLabel>
+                    <input
+                      id="new-city"
+                      type="text"
+                      value={newPatient.city}
+                      onChange={(e) => setPatientField("city", e.target.value)}
+                      className={cn(
+                        controlClass,
+                        patientErrors.city ? "border-rose-400" : "border-border"
+                      )}
+                    />
+                    <FieldError message={patientErrors.city} />
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="new-state" required>
+                      State
+                    </FieldLabel>
+                    <DownwardSelect
+                      id="new-state"
+                      value={newPatient.state}
+                      onChange={(value) => setPatientField("state", value)}
+                      options={US_STATE_OPTIONS}
+                      placeholder="Select state..."
+                      error={Boolean(patientErrors.state)}
+                    />
+                    <FieldError message={patientErrors.state} />
+                  </div>
+                </div>
+                <div>
+                  <FieldLabel htmlFor="new-phone" required>
+                    Cell Phone
+                  </FieldLabel>
                   <input
                     id="new-phone"
                     type="tel"
                     value={newPatient.phone}
                     onChange={(e) => setPatientField("phone", e.target.value)}
-                    className={cn(controlClass, "border-border")}
+                    className={cn(
+                      controlClass,
+                      patientErrors.phone ? "border-rose-400" : "border-border"
+                    )}
                   />
+                  <FieldError message={patientErrors.phone} />
                 </div>
                 <div>
                   <FieldLabel htmlFor="new-employer">Employer</FieldLabel>
@@ -1087,19 +1216,18 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                 className={cn(controlClass, "resize-y border-border")}
               />
             </div>
-          </div>
+            </div>
 
-          <div className="flex flex-wrap justify-end gap-2 border-t border-border/70 px-5 py-4">
-            <Button type="button" variant="outline" onClick={resetAndClose}>
-              {bookResult ? "Close" : "Cancel"}
-            </Button>
-            {!bookResult ? (
+            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border/70 px-5 py-4">
+              <Button type="button" variant="outline" onClick={resetAndClose}>
+                Cancel
+              </Button>
               <Button type="submit" disabled={submitting || loadingMeta}>
                 {submitting ? "Booking…" : "Book Appointment"}
               </Button>
-            ) : null}
-          </div>
-        </form>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

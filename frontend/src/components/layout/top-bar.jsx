@@ -33,15 +33,12 @@ export function TopBar({
         >
           <Menu className="h-5 w-5" />
         </button>
-        <p className="truncate text-sm text-[#6b7280]">
-          {portalLabel}
+        <p className="flex min-w-0 items-center gap-3 truncate text-sm text-[#6b7280]">
+          <span>{portalLabel}</span>
           {organizationLabel ? (
-            <>
-              {" "}
-              <span className="font-bold tracking-wide text-ink uppercase">
-                {organizationLabel}
-              </span>
-            </>
+            <span className="truncate font-bold tracking-wide text-ink uppercase">
+              {organizationLabel}
+            </span>
           ) : null}
         </p>
       </div>
@@ -61,7 +58,7 @@ export function TopBar({
         <div className="min-w-0 flex-1" />
       )}
 
-      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+      <div className="flex shrink-0 items-center gap-3 sm:gap-4">
         <NotificationsMenu items={notifications} variant={showSearch ? "soft" : "ghost"} />
         <span className="hidden text-sm text-[#9ca3af] sm:inline">Welcome</span>
         <ProfileMenu user={profileUser} profileHref={profileHref} />

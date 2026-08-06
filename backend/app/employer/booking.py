@@ -32,6 +32,9 @@ from app.employer.schemas import (
 # 3 = Cancelled — does not block availability.
 CANCELLED_STATUS_IDS = {3}
 
+# Employer portal booking durations (minutes).
+ALLOWED_DURATION_MINUTES = {15, 30, 45, 60}
+
 
 def _clinic_and_employer(current_user: CurrentUser):
     clinic = get_clinic_by_activation_key(current_user.activation_key)
@@ -283,10 +286,10 @@ def list_available_slots(
 ) -> AppointmentSlotsResponse:
     clinic, _profile = _clinic_and_employer(current_user)
     _ensure_booking_date_not_past(clinic, on_date)
-    if duration_minutes <= 0:
+    if duration_minutes not in ALLOWED_DURATION_MINUTES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Duration must be greater than zero.",
+            detail="Duration must be 15, 30, 45, or 60 minutes.",
         )
 
     work_day = _work_day_monday_first(on_date)
@@ -376,8 +379,11 @@ def book_appointment(
     on_date = date.fromisoformat(payload.date)
     _ensure_booking_date_not_past(clinic, on_date)
     duration = int(payload.duration_minutes)
-    if duration <= 0:
-        raise HTTPException(status_code=400, detail="Duration must be greater than zero.")
+    if duration not in ALLOWED_DURATION_MINUTES:
+        raise HTTPException(
+            status_code=400,
+            detail="Duration must be 15, 30, 45, or 60 minutes.",
+        )
 
     start_time = _parse_time(payload.start_time)
     if start_time is None:

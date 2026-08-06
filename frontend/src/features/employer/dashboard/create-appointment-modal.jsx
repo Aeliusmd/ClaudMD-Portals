@@ -24,6 +24,13 @@ const APPOINTMENT_STATUSES = [
 
 const SCHEDULE_TYPES = [{ value: "1", label: "Once" }];
 
+const DURATION_OPTIONS = [
+  { value: "15", label: "15 minutes" },
+  { value: "30", label: "30 minutes" },
+  { value: "45", label: "45 minutes" },
+  { value: "60", label: "60 minutes" },
+];
+
 const GENDER_OPTIONS = [
   { value: "M", label: "Male" },
   { value: "F", label: "Female" },
@@ -483,8 +490,8 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
       next.duration =
         "Duration requires neighboring free slots that are not available from this start time.";
     }
-    if (!form.duration || Number(form.duration) <= 0) {
-      next.duration = "Enter duration in minutes.";
+    if (!DURATION_OPTIONS.some((opt) => opt.value === String(form.duration))) {
+      next.duration = "Select a duration (15, 30, 45, or 60 minutes).";
     }
     if (!form.statusId) next.statusId = "Select a status.";
     return next;
@@ -1131,19 +1138,15 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <FieldLabel htmlFor="appt-duration" required>
-                  Duration (min)
+                  Duration
                 </FieldLabel>
-                <input
+                <DownwardSelect
                   id="appt-duration"
-                  type="number"
-                  min="5"
-                  step="5"
                   value={form.duration}
-                  onChange={(e) => setField("duration", e.target.value)}
-                  className={cn(
-                    controlClass,
-                    errors.duration ? "border-rose-400" : "border-border"
-                  )}
+                  onChange={(value) => setField("duration", value)}
+                  options={DURATION_OPTIONS}
+                  placeholder="Select duration..."
+                  error={Boolean(errors.duration)}
                   disabled={!form.resourceId}
                 />
                 <FieldError message={errors.duration} />

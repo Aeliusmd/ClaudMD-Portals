@@ -482,6 +482,7 @@ export function EmployerProfileView() {
             </Button>
           </Card>
 
+          {/* Two-Factor Authentication — hidden for now (no 2FA in clinic DB)
           <Card className="p-5 sm:p-6">
             <h2 className="mb-4 text-lg font-semibold text-ink">
               Two-Factor Authentication
@@ -491,6 +492,7 @@ export function EmployerProfileView() {
               database (no 2FA tables or columns). No action is available here.
             </p>
           </Card>
+          */}
         </div>
       ) : null}
 

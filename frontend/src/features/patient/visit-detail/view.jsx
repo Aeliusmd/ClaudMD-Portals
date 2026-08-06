@@ -13,10 +13,6 @@ import { categoryStyles } from "@/lib/category-styles";
 import { SAMPLE_DOCUMENT_URL, documentBadge } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
-function visitHref(visitId) {
-  return `/patient/visits/${encodeURIComponent(visitId)}`;
-}
-
 function DocumentThumb({ document, onPreview }) {
   return (
     <div className="w-[8.5rem] shrink-0 sm:w-40">
@@ -35,7 +31,9 @@ function DocumentThumb({ document, onPreview }) {
 
 export function PatientVisitDetailView({
   visit,
-  otherVisits = [],
+  showEmployer = true,
+  showInsurance = true,
+  showWorkStatus = true,
   backHref = "/patient/dashboard",
 }) {
   const router = useRouter();
@@ -119,29 +117,39 @@ export function PatientVisitDetailView({
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-x-8 gap-y-4 border-t border-border/70 pt-4 text-sm sm:grid-cols-2">
-                <div>
-                  <p className="text-[11px] font-semibold tracking-[0.1em] text-foreground-500 uppercase">
-                    Insurance
-                  </p>
-                  <p className="mt-1 font-semibold text-foreground-900">
-                    {currentPatient.insurance.carrier}
-                  </p>
-                  <p className="mt-0.5 text-foreground-700">
-                    {currentPatient.insurance.planType}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold tracking-[0.1em] text-foreground-500 uppercase">
-                    Employer
-                  </p>
-                  <p className="mt-1 font-semibold text-foreground-900">
-                    {currentPatient.employer.name}
-                  </p>
-                  <p className="mt-0.5 text-foreground-700">
-                    {currentPatient.employer.department}
-                  </p>
-                </div>
+              <div
+                className={cn(
+                  "grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2",
+                  (showInsurance || showEmployer) &&
+                    "mt-4 border-t border-border/70 pt-4"
+                )}
+              >
+                {showInsurance ? (
+                  <div>
+                    <p className="text-[11px] font-semibold tracking-[0.1em] text-foreground-500 uppercase">
+                      Insurance
+                    </p>
+                    <p className="mt-1 font-semibold text-foreground-900">
+                      {currentPatient.insurance.carrier}
+                    </p>
+                    <p className="mt-0.5 text-foreground-700">
+                      {currentPatient.insurance.planType}
+                    </p>
+                  </div>
+                ) : null}
+                {showEmployer ? (
+                  <div>
+                    <p className="text-[11px] font-semibold tracking-[0.1em] text-foreground-500 uppercase">
+                      Employer
+                    </p>
+                    <p className="mt-1 font-semibold text-foreground-900">
+                      {currentPatient.employer.name}
+                    </p>
+                    <p className="mt-0.5 text-foreground-700">
+                      {currentPatient.employer.department}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
           </Card>
@@ -157,7 +165,9 @@ export function PatientVisitDetailView({
                 <DetailField label="Provider" value={visit.provider} />
                 <DetailField label="Location" value={visit.location} />
                 <DetailField label="Status" value={visit.status} />
-                <DetailField label="Work Status" value={visit.workStatus} />
+                {showWorkStatus ? (
+                  <DetailField label="Work Status" value={visit.workStatus} />
+                ) : null}
                 <DetailField label="Restrictions" value={visit.restrictions} />
                 <DetailField label="Follow-up" value={visit.followUp} />
               </div>
@@ -177,42 +187,6 @@ export function PatientVisitDetailView({
             </div>
           </Card>
 
-          {otherVisits.length > 0 ? (
-            <Card className="overflow-hidden p-0">
-              <h2 className="border-b border-border/70 px-5 py-4 text-base font-semibold text-foreground-900">
-                Other Visits
-              </h2>
-
-              <div className="divide-y divide-border/60">
-                {otherVisits.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => router.push(visitHref(item.id))}
-                    className="flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-3.5 text-left transition hover:bg-background-50"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold text-foreground-900">
-                        {item.date}
-                      </p>
-                      <p className="mt-0.5 truncate text-sm text-foreground-500">
-                        {item.provider} · {item.location}
-                      </p>
-                    </div>
-                    <Badge
-                      className={cn(
-                        "shrink-0",
-                        categoryStyles[item.category] ||
-                          "bg-stone-100 text-stone-600"
-                      )}
-                    >
-                      {item.category}
-                    </Badge>
-                  </button>
-                ))}
-              </div>
-            </Card>
-          ) : null}
         </div>
 
         {/* Documents attached to this visit */}

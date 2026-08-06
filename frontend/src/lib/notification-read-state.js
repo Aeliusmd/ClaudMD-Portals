@@ -1,19 +1,29 @@
-const STORAGE_KEY = "employer.notifications.lastOpenedAt";
+const STORAGE_KEYS = {
+  employer: "employer.notifications.lastOpenedAt",
+  insurance: "insurance.notifications.lastOpenedAt",
+};
 
-export function getNotificationsLastOpenedAt() {
+function storageKey(portal = "employer") {
+  return STORAGE_KEYS[portal] || STORAGE_KEYS.employer;
+}
+
+export function getNotificationsLastOpenedAt(portal = "employer") {
   if (typeof window === "undefined") return null;
   try {
-    const value = window.localStorage.getItem(STORAGE_KEY);
+    const value = window.localStorage.getItem(storageKey(portal));
     return value && value.trim() ? value.trim() : null;
   } catch {
     return null;
   }
 }
 
-export function setNotificationsLastOpenedAt(iso = new Date().toISOString()) {
+export function setNotificationsLastOpenedAt(
+  iso = new Date().toISOString(),
+  portal = "employer"
+) {
   if (typeof window === "undefined") return iso;
   try {
-    window.localStorage.setItem(STORAGE_KEY, iso);
+    window.localStorage.setItem(storageKey(portal), iso);
   } catch {
     // ignore quota / private mode
   }

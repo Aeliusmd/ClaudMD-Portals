@@ -83,13 +83,13 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "This account is not enabled for the employer or patient portal. "
+                "This account is not enabled for the employer, patient, or insurance portal. "
                 "Contact your clinic administrator."
             ),
         )
 
     expected = (payload.portal or "").strip().lower() or None
-    if expected in {"employer", "patient"} and expected != portal:
+    if expected in {"employer", "patient", "insurance"} and expected != portal:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
@@ -386,7 +386,7 @@ def _fetch_user_profile_type(
                      OR LOWER(LTRIM(RTRIM(Email))) = LOWER(?)
                   )
                 ORDER BY
-                    CASE WHEN TypeId IN (?, ?, ?) THEN 0 ELSE 1 END,
+                    CASE WHEN TypeId IN (?, ?, ?, ?) THEN 0 ELSE 1 END,
                     Id DESC
                 """,
                 (
@@ -395,6 +395,7 @@ def _fetch_user_profile_type(
                     int(UserType.SuperAdmin),
                     int(UserType.EmployerUser),
                     int(UserType.PatientUser),
+                    int(UserType.InsuranceUser),
                 ),
             )
             row = cursor.fetchone()

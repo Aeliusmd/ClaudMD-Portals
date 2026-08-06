@@ -32,8 +32,8 @@ export const employerNavItems = [
 ];
 
 export const insuranceNavItems = [
-  { href: "/insurance/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
-  { href: "/insurance/profile", label: "Profile / Security", icon: "Shield" },
+  { href: "/insuranceportal/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
+  { href: "/insuranceportal/profile", label: "Profile / Security", icon: "Shield" },
 ];
 
 /** Epic 4 scoped session — only Shared Documents (secure email link). */

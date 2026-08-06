@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Keep Turbopack rooted in frontend/ (repo root also has a package-lock.json).
+  turbopack: {
+    root: process.cwd(),
+  },
   async redirects() {
     return [
       // Legacy short employer prefix → unified employerportal URLs

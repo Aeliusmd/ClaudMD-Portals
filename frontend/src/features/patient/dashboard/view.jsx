@@ -29,24 +29,28 @@ import {
 import { isWithinRange, shiftIsoDate, toIsoDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
+/** Work status only applies to injury-related care, so the other tabs drop that column. */
 const kpiTabs = [
   {
     key: "urgentCare",
     label: "Urgent Care",
     title: "Urgent Care Visits",
     category: "Urgent Care",
+    hideWorkStatus: true,
   },
   {
     key: "personalInjury",
     label: "Personal Injury",
     title: "Personal Injury Visits",
     category: "Personal Injury",
+    hideWorkStatus: true,
   },
   {
     key: "physicals",
     label: "Physicals",
     title: "Physicals",
     category: "Physical",
+    hideWorkStatus: true,
   },
   {
     key: "injury",
@@ -169,8 +173,9 @@ export function PatientDashboardView() {
     PAGE_SIZE
   );
 
-  const tableTitle =
-    kpiTabs.find((item) => item.key === activeTab)?.title || "All Visits";
+  const activeTabConfig = kpiTabs.find((item) => item.key === activeTab);
+  const tableTitle = activeTabConfig?.title || "All Visits";
+  const showWorkStatus = !activeTabConfig?.hideWorkStatus;
 
   function handleTabClick(key) {
     setActiveTab((prev) => (prev === key ? null : key));
@@ -335,7 +340,9 @@ export function PatientDashboardView() {
                       <th className="px-4 py-3 sm:px-5">Provider / Location</th>
                       <th className="px-4 py-3 sm:px-5">Category</th>
                       <th className="px-4 py-3 sm:px-5">Date</th>
-                      <th className="px-4 py-3 sm:px-5">Work Status</th>
+                      {showWorkStatus ? (
+                        <th className="px-4 py-3 sm:px-5">Work Status</th>
+                      ) : null}
                       <th className="px-4 py-3 sm:px-5">Documents</th>
                     </tr>
                   </thead>
@@ -366,11 +373,13 @@ export function PatientDashboardView() {
                         <td className="px-4 py-3.5 text-ink sm:px-5 sm:py-4">
                           {visit.date}
                         </td>
-                        <td className="px-4 py-3.5 sm:px-5 sm:py-4">
-                          <Badge className={workStatusStyle(visit.workStatus)}>
-                            {visit.workStatus}
-                          </Badge>
-                        </td>
+                        {showWorkStatus ? (
+                          <td className="px-4 py-3.5 sm:px-5 sm:py-4">
+                            <Badge className={workStatusStyle(visit.workStatus)}>
+                              {visit.workStatus}
+                            </Badge>
+                          </td>
+                        ) : null}
                         <td className="px-4 py-3.5 sm:px-5 sm:py-4">
                           <span className="inline-flex items-center gap-2 text-ink">
                             <FileText

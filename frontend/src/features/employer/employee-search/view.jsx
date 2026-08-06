@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, FileText, UserRound } from "lucide-react";
+import { CalendarDays, FileText, Filter, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DateRangeInput } from "@/components/ui/date-range-input";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -22,14 +23,23 @@ import { employerPaths } from "@/lib/portal-paths";
 import { reportBadgeStyles } from "@/lib/report-badge-styles";
 import { workStatusStyles } from "@/lib/category-styles";
 
+const emptySubscribe = () => () => {};
+
+function formatLocalIso(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function daysAgoIso(days) {
   const date = new Date();
   date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
+  return formatLocalIso(date);
 }
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return formatLocalIso(new Date());
 }
 
 function parsePatientId(param) {
@@ -64,10 +74,25 @@ function EmployeeSearchContent() {
   const fromParam = searchParams.get("from");
   const categoryFilter = searchParams.get("category");
 
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [fromDate, setFromDate] = useState(daysAgoIso(30));
-  const [toDate, setToDate] = useState(todayIso());
+  const [draftQuery, setDraftQuery] = useState("");
+  const [draftFromDate, setDraftFromDate] = useState(null);
+  const [draftToDate, setDraftToDate] = useState(null);
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [appliedFromDate, setAppliedFromDate] = useState(null);
+  const [appliedToDate, setAppliedToDate] = useState(null);
+
+  const defaultTo = useSyncExternalStore(emptySubscribe, todayIso, () => "");
+  const defaultFrom = useSyncExternalStore(
+    emptySubscribe,
+    () => daysAgoIso(30),
+    () => ""
+  );
+  const rangeReady = Boolean(defaultFrom && defaultTo);
+  const effectiveDraftFrom = draftFromDate ?? defaultFrom;
+  const effectiveDraftTo = draftToDate ?? defaultTo;
+  const effectiveAppliedFrom = appliedFromDate ?? defaultFrom;
+  const effectiveAppliedTo = appliedToDate ?? defaultTo;
+
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -77,16 +102,9 @@ function EmployeeSearchContent() {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(Boolean(employeeParam));
 
-  useEffect(() => {
-    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
-    return () => clearTimeout(handle);
-  }, [query]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [fromDate, toDate, debouncedQuery, categoryFilter]);
-
   const loadEmployees = useCallback(async () => {
+    if (!rangeReady || !effectiveAppliedFrom || !effectiveAppliedTo) return;
+
     const token = getAccessToken();
     if (!token) {
       router.replace(LOGIN_PATH);
@@ -107,11 +125,11 @@ function EmployeeSearchContent() {
               : undefined;
 
       const data = await fetchEmployerEmployeeSearch(token, {
-        fromDate,
-        toDate,
+        fromDate: effectiveAppliedFrom,
+        toDate: effectiveAppliedTo,
         page,
         pageSize: PAGE_SIZE,
-        search: debouncedQuery || undefined,
+        search: appliedQuery || undefined,
         category,
       });
       setRows(data.items);
@@ -130,21 +148,31 @@ function EmployeeSearchContent() {
       setLoading(false);
     }
   }, [
+    appliedQuery,
     categoryFilter,
-    debouncedQuery,
-    fromDate,
+    effectiveAppliedFrom,
+    effectiveAppliedTo,
     page,
+    rangeReady,
     router,
-    toDate,
   ]);
 
   useEffect(() => {
     if (employeeParam) return undefined;
-    const handle = setTimeout(() => {
-      loadEmployees();
-    }, 100);
-    return () => clearTimeout(handle);
+    loadEmployees();
+    return undefined;
   }, [employeeParam, loadEmployees]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [categoryFilter]);
+
+  function applyFilters() {
+    setAppliedQuery(draftQuery.trim());
+    setAppliedFromDate(effectiveDraftFrom);
+    setAppliedToDate(effectiveDraftTo);
+    setPage(1);
+  }
 
   useEffect(() => {
     if (!employeeParam) {
@@ -166,8 +194,8 @@ function EmployeeSearchContent() {
       try {
         const patientId = parsePatientId(employeeParam);
         const data = await fetchEmployerEmployeeSearch(token, {
-          fromDate,
-          toDate,
+          fromDate: effectiveAppliedFrom,
+          toDate: effectiveAppliedTo,
           page: 1,
           pageSize: 1,
           patientId: patientId || undefined,
@@ -204,7 +232,7 @@ function EmployeeSearchContent() {
     return () => {
       cancelled = true;
     };
-  }, [employeeParam, fromDate, fromParam, router, toDate]);
+  }, [effectiveAppliedFrom, effectiveAppliedTo, employeeParam, fromParam, router]);
 
   if (employeeParam) {
     const backToDashboard = fromParam === "dashboard";
@@ -248,8 +276,14 @@ function EmployeeSearchContent() {
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <SearchInput
           className="max-w-xl flex-1"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={draftQuery}
+          onChange={(e) => setDraftQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              applyFilters();
+            }
+          }}
           placeholder="Search by name, account, or SSN"
           ariaLabel="Search employees"
         />
@@ -257,16 +291,25 @@ function EmployeeSearchContent() {
           <DateRangeInput
             id="employee-search-from"
             label="From"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
+            value={effectiveDraftFrom}
+            onChange={(e) => setDraftFromDate(e.target.value)}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="employee-search-to"
             label="To"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
+            value={effectiveDraftTo}
+            onChange={(e) => setDraftToDate(e.target.value)}
           />
+          <Button
+            type="button"
+            onClick={applyFilters}
+            className="h-[2.625rem] shrink-0 gap-1.5 rounded-xl px-3.5 py-0 text-sm"
+            aria-label="Apply filters"
+          >
+            <Filter className="h-3.5 w-3.5" strokeWidth={2.25} />
+            Filter
+          </Button>
         </div>
       </div>
 

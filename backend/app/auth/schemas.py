@@ -25,6 +25,7 @@ class UserInfo(BaseModel):
     name: str | None = None
     portal: str = "employer"
     type_id: int | None = None
+    type_label: str | None = None
     activation_key: str | None = None
 
 

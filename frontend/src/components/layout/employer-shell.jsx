@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -14,22 +14,29 @@ import {
   isSecureShareExpired,
 } from "@/data/secure-shares";
 import { useEmployerProfile } from "@/hooks/use-employer-profile";
-import { clearAuthSession } from "@/lib/auth-session";
+import { clearAuthSession, getAuthSession } from "@/lib/auth-session";
 import {
   clearSecureShareSession,
   getSecureShareSession,
 } from "@/lib/secure-share-session";
 import { employerPaths } from "@/lib/portal-paths";
+import { userTypeLabel } from "@/lib/user-type";
 
-function hasActiveSecureShareSession() {
+const emptySubscribe = () => () => {};
+
+function readScopedSessionActive() {
   const session = getSecureShareSession();
   if (!session?.token) return false;
   const share = findSecureShare(session.token);
-  if (!share || isSecureShareExpired(share)) {
-    clearSecureShareSession();
-    return false;
-  }
+  if (!share || isSecureShareExpired(share)) return false;
   return true;
+}
+
+function readSessionTypeLabel() {
+  const sessionUser = getAuthSession()?.user;
+  if (sessionUser?.type_label) return sessionUser.type_label;
+  if (sessionUser?.type_id != null) return userTypeLabel(sessionUser.type_id);
+  return null;
 }
 
 function handleLogout() {
@@ -37,33 +44,53 @@ function handleLogout() {
   clearSecureShareSession();
 }
 
+function resolveUserTypeLabel(profile) {
+  if (profile?.typeLabel) return profile.typeLabel;
+  if (profile?.typeId != null) return userTypeLabel(profile.typeId);
+  return null;
+}
+
 export function EmployerShell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
-  const [scopedSession, setScopedSession] = useState(false);
+  const scopedSession = useSyncExternalStore(
+    emptySubscribe,
+    readScopedSessionActive,
+    () => false
+  );
+  const sessionTypeLabel = useSyncExternalStore(
+    emptySubscribe,
+    readSessionTypeLabel,
+    () => null
+  );
   const { profile, loading: profileLoading } = useEmployerProfile();
 
-  const profileUser = useMemo(
-    () =>
-      profile || {
-        fullName: profileLoading ? "Loading..." : "Employer User",
-        title: profileLoading ? "" : "Employer Contact",
-        role: "Employer",
-      },
-    [profile, profileLoading]
-  );
+  const profileUser = useMemo(() => {
+    const typeLabel = resolveUserTypeLabel(profile) || sessionTypeLabel;
+    if (profile) {
+      return {
+        ...profile,
+        title: typeLabel || profile.jobTitle || profile.title || "",
+        role: typeLabel,
+      };
+    }
+    return {
+      fullName: profileLoading ? "Loading..." : "User",
+      title: profileLoading ? "" : typeLabel || "",
+      role: typeLabel,
+    };
+  }, [profile, profileLoading, sessionTypeLabel]);
 
   useEffect(() => {
-    const active = hasActiveSecureShareSession();
-    setScopedSession(active);
-
-    // Keep secure-link sessions in the scoped Shared Documents view only.
-    if (
-      active &&
-      pathname &&
-      !pathname.startsWith(employerPaths.sharedDocumentsScoped)
-    ) {
+    const session = getSecureShareSession();
+    if (!session?.token) return;
+    const share = findSecureShare(session.token);
+    if (!share || isSecureShareExpired(share)) {
+      clearSecureShareSession();
+      return;
+    }
+    if (pathname && !pathname.startsWith(employerPaths.sharedDocumentsScoped)) {
       router.replace(employerPaths.sharedDocumentsScoped);
     }
   }, [pathname, router]);

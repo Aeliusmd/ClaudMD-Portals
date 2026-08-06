@@ -39,14 +39,18 @@ export async function fetchEmployerProfile(accessToken) {
 
   return {
     fullName: data.full_name,
-    title: data.title || "Employer Contact",
-    role: "Employer",
-    email: data.email,
-    phone: data.phone,
-    organization: data.organization,
+    title: data.title || "",
+    role: data.type_label || null,
+    jobTitle: data.title || null,
+    email: data.email || "",
+    phone: data.phone || "",
+    organization: data.organization || "",
+    address: data.address || "",
     employerId: data.employer_id,
     userId: data.user_id,
     loginId: data.login_id,
+    typeId: data.type_id,
+    typeLabel: data.type_label,
   };
 }
 
@@ -186,6 +190,7 @@ export function searchRowToEmployee(row) {
 
   return {
     id: String(row.employeeId),
+    numericPatientId: row.patientId,
     name: row.employeeName || row.employee,
     patientId,
     accountNo,
@@ -211,6 +216,7 @@ export function searchRowToEmployee(row) {
             date: row.date || row.lastVisit || "—",
             label: row.reportType || row.category || "Visit",
             category: row.category,
+            documents: [],
           },
         ],
       },
@@ -258,5 +264,57 @@ export async function fetchEmployerEmployeeSearch(
     fromDate: data.from_date,
     toDate: data.to_date,
     employerId: data.employer_id,
+  };
+}
+
+export async function fetchEmployeeVisits(
+  accessToken,
+  patientId,
+  { fromDate, toDate } = {}
+) {
+  const params = new URLSearchParams();
+  if (fromDate) params.set("fromDate", fromDate);
+  if (toDate) params.set("toDate", toDate);
+  const qs = params.toString();
+  const path = `/api/employer/employees/${encodeURIComponent(patientId)}/visits${
+    qs ? `?${qs}` : ""
+  }`;
+
+  const data = await employerFetch(
+    path,
+    accessToken,
+    "Unable to load visit documents."
+  );
+
+  return {
+    patientId: data.patient_id,
+    employerId: data.employer_id,
+    fromDate: data.from_date,
+    toDate: data.to_date,
+    visits: (data.visits || []).map((visit) => ({
+      id: String(visit.check_in_id),
+      checkInId: visit.check_in_id,
+      date: visit.check_in_date,
+      dateValue: visit.check_in_date_value,
+      label: visit.visit_label || "Visit",
+      category: visit.category,
+      documents: (visit.documents || []).map((doc) => ({
+        id: String(doc.id),
+        documentId: String(doc.id),
+        checkInId: doc.check_in_id,
+        reportId: doc.report_id,
+        title: doc.report_name || doc.name,
+        name: doc.name,
+        documentType: doc.report_name,
+        previewBadge: doc.preview_badge,
+        previewLabel: doc.preview_label || doc.preview_badge,
+        badgeLabel: doc.report_name,
+        path: doc.path,
+        url: doc.path || null,
+        visitDate: visit.check_in_date,
+        reportDate: visit.check_in_date,
+        isCompleted: doc.is_completed,
+      })),
+    })),
   };
 }

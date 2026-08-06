@@ -27,7 +27,10 @@ def get_employer_profile(current_user: CurrentUser) -> EmployerProfileResponse:
         email=profile.email,
         phone=profile.phone,
         organization=profile.organization,
+        address=profile.address,
         login_id=profile.login_id,
+        type_id=profile.type_id,
+        type_label=profile.type_label,
     )
 
 
@@ -60,65 +63,45 @@ def get_dashboard_summary(current_user: CurrentUser) -> DashboardSummaryResponse
 
 def _fetch_checkin_counts(clinic, employer_id: int) -> dict[str, int]:
     """
-    Read-only counts from CheckInsHeader for the employer's patients (last 30 days).
+    Read-only KPI counts from CheckInsHeader (last 30 days) in one query.
 
-    Injury: VisitTypes.CategoryId = 1 (workers comp / injury visit types).
-    Physicals: VisitTypes.CategoryId = 2, excluding drug screen code PDS.
-    Drug screens: VisitTypes.Code = 'PDS'.
-
-    CheckInsHeader.VisitTypeId stores VisitTypes.Id (e.g. 14=WNI, 39=PDS),
-    not the category id directly.
+    Injury: VisitTypes.CategoryId = 1
+    Physicals: VisitTypes.CategoryId = 2, excluding drug screen code PDS
+    Drug screens: VisitTypes.Code = 'PDS'
     """
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
-
-        base_filter = """
-            ch.EmployerId = ?
-            AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
-            AND ch.CheckInDate IS NOT NULL
-            AND ch.CheckInDate >= DATEADD(day, -30, CAST(GETDATE() AS date))
-            AND ch.CheckInDate <= CAST(GETDATE() AS date)
-        """
-
         cursor.execute(
-            f"""
-            SELECT COUNT(*)
+            """
+            SELECT
+                SUM(CASE WHEN vt.CategoryId = 1 THEN 1 ELSE 0 END) AS InjuryCount,
+                SUM(
+                    CASE
+                        WHEN vt.CategoryId = 2
+                         AND UPPER(LTRIM(RTRIM(ISNULL(vt.Code, '')))) <> 'PDS'
+                        THEN 1 ELSE 0
+                    END
+                ) AS PhysicalsCount,
+                SUM(
+                    CASE
+                        WHEN UPPER(LTRIM(RTRIM(ISNULL(vt.Code, '')))) = 'PDS'
+                        THEN 1 ELSE 0
+                    END
+                ) AS DrugScreensCount
             FROM dbo.CheckInsHeader ch
             INNER JOIN dbo.VisitTypes vt ON vt.Id = ch.VisitTypeId
-            WHERE {base_filter}
-              AND vt.CategoryId = 1
+            WHERE ch.EmployerId = ?
+              AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+              AND ch.CheckInDate IS NOT NULL
+              AND ch.CheckInDate >= DATEADD(day, -30, CAST(GETDATE() AS date))
+              AND ch.CheckInDate <= CAST(GETDATE() AS date)
             """,
             (employer_id,),
         )
-        injury = int(cursor.fetchone()[0])
-
-        cursor.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM dbo.CheckInsHeader ch
-            INNER JOIN dbo.VisitTypes vt ON vt.Id = ch.VisitTypeId
-            WHERE {base_filter}
-              AND vt.CategoryId = 2
-              AND vt.Code <> 'PDS'
-            """,
-            (employer_id,),
-        )
-        physicals = int(cursor.fetchone()[0])
-
-        cursor.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM dbo.CheckInsHeader ch
-            INNER JOIN dbo.VisitTypes vt ON vt.Id = ch.VisitTypeId
-            WHERE {base_filter}
-              AND vt.Code = 'PDS'
-            """,
-            (employer_id,),
-        )
-        drug_screens = int(cursor.fetchone()[0])
+        row = cursor.fetchone()
 
     return {
-        "injury": injury,
-        "physicals": physicals,
-        "drug_screens": drug_screens,
+        "injury": int(row.InjuryCount or 0) if row else 0,
+        "physicals": int(row.PhysicalsCount or 0) if row else 0,
+        "drug_screens": int(row.DrugScreensCount or 0) if row else 0,
     }

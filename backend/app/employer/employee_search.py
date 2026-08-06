@@ -118,7 +118,7 @@ def _fetch_employee_rows(
     category: str | None,
     patient_id: int | None,
 ) -> tuple[int, list[EmployeeSearchRow]]:
-    """Read-only: unique patients with latest check-in in range (paged)."""
+    """Read-only: unique patients (one row each) with latest matching check-in in range."""
     q = (search or "").strip()
     search_like = f"%{q.lower()}%"
     category_sql, _ = _category_sql_clause(category)
@@ -157,11 +157,13 @@ def _fetch_employee_rows(
                     ch.WorkStatusId,
                     ch.VisitTypeId
                 FROM dbo.CheckInsHeader ch
+                LEFT JOIN dbo.VisitTypes vt ON vt.Id = ch.VisitTypeId
                 WHERE ch.EmployerId = ?
                   AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
                   AND ch.CheckInDate IS NOT NULL
                   AND ch.CheckInDate >= ?
                   AND ch.CheckInDate <= ?
+                  {category_sql}
             ),
             Ranked AS (
                 SELECT *,
@@ -183,7 +185,6 @@ def _fetch_employee_rows(
             WHERE r.rn = 1
               AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
               {patient_filter_sql}
-              {category_sql}
               {search_sql}
     """
 
@@ -245,7 +246,6 @@ def _fetch_employee_rows(
             WHERE r.rn = 1
               AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
               {patient_filter_sql}
-              {category_sql}
               {search_sql}
             ORDER BY r.CheckInDate DESC, p.LastName, p.FirstName
             OFFSET ? ROWS FETCH NEXT ? ROWS ONLY

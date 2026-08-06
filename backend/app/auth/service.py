@@ -8,7 +8,7 @@ from app.auth.identity import (
     request_password_token,
 )
 from app.auth.schemas import ClinicInfo, LoginRequest, LoginResponse, UserInfo
-from app.auth.user_profile_type import UserProfileType, portal_for_type_id
+from app.auth.user_profile_type import UserType, portal_for_type_id, user_type_label
 from app.config import get_settings
 from app.db.clinic import ClinicConnectionInfo, get_clinic_by_activation_key, get_clinic_connection
 
@@ -113,6 +113,7 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
             name=name,
             portal=portal,
             type_id=type_id,
+            type_label=user_type_label(type_id),
             activation_key=key_from_token,
         ),
         clinic=_clinic_info(clinic, key_from_token),
@@ -194,8 +195,8 @@ def _fetch_user_profile_type(
                 (
                     login_id.strip(),
                     (email or login_id).strip(),
-                    int(UserProfileType.Employer),
-                    int(UserProfileType.Patient),
+                    int(UserType.EmployerUser),
+                    int(UserType.PatientUser),
                 ),
             )
             row = cursor.fetchone()

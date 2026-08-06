@@ -41,9 +41,11 @@ export function ProfileDropdownCard({
   user,
   patient,
   profileHref = patientPaths.profile,
+  settingsHref,
   onClose,
 }) {
   const profileUser = user || patient;
+  const resolvedSettingsHref = settingsHref || profileHref;
 
   return (
     <div
@@ -68,7 +70,7 @@ export function ProfileDropdownCard({
           onClick={onClose}
         />
         <ProfileMenuItem
-          href={profileHref}
+          href={resolvedSettingsHref}
           icon={Settings}
           label="Settings"
           onClick={onClose}

@@ -9,6 +9,7 @@ import { patientPaths } from "@/lib/portal-paths";
 export function ProfileMenu({
   user = currentPatient,
   profileHref = patientPaths.profile,
+  settingsHref,
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -73,6 +74,7 @@ export function ProfileMenu({
         <ProfileDropdownCard
           user={user}
           profileHref={profileHref}
+          settingsHref={settingsHref}
           onClose={() => setOpen(false)}
         />
       ) : null}

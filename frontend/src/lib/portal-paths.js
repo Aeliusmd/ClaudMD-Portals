@@ -21,6 +21,7 @@ export const employerPaths = {
   appointments: `${EMPLOYER_PORTAL_BASE}/appointments`,
   authorizations: `${EMPLOYER_PORTAL_BASE}/authorizations`,
   profile: `${EMPLOYER_PORTAL_BASE}/profile`,
+  profilePermissions: `${EMPLOYER_PORTAL_BASE}/profile?tab=permissions`,
   sharedDocuments: `${EMPLOYER_PORTAL_BASE}/shared-documents`,
   sharedDocumentsScoped: `${EMPLOYER_PORTAL_BASE}/shared-documents/scoped`,
   notifications: `${EMPLOYER_PORTAL_BASE}/notifications`,
@@ -42,6 +43,7 @@ export const insurancePaths = {
   login: INSURANCE_LOGIN_PATH,
   dashboard: `${INSURANCE_PORTAL_BASE}/dashboard`,
   profile: `${INSURANCE_PORTAL_BASE}/profile`,
+  profilePermissions: `${INSURANCE_PORTAL_BASE}/profile?tab=permissions`,
   notifications: `${INSURANCE_PORTAL_BASE}/notifications`,
 };
 

@@ -299,6 +299,10 @@ export const visits = [
   },
 ];
 
+export function findVisit(id) {
+  return visits.find((visit) => visit.id === id) || null;
+}
+
 export const visitCategories = [
   "Urgent Care",
   "Personal Injury",

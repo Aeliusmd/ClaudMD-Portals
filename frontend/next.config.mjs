@@ -1,8 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Keep Turbopack rooted in frontend/ (repo root also has a package-lock.json).
+  turbopack: {
+    root: process.cwd(),
+  },
   async redirects() {
     return [
-      // Legacy short prefixes → unified *portal URLs
+      // Legacy short employer prefix → unified employerportal URLs
       {
         source: "/employer",
         destination: "/employerportal/dashboard",
@@ -11,16 +15,6 @@ const nextConfig = {
       {
         source: "/employer/:path*",
         destination: "/employerportal/:path*",
-        permanent: false,
-      },
-      {
-        source: "/patient",
-        destination: "/patientportal/dashboard",
-        permanent: false,
-      },
-      {
-        source: "/patient/:path*",
-        destination: "/patientportal/:path*",
         permanent: false,
       },
       {

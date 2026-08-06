@@ -1,10 +1,12 @@
 /** Single source of truth for portal URL prefixes (no /employer vs /employerportal split). */
 
 export const EMPLOYER_PORTAL_BASE = "/employerportal";
-export const PATIENT_PORTAL_BASE = "/patientportal";
+/** Chanuka patient portal keeps the /patient prefix (dummy data UI). */
+export const PATIENT_PORTAL_BASE = "/patient";
 
 export const EMPLOYER_LOGIN_PATH = `${EMPLOYER_PORTAL_BASE}/authentication/login`;
-export const PATIENT_LOGIN_PATH = `${PATIENT_PORTAL_BASE}/authentication/login`;
+/** Patient auth pages live under patientportal (from main); portal UI stays on /patient. */
+export const PATIENT_LOGIN_PATH = `/patientportal/authentication/login`;
 
 /** Default login used by shared entry points (root, /login, logout). */
 export const LOGIN_PATH = EMPLOYER_LOGIN_PATH;

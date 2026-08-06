@@ -1,0 +1,581 @@
+import { SAMPLE_DOCUMENT_URL } from "@/lib/documents";
+
+export const currentInsuranceUser = {
+  id: "ins-user-001",
+  accountId: "INS-8814",
+  fullName: "David Park",
+  title: "Claims Manager",
+  role: "Insurance",
+  email: "david.park@medsurehealth.com",
+  phone: "(555) 918-2240",
+  organization: "MedSure Health",
+  address: "1200 Harbor Point Blvd, Springfield, IL 62704",
+  accessLevel: "Claims Admin",
+};
+
+export const insuranceNotifications = [
+  {
+    id: "in-001",
+    message: "New Work Status Report shared for Marcus Webb",
+    timeAgo: "20 min ago",
+    unread: true,
+  },
+  {
+    id: "in-002",
+    message: "Initial Injury Report ready for Emily Rhodes",
+    timeAgo: "3 hrs ago",
+    unread: true,
+  },
+  {
+    id: "in-003",
+    message: "Claim CLM-2026-0119 marked complete",
+    timeAgo: "Yesterday",
+    unread: false,
+  },
+];
+
+/** Short code stamped on the document thumbnail (Doctor First Report, Work Status Report, ...). */
+function doc(id, badge, title, visitDate, documentId) {
+  return {
+    id,
+    previewBadge: badge,
+    title,
+    visitDate,
+    reportDate: visitDate,
+    documentId,
+    url: SAMPLE_DOCUMENT_URL,
+  };
+}
+
+/**
+ * Workers comp patients are claimed through an employer, so they carry an
+ * `employer` and an incident number. Private insurance patients carry neither —
+ * they are billed straight to the plan under a claim number.
+ */
+export const workersCompPatients = [
+  {
+    id: "wc-001",
+    coverage: "Workers Comp",
+    employer: "Downtown Retail Group",
+    patient: "Emily Rhodes",
+    patientId: "PAT-8841",
+    accountNo: "ACC-99201",
+    dateOfBirth: "12/1/1986",
+    gender: "F",
+    phone: "(555) 321-9901",
+    addressLines: ["1725 Main Street", "Covina CA 91723"],
+    insurance: "MedSure Health — PPO Gold",
+    incidentNumber: "INC-2026-0062",
+    category: "Personal Injury",
+    lastVisit: "Jul 18, 2026",
+    lastVisitValue: "2026-07-18",
+    workStatus: "Off work — 5 days",
+    visits: [
+      {
+        id: "wc-001-v1",
+        date: "Jul 18, 2026",
+        label: "Follow-up",
+        documents: [
+          doc("wc-001-d1", "DFR", "DFR — Shelving Collapse", "Jul 18, 2026", "RPT-2026-0062-A"),
+          doc("wc-001-d2", "WSR", "WSR — Shelving Collapse", "Jul 18, 2026", "RPT-2026-0062-B"),
+        ],
+      },
+      {
+        id: "wc-001-v2",
+        date: "Jul 10, 2026",
+        label: "Initial Evaluation",
+        documents: [
+          doc("wc-001-d3", "DFR", "DFR — Initial Evaluation", "Jul 10, 2026", "RPT-2026-0062-C"),
+        ],
+      },
+      {
+        id: "wc-001-v3",
+        date: "Jul 5, 2026",
+        label: "Initial Injury Visit",
+        documents: [
+          doc("wc-001-d4", "DFR", "DFR — Initial Injury Visit", "Jul 5, 2026", "RPT-2026-0062-D"),
+          doc("wc-001-d5", "WSR", "WSR — Initial Injury Visit", "Jul 5, 2026", "RPT-2026-0062-E"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "wc-002",
+    coverage: "Workers Comp",
+    employer: "Sunrise Medical Staffing",
+    patient: "Sophia Martinez",
+    patientId: "PAT-8853",
+    accountNo: "ACC-99244",
+    dateOfBirth: "4/22/1991",
+    gender: "F",
+    phone: "(555) 447-2210",
+    addressLines: ["82 Larkspur Avenue", "Springfield IL 62704"],
+    insurance: "MedSure Health — HMO Select",
+    incidentNumber: "INC-2026-0058",
+    category: "Personal Injury",
+    lastVisit: "Jul 12, 2026",
+    lastVisitValue: "2026-07-12",
+    workStatus: "Light duty — 4 weeks",
+    visits: [
+      {
+        id: "wc-002-v1",
+        date: "Jul 12, 2026",
+        label: "Follow-up",
+        documents: [
+          doc("wc-002-d1", "WSR", "WSR — Lower Back Strain", "Jul 12, 2026", "RPT-2026-0058-A"),
+          doc("wc-002-d2", "PR", "PT Progress Note", "Jul 12, 2026", "RPT-2026-0058-B"),
+        ],
+      },
+      {
+        id: "wc-002-v2",
+        date: "Jun 28, 2026",
+        label: "Initial Injury Visit",
+        documents: [
+          doc("wc-002-d3", "DFR", "DFR — Lower Back Strain", "Jun 28, 2026", "RPT-2026-0058-C"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "wc-003",
+    coverage: "Workers Comp",
+    employer: "Greenfield Construction",
+    patient: "Priya Kapoor",
+    patientId: "PAT-8860",
+    accountNo: "ACC-99310",
+    dateOfBirth: "9/8/1988",
+    gender: "F",
+    phone: "(555) 662-8034",
+    addressLines: ["410 Quarry Road", "Springfield IL 62711"],
+    insurance: "MedSure Health — PPO Gold",
+    incidentNumber: "INC-2026-0051",
+    category: "Personal Injury",
+    lastVisit: "Jul 8, 2026",
+    lastVisitValue: "2026-07-08",
+    workStatus: "Modified schedule",
+    visits: [
+      {
+        id: "wc-003-v1",
+        date: "Jul 8, 2026",
+        label: "Specialist Consultation",
+        documents: [
+          doc("wc-003-d1", "SCR", "Orthopedic Consultation", "Jul 8, 2026", "RPT-2026-0051-A"),
+          doc("wc-003-d2", "WSR", "WSR — Shoulder Impingement", "Jul 8, 2026", "RPT-2026-0051-B"),
+        ],
+      },
+      {
+        id: "wc-003-v2",
+        date: "Jun 24, 2026",
+        label: "Initial Injury Visit",
+        documents: [
+          doc("wc-003-d3", "DFR", "DFR — Shoulder Impingement", "Jun 24, 2026", "RPT-2026-0051-C"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "wc-004",
+    coverage: "Workers Comp",
+    employer: "Greenfield Construction",
+    patient: "Olivia Cross",
+    patientId: "PAT-8872",
+    accountNo: "ACC-99358",
+    dateOfBirth: "1/17/1994",
+    gender: "F",
+    phone: "(555) 209-4417",
+    addressLines: ["93 Sycamore Lane", "Springfield IL 62702"],
+    insurance: "MedSure Health — PPO Silver",
+    incidentNumber: "INC-2026-0047",
+    category: "Personal Injury",
+    lastVisit: "Jul 5, 2026",
+    lastVisitValue: "2026-07-05",
+    workStatus: "Off work — 2 weeks",
+    visits: [
+      {
+        id: "wc-004-v1",
+        date: "Jul 5, 2026",
+        label: "Initial Injury Visit",
+        documents: [
+          doc("wc-004-d1", "DFR", "DFR — Ankle Fracture", "Jul 5, 2026", "RPT-2026-0047-A"),
+          doc("wc-004-d2", "WSR", "WSR — Ankle Fracture", "Jul 5, 2026", "RPT-2026-0047-B"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "wc-005",
+    coverage: "Workers Comp",
+    employer: "Metro Logistics",
+    patient: "Marcus Webb",
+    patientId: "PAT-8884",
+    accountNo: "ACC-99402",
+    dateOfBirth: "6/30/1983",
+    gender: "M",
+    phone: "(555) 774-1188",
+    addressLines: ["2280 Depot Street", "Springfield IL 62703"],
+    insurance: "MedSure Health — PPO Gold",
+    incidentNumber: "INC-2026-0068",
+    category: "Personal Injury",
+    lastVisit: "Jul 30, 2026",
+    lastVisitValue: "2026-07-30",
+    workStatus: "Off work — 3 weeks",
+    visits: [
+      {
+        id: "wc-005-v1",
+        date: "Jul 30, 2026",
+        label: "Follow-up",
+        documents: [
+          doc("wc-005-d1", "WSR", "WSR — Lumbar Disc Injury", "Jul 30, 2026", "RPT-2026-0068-A"),
+          doc("wc-005-d2", "IMG", "MRI — Lumbar Spine", "Jul 30, 2026", "RPT-2026-0068-B"),
+        ],
+      },
+      {
+        id: "wc-005-v2",
+        date: "Jul 16, 2026",
+        label: "Initial Evaluation",
+        documents: [
+          doc("wc-005-d3", "DFR", "DFR — Lumbar Disc Injury", "Jul 16, 2026", "RPT-2026-0068-C"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "wc-006",
+    coverage: "Workers Comp",
+    employer: "Springfield Manufacturing",
+    patient: "Nina Patel",
+    patientId: "PAT-8896",
+    accountNo: "ACC-99455",
+    dateOfBirth: "11/3/1990",
+    gender: "F",
+    phone: "(555) 318-6620",
+    addressLines: ["57 Foundry Court", "Springfield IL 62707"],
+    insurance: "MedSure Health — HMO Select",
+    incidentNumber: "INC-2026-0055",
+    category: "Personal Injury",
+    lastVisit: "Jul 25, 2026",
+    lastVisitValue: "2026-07-25",
+    workStatus: "Light duty — 6 weeks",
+    visits: [
+      {
+        id: "wc-006-v1",
+        date: "Jul 25, 2026",
+        label: "Follow-up",
+        documents: [
+          doc("wc-006-d1", "WSR", "WSR — Repetitive Strain", "Jul 25, 2026", "RPT-2026-0055-A"),
+        ],
+      },
+      {
+        id: "wc-006-v2",
+        date: "Jul 2, 2026",
+        label: "Initial Injury Visit",
+        documents: [
+          doc("wc-006-d2", "DFR", "DFR — Repetitive Strain", "Jul 2, 2026", "RPT-2026-0055-B"),
+          doc("wc-006-d3", "PR", "PT Evaluation", "Jul 2, 2026", "RPT-2026-0055-C"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "wc-007",
+    coverage: "Workers Comp",
+    employer: "Greenfield Construction",
+    patient: "Carlos Mendez",
+    patientId: "PAT-8903",
+    accountNo: "ACC-99501",
+    dateOfBirth: "3/14/1979",
+    gender: "M",
+    phone: "(555) 890-3372",
+    addressLines: ["1140 Ridgeview Drive", "Springfield IL 62704"],
+    insurance: "MedSure Health — PPO Silver",
+    incidentNumber: "INC-2026-0072",
+    category: "Personal Injury",
+    lastVisit: "Jul 22, 2026",
+    lastVisitValue: "2026-07-22",
+    workStatus: "Off work — 1 week",
+    visits: [
+      {
+        id: "wc-007-v1",
+        date: "Jul 22, 2026",
+        label: "Initial Injury Visit",
+        documents: [
+          doc("wc-007-d1", "DFR", "DFR — Hand Laceration", "Jul 22, 2026", "RPT-2026-0072-A"),
+          doc("wc-007-d2", "WSR", "WSR — Hand Laceration", "Jul 22, 2026", "RPT-2026-0072-B"),
+        ],
+      },
+    ],
+  },
+];
+
+export const privateInsurancePatients = [
+  {
+    id: "pi-001",
+    coverage: "Private Insurance",
+    patient: "Daniel Foster",
+    patientId: "PAT-9012",
+    accountNo: "ACC-88110",
+    dateOfBirth: "8/5/1985",
+    gender: "M",
+    phone: "(555) 640-7728",
+    addressLines: ["318 Harbor Point Blvd", "Springfield IL 62704"],
+    insurance: "MedSure Health — PPO Gold",
+    claimNumber: "CLM-2026-0119",
+    category: "Personal Injury",
+    lastVisit: "Jul 28, 2026",
+    lastVisitValue: "2026-07-28",
+    workStatus: "Off work — 2 weeks",
+    visits: [
+      {
+        id: "pi-001-v1",
+        date: "Jul 28, 2026",
+        label: "Imaging Review",
+        documents: [
+          doc("pi-001-d1", "IMG", "MRI — Right Knee", "Jul 28, 2026", "RPT-2026-0119-A"),
+        ],
+      },
+      {
+        id: "pi-001-v2",
+        date: "Jul 14, 2026",
+        label: "Initial Evaluation",
+        documents: [
+          doc("pi-001-d2", "DFR", "Initial Evaluation Note", "Jul 14, 2026", "RPT-2026-0119-B"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "pi-002",
+    coverage: "Private Insurance",
+    patient: "Grace Whitfield",
+    patientId: "PAT-9024",
+    accountNo: "ACC-88167",
+    dateOfBirth: "2/19/1996",
+    gender: "F",
+    phone: "(555) 502-9943",
+    addressLines: ["77 Bellview Terrace", "Springfield IL 62702"],
+    insurance: "MedSure Health — HMO Select",
+    claimNumber: "CLM-2026-0112",
+    category: "Urgent Care",
+    lastVisit: "Jul 21, 2026",
+    lastVisitValue: "2026-07-21",
+    workStatus: "Full duty",
+    visits: [
+      {
+        id: "pi-002-v1",
+        date: "Jul 21, 2026",
+        label: "Urgent Care Visit",
+        documents: [
+          doc("pi-002-d1", "DIS", "Discharge Summary", "Jul 21, 2026", "RPT-2026-0112-A"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "pi-003",
+    coverage: "Private Insurance",
+    patient: "Andre Wilson",
+    patientId: "PAT-9038",
+    accountNo: "ACC-88203",
+    dateOfBirth: "12/11/1981",
+    gender: "M",
+    phone: "(555) 233-5510",
+    addressLines: ["905 Riverside Way", "Springfield IL 62703"],
+    insurance: "MedSure Health — PPO Silver",
+    claimNumber: "CLM-2026-0104",
+    category: "Personal Injury",
+    lastVisit: "Jul 16, 2026",
+    lastVisitValue: "2026-07-16",
+    workStatus: "Light duty — 3 weeks",
+    visits: [
+      {
+        id: "pi-003-v1",
+        date: "Jul 16, 2026",
+        label: "Physical Therapy",
+        documents: [
+          doc("pi-003-d1", "PR", "PT Progress Note", "Jul 16, 2026", "RPT-2026-0104-A"),
+          doc("pi-003-d2", "WSR", "Work Status Update", "Jul 16, 2026", "RPT-2026-0104-B"),
+        ],
+      },
+      {
+        id: "pi-003-v2",
+        date: "Jun 30, 2026",
+        label: "Initial Evaluation",
+        documents: [
+          doc("pi-003-d3", "DFR", "Initial Evaluation Note", "Jun 30, 2026", "RPT-2026-0104-C"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "pi-004",
+    coverage: "Private Insurance",
+    patient: "Hannah Reyes",
+    patientId: "PAT-9046",
+    accountNo: "ACC-88259",
+    dateOfBirth: "7/27/1993",
+    gender: "F",
+    phone: "(555) 118-3364",
+    addressLines: ["24 Lakeside Drive", "Springfield IL 62711"],
+    insurance: "MedSure Health — HMO Select",
+    claimNumber: "CLM-2026-0098",
+    category: "Physical",
+    lastVisit: "Jul 9, 2026",
+    lastVisitValue: "2026-07-09",
+    workStatus: "Full duty",
+    visits: [
+      {
+        id: "pi-004-v1",
+        date: "Jul 9, 2026",
+        label: "Annual Physical",
+        documents: [
+          doc("pi-004-d1", "PR", "Annual Physical Report", "Jul 9, 2026", "RPT-2026-0098-A"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "pi-005",
+    coverage: "Private Insurance",
+    patient: "Victor Nguyen",
+    patientId: "PAT-9055",
+    accountNo: "ACC-88304",
+    dateOfBirth: "5/2/1987",
+    gender: "M",
+    phone: "(555) 976-2201",
+    addressLines: ["660 Chestnut Street", "Springfield IL 62707"],
+    insurance: "MedSure Health — PPO Gold",
+    claimNumber: "CLM-2026-0091",
+    category: "Urgent Care",
+    lastVisit: "Jul 2, 2026",
+    lastVisitValue: "2026-07-02",
+    workStatus: "Modified schedule",
+    visits: [
+      {
+        id: "pi-005-v1",
+        date: "Jul 2, 2026",
+        label: "Urgent Care Visit",
+        documents: [
+          doc("pi-005-d1", "DIS", "Discharge Summary", "Jul 2, 2026", "RPT-2026-0091-A"),
+          doc("pi-005-d2", "WSR", "Work Status Update", "Jul 2, 2026", "RPT-2026-0091-B"),
+        ],
+      },
+    ],
+  },
+];
+
+export const insurancePatients = [
+  ...workersCompPatients,
+  ...privateInsurancePatients,
+];
+
+export function findInsurancePatient(id) {
+  return insurancePatients.find((patient) => patient.id === id) || null;
+}
+
+export const unreadInsuranceReports = [
+  {
+    id: "ur-001",
+    patient: "Marcus Webb",
+    reportType: "Work Status Report",
+    coverage: "Workers Comp",
+    provider: "Springfield Occupational Health",
+    received: "Jul 30, 2026",
+    receivedValue: "2026-07-30",
+  },
+  {
+    id: "ur-002",
+    patient: "Daniel Foster",
+    reportType: "Imaging Result — MRI",
+    coverage: "Private Insurance",
+    provider: "Harbor Point Imaging",
+    received: "Jul 28, 2026",
+    receivedValue: "2026-07-28",
+  },
+  {
+    id: "ur-003",
+    patient: "Nina Patel",
+    reportType: "Follow-up Visit Summary",
+    coverage: "Workers Comp",
+    provider: "Springfield Occupational Health",
+    received: "Jul 25, 2026",
+    receivedValue: "2026-07-25",
+  },
+  {
+    id: "ur-004",
+    patient: "Carlos Mendez",
+    reportType: "Initial Injury Report",
+    coverage: "Workers Comp",
+    provider: "Greenfield Urgent Care",
+    received: "Jul 22, 2026",
+    receivedValue: "2026-07-22",
+  },
+  {
+    id: "ur-005",
+    patient: "Grace Whitfield",
+    reportType: "Discharge Summary",
+    coverage: "Private Insurance",
+    provider: "Metro Urgent Care West",
+    received: "Jul 21, 2026",
+    receivedValue: "2026-07-21",
+  },
+  {
+    id: "ur-006",
+    patient: "Emily Rhodes",
+    reportType: "Work Status Report",
+    coverage: "Workers Comp",
+    provider: "Downtown Occupational Clinic",
+    received: "Jul 18, 2026",
+    receivedValue: "2026-07-18",
+  },
+  {
+    id: "ur-007",
+    patient: "Andre Wilson",
+    reportType: "Physical Therapy Note",
+    coverage: "Private Insurance",
+    provider: "Riverside Rehab Partners",
+    received: "Jul 16, 2026",
+    receivedValue: "2026-07-16",
+  },
+  {
+    id: "ur-008",
+    patient: "Sophia Martinez",
+    reportType: "Follow-up Visit Summary",
+    coverage: "Workers Comp",
+    provider: "Sunrise Care Center",
+    received: "Jul 12, 2026",
+    receivedValue: "2026-07-12",
+  },
+  {
+    id: "ur-009",
+    patient: "Hannah Reyes",
+    reportType: "Annual Physical Report",
+    coverage: "Private Insurance",
+    provider: "Lakeside Family Medicine",
+    received: "Jul 9, 2026",
+    receivedValue: "2026-07-09",
+  },
+  {
+    id: "ur-010",
+    patient: "Priya Kapoor",
+    reportType: "Specialist Consultation",
+    coverage: "Workers Comp",
+    provider: "Greenfield Orthopedics",
+    received: "Jul 8, 2026",
+    receivedValue: "2026-07-08",
+  },
+  {
+    id: "ur-011",
+    patient: "Olivia Cross",
+    reportType: "Initial Injury Report",
+    coverage: "Workers Comp",
+    provider: "Greenfield Urgent Care",
+    received: "Jul 5, 2026",
+    receivedValue: "2026-07-05",
+  },
+];
+
+export const insuranceDashboardSummary = {
+  workersComp: workersCompPatients.length,
+  privateInsurance: privateInsurancePatients.length,
+  unreadReports: unreadInsuranceReports.length,
+};

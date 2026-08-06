@@ -1,21 +1,12 @@
 import { employerPaths, patientPaths } from "@/lib/portal-paths";
 
+/** Visits and appointments are surfaced on the dashboard itself, so they are not separate nav items. */
 export const patientNavItems = [
   { href: patientPaths.dashboard, label: "Dashboard", icon: "LayoutDashboard" },
   {
     href: patientPaths.myInformation,
     label: "My Information",
     icon: "User",
-  },
-  {
-    href: patientPaths.visits,
-    label: "Visits / Check-ins",
-    icon: "ClipboardList",
-  },
-  {
-    href: patientPaths.appointments,
-    label: "Appointments",
-    icon: "CalendarDays",
   },
   { href: patientPaths.profile, label: "Profile / Security", icon: "Shield" },
 ];
@@ -38,6 +29,11 @@ export const employerNavItems = [
     label: "Profile / Security",
     icon: "Shield",
   },
+];
+
+export const insuranceNavItems = [
+  { href: "/insurance/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
+  { href: "/insurance/profile", label: "Profile / Security", icon: "Shield" },
 ];
 
 /** Epic 4 scoped session — only Shared Documents (secure email link). */

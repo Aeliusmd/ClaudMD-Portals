@@ -26,6 +26,15 @@ export const currentPatient = {
   },
 };
 
+/** Fixed demo "today" so the dashboard windows render identically on server and client. */
+export const PATIENT_DEMO_TODAY = "2026-07-20";
+
+/** The dashboard summarises a recent slice: visits from the last 120 days... */
+export const DASHBOARD_VISIT_WINDOW_DAYS = 120;
+
+/** ...and appointments scheduled within the next 15 days. */
+export const DASHBOARD_APPOINTMENT_WINDOW_DAYS = 15;
+
 export const dashboardSummary = {
   upcomingAppointment: {
     date: "Jul 22, 2026",

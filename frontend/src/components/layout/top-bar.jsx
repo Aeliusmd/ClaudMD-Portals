@@ -13,6 +13,7 @@ export function TopBar({
   profileUser,
   profileHref = patientPaths.profile,
   settingsHref,
+  loginHref,
   notifications,
   notificationsViewAllHref,
   onNotificationsOpen,
@@ -80,6 +81,7 @@ export function TopBar({
           user={profileUser}
           profileHref={profileHref}
           settingsHref={settingsHref}
+          loginHref={loginHref}
         />
       </div>
     </header>

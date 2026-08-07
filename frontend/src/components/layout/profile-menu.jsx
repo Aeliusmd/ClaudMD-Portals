@@ -10,6 +10,7 @@ export function ProfileMenu({
   user = currentPatient,
   profileHref = patientPaths.profile,
   settingsHref,
+  loginHref = patientPaths.login,
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -75,6 +76,7 @@ export function ProfileMenu({
           user={user}
           profileHref={profileHref}
           settingsHref={settingsHref}
+          loginHref={loginHref}
           onClose={() => setOpen(false)}
         />
       ) : null}

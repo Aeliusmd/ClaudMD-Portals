@@ -1,15 +1,66 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
-import { currentPatient } from "@/data/patient";
 import { notifications as patientNotifications } from "@/data/notifications";
 import { patientNavItems } from "@/data/navigation";
+import {
+  clearAuthSession,
+  getAccessToken,
+  getAuthSession,
+} from "@/lib/auth-session";
 import { patientPaths } from "@/lib/portal-paths";
+import { userTypeLabel } from "@/lib/user-type";
+
+function handleLogout() {
+  clearAuthSession();
+}
+
+function sessionProfileUser() {
+  const session = getAuthSession();
+  const user = session?.user;
+  if (!user) {
+    return {
+      fullName: "Patient",
+      title: "",
+      role: null,
+    };
+  }
+
+  const fullName =
+    user.name ||
+    [user.first_name, user.last_name].filter(Boolean).join(" ") ||
+    user.email ||
+    user.login_id ||
+    "Patient";
+  const typeLabel =
+    user.type_label ||
+    (user.type_id != null ? userTypeLabel(user.type_id) : null);
+
+  return {
+    fullName,
+    title: typeLabel || "",
+    role: typeLabel,
+  };
+}
 
 export function PatientShell({ children }) {
+  const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [profileUser, setProfileUser] = useState(() => sessionProfileUser());
+
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(patientPaths.login);
+      return;
+    }
+    setProfileUser(sessionProfileUser());
+    setReady(true);
+  }, [router]);
 
   useEffect(() => {
     if (!navOpen) return undefined;
@@ -29,6 +80,16 @@ export function PatientShell({ children }) {
     };
   }, [navOpen]);
 
+  const profileHref = useMemo(() => patientPaths.profile, []);
+
+  if (!ready) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-cream text-sm text-muted">
+        Loading…
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex h-full w-full overflow-hidden bg-cream"
@@ -38,14 +99,17 @@ export function PatientShell({ children }) {
         open={navOpen}
         onClose={() => setNavOpen(false)}
         items={patientNavItems}
+        onLogout={handleLogout}
+        loginHref={patientPaths.login}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar
           onMenuClick={() => setNavOpen(true)}
           portalLabel="Patient Portal"
-          profileUser={currentPatient}
-          profileHref={patientPaths.profile}
+          profileUser={profileUser}
+          profileHref={profileHref}
+          loginHref={patientPaths.login}
           notifications={patientNotifications}
           showSearch={false}
         />

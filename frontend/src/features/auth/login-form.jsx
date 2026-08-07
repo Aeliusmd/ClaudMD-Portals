@@ -17,7 +17,6 @@ import {
   saveSecureShareSession,
 } from "@/lib/secure-share-session";
 
-const DEFAULT_ACTIVATION_KEY = "20000002";
 const ERROR_MISSING = "Please enter both email and password.";
 const ERROR_ACTIVATION =
   "Missing activation key. Open the link from your invitation email.";
@@ -27,16 +26,26 @@ function LoginFormInner({ portal = "employer" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shareToken = searchParams.get("share") || "";
-  const activationKey =
+  const activationKey = (
     searchParams.get("activationkey") ||
     searchParams.get("activationKey") ||
-    DEFAULT_ACTIVATION_KEY;
+    ""
+  ).trim();
+  const hasActivationKey = Boolean(activationKey);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    hasActivationKey ? "" : ERROR_ACTIVATION
+  );
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [shareBanner, setShareBanner] = useState(null);
+
+  useEffect(() => {
+    if (!hasActivationKey) {
+      setError(ERROR_ACTIVATION);
+    }
+  }, [hasActivationKey]);
 
   useEffect(() => {
     if (!shareToken) {
@@ -73,7 +82,13 @@ function LoginFormInner({ portal = "employer" }) {
   }, [shareToken]);
 
   function clearError() {
-    if (error) setError("");
+    if (!error) return;
+    // Keep the activation-key message until the URL includes activationkey.
+    if (!hasActivationKey) {
+      setError(ERROR_ACTIVATION);
+      return;
+    }
+    setError("");
   }
 
   async function handleSubmit(event) {
@@ -84,13 +99,13 @@ function LoginFormInner({ portal = "employer" }) {
     const hasEmail = Boolean(normalizedEmail);
     const hasPassword = Boolean(password);
 
-    if (!hasEmail || !hasPassword) {
-      setError(ERROR_MISSING);
+    if (!activationKey) {
+      setError(ERROR_ACTIVATION);
       return;
     }
 
-    if (!activationKey) {
-      setError(ERROR_ACTIVATION);
+    if (!hasEmail || !hasPassword) {
+      setError(ERROR_MISSING);
       return;
     }
 
@@ -196,7 +211,9 @@ function LoginFormInner({ portal = "employer" }) {
               Welcome back
             </h2>
             <p className="mt-2 font-body text-sm text-foreground-500 sm:mt-2.5 sm:text-[0.9375rem]">
-              Enter your credentials to access your secure portal.
+              {hasActivationKey
+                ? "Enter your credentials to access your secure portal."
+                : "Open the secure portal link from your invitation email to continue."}
             </p>
 
             {shareBanner ? (
@@ -212,6 +229,20 @@ function LoginFormInner({ portal = "employer" }) {
               </div>
             ) : null}
 
+            {!hasActivationKey ? (
+              <div
+                role="alert"
+                className="mt-6 flex items-start gap-2.5 rounded-lg border border-accent-100 bg-accent-50 px-3.5 py-3 sm:mt-8"
+              >
+                <Info
+                  className="mt-0.5 h-4 w-4 shrink-0 text-accent-600"
+                  strokeWidth={2.25}
+                />
+                <p className="font-sans text-sm font-medium text-accent-600">
+                  {ERROR_ACTIVATION}
+                </p>
+              </div>
+            ) : (
             <form
               onSubmit={handleSubmit}
               className="mt-6 space-y-4 sm:mt-8 sm:space-y-5"
@@ -305,6 +336,7 @@ function LoginFormInner({ portal = "employer" }) {
                 )}
               </button>
             </form>
+            )}
 
             <p className="mt-6 text-center font-sans text-xs leading-relaxed text-[#9aa0a8] sm:mt-8">
               By logging in, you agree to our{" "}

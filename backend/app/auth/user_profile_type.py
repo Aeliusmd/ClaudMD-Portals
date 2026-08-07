@@ -30,10 +30,20 @@ USER_TYPE_LABELS: dict[UserType, str] = {
     UserType.PatientUser: "Patient User",
 }
 
+# Primary portal used when login request does not specify one.
 USER_TYPE_PORTAL: dict[UserType, str] = {
     UserType.SuperAdmin: "employer",
     UserType.EmployerUser: "employer",
     UserType.PatientUser: "patient",
+    UserType.InsuranceUser: "insurance",
+}
+
+# Portals each TypeId may sign into (Super Admin can use employer + insurance).
+USER_TYPE_ALLOWED_PORTALS: dict[UserType, frozenset[str]] = {
+    UserType.SuperAdmin: frozenset({"employer", "insurance"}),
+    UserType.EmployerUser: frozenset({"employer"}),
+    UserType.PatientUser: frozenset({"patient"}),
+    UserType.InsuranceUser: frozenset({"insurance"}),
 }
 
 
@@ -53,11 +63,23 @@ def user_type_label(type_id: int | None) -> str | None:
     return USER_TYPE_LABELS.get(user_type)
 
 
-def portal_for_type_id(type_id: int | None) -> str | None:
-    """Return 'employer' / 'patient' for a portal-enabled TypeId, else None.
+def portals_for_type_id(type_id: int | None) -> frozenset[str]:
+    """Return the set of portals a TypeId may access."""
+    if type_id is None:
+        return frozenset()
+    try:
+        user_type = UserType(int(type_id))
+    except (TypeError, ValueError):
+        return frozenset()
+    return USER_TYPE_ALLOWED_PORTALS.get(user_type, frozenset())
 
-    Super Admin and Employer User → employer portal.
-    Patient User → patient portal.
+
+def portal_for_type_id(type_id: int | None) -> str | None:
+    """Return the primary portal for a TypeId, else None.
+
+    Super Admin / Employer User → employer (primary).
+    Insurance User → insurance.
+    Patient User → patient.
     """
     if type_id is None:
         return None
@@ -66,3 +88,26 @@ def portal_for_type_id(type_id: int | None) -> str | None:
     except (TypeError, ValueError):
         return None
     return USER_TYPE_PORTAL.get(user_type)
+
+
+def resolve_login_portal(type_id: int | None, requested_portal: str | None) -> str:
+    """
+    Resolve which portal the session belongs to after login.
+
+    If a portal is requested, it must be allowed for the TypeId.
+    Otherwise the primary portal for that TypeId is used.
+    """
+    allowed = portals_for_type_id(type_id)
+    if not allowed:
+        raise ValueError("not_enabled")
+
+    expected = (requested_portal or "").strip().lower() or None
+    if expected in {"employer", "patient", "insurance"}:
+        if expected not in allowed:
+            raise ValueError("wrong_portal")
+        return expected
+
+    primary = portal_for_type_id(type_id)
+    if primary is None:
+        raise ValueError("not_enabled")
+    return primary

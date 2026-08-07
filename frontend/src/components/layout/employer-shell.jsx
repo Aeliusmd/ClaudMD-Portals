@@ -136,6 +136,7 @@ export function EmployerShell({ children }) {
         onClose={() => setNavOpen(false)}
         items={navItems}
         onLogout={handleLogout}
+        loginHref={employerPaths.login}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

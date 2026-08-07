@@ -16,7 +16,12 @@ from app.auth.schemas import (
     LoginResponse,
     UserInfo,
 )
-from app.auth.user_profile_type import UserType, portal_for_type_id, user_type_label
+from app.auth.user_profile_type import (
+    UserType,
+    portal_for_type_id,
+    resolve_login_portal,
+    user_type_label,
+)
 from app.config import get_settings
 from app.db.clinic import ClinicConnectionInfo, get_clinic_by_activation_key, get_clinic_connection
 from app.auth.dependencies import CurrentUser
@@ -48,7 +53,7 @@ def resolve_clinic(activation_key: str) -> ClinicConnectionInfo:
 def authenticate_user(payload: LoginRequest) -> LoginResponse:
     """
     Authenticate via ClaudMD IdentityServer password grant.
-    Then resolve UserProfiles.TypeId (SELECT only) to choose employer/patient portal.
+    Then resolve UserProfiles.TypeId (SELECT only) to choose employer/patient/insurance portal.
     """
     settings = get_settings()
     activation_key = (payload.activation_key or settings.default_activation_key).strip()
@@ -78,25 +83,26 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
     )
 
     type_id = profile.get("type_id") if profile else None
-    portal = portal_for_type_id(type_id)
-    if portal is None:
+    try:
+        portal = resolve_login_portal(type_id, payload.portal)
+    except ValueError as exc:
+        reason = str(exc)
+        if reason == "wrong_portal":
+            primary = portal_for_type_id(type_id) or "another"
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"This account belongs to the {primary} portal. "
+                    f"Please sign in using the {primary} portal login."
+                ),
+            ) from exc
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "This account is not enabled for the employer or patient portal. "
-                "Contact your clinic administrator."
+                "This account is not enabled for the employer, patient, or "
+                "insurance portal. Contact your clinic administrator."
             ),
-        )
-
-    expected = (payload.portal or "").strip().lower() or None
-    if expected in {"employer", "patient"} and expected != portal:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"This account belongs to the {portal} portal. "
-                f"Please sign in using the {portal} portal login."
-            ),
-        )
+        ) from exc
 
     # Prefer clinic profile names when available.
     first_name = (profile or {}).get("first_name") or user_fields.get("first_name")
@@ -386,7 +392,7 @@ def _fetch_user_profile_type(
                      OR LOWER(LTRIM(RTRIM(Email))) = LOWER(?)
                   )
                 ORDER BY
-                    CASE WHEN TypeId IN (?, ?, ?) THEN 0 ELSE 1 END,
+                    CASE WHEN TypeId IN (?, ?, ?, ?) THEN 0 ELSE 1 END,
                     Id DESC
                 """,
                 (
@@ -395,6 +401,7 @@ def _fetch_user_profile_type(
                     int(UserType.SuperAdmin),
                     int(UserType.EmployerUser),
                     int(UserType.PatientUser),
+                    int(UserType.InsuranceUser),
                 ),
             )
             row = cursor.fetchone()

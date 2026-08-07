@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,7 @@ function DocumentThumb({ document, onPreview }) {
         onOpen={() => onPreview(document)}
       />
       <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
-        {`${document.visitDate} ${document.previewBadge}`}
+        {`${document.visitDate || ""} ${document.previewBadge || ""}`.trim()}
       </p>
     </div>
   );
@@ -28,16 +28,18 @@ function DocumentThumb({ document, onPreview }) {
 
 export function InsurancePatientDetailView({ patient, backHref }) {
   const router = useRouter();
-  const [selectedVisitId, setSelectedVisitId] = useState(
-    patient.visits[0]?.id || null
-  );
+  const visits = patient?.visits || [];
+  const [selectedVisitId, setSelectedVisitId] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
 
+  useEffect(() => {
+    setSelectedVisitId(patient?.visits?.[0]?.id || null);
+  }, [patient?.id, patient?.visits?.[0]?.id]);
+
   const selectedVisit =
-    patient.visits.find((visit) => visit.id === selectedVisitId) ||
-    patient.visits[0] ||
-    null;
+    visits.find((visit) => visit.id === selectedVisitId) || visits[0] || null;
   const visitDocuments = selectedVisit?.documents || [];
+  const addressLines = patient?.addressLines || [];
 
   return (
     <div className="space-y-5">
@@ -66,7 +68,9 @@ export function InsurancePatientDetailView({ patient, backHref }) {
                 {patient.patient}
               </p>
               <p className="mt-0.5 text-sm tabular-nums text-foreground-500">
-                {patient.patientId} · {patient.accountNo}
+                {[patient.patientId, patient.accountNo]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             </div>
           </div>
@@ -92,32 +96,35 @@ export function InsurancePatientDetailView({ patient, backHref }) {
               <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
                 <div className="space-y-2.5">
                   <p className="font-semibold tabular-nums text-foreground-900">
-                    {patient.accountNo}
+                    {patient.accountNo || "—"}
                   </p>
                   <p className="font-semibold tabular-nums text-foreground-900">
-                    {patient.dateOfBirth}
+                    {patient.dateOfBirth || "—"}
                   </p>
                   <p className="font-semibold text-foreground-900">
                     {patient.patient}
                   </p>
-                  {patient.addressLines.map((line) => (
-                    <p key={line} className="text-foreground-700">
-                      {line}
-                    </p>
-                  ))}
+                  {addressLines.length > 0 ? (
+                    addressLines.map((line) => (
+                      <p key={line} className="text-foreground-700">
+                        {line}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-foreground-700">—</p>
+                  )}
                   <p className="tabular-nums text-foreground-700">
-                    {patient.phone}
+                    {patient.phone || "—"}
                   </p>
                 </div>
                 <div className="space-y-2.5">
                   <p className="font-semibold tabular-nums text-foreground-900">
-                    {patient.phone}
+                    {patient.phone || "—"}
                   </p>
-                  <p className="text-foreground-900">{patient.gender}</p>
+                  <p className="text-foreground-900">{patient.gender || "—"}</p>
                 </div>
               </div>
 
-              {/* Workers comp claims run through an employer; private insurance ones do not. */}
               <div className="mt-4 grid gap-x-8 gap-y-4 border-t border-border/70 pt-4 text-sm sm:grid-cols-2">
                 {patient.employer ? (
                   <div>
@@ -134,7 +141,7 @@ export function InsurancePatientDetailView({ patient, backHref }) {
                     Insurance
                   </p>
                   <p className="mt-1 font-semibold text-foreground-900">
-                    {patient.insurance}
+                    {patient.insurance || "—"}
                   </p>
                 </div>
               </div>
@@ -151,43 +158,53 @@ export function InsurancePatientDetailView({ patient, backHref }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {patient.visits.map((visit) => {
-                    const selected = visit.id === selectedVisit?.id;
-
-                    return (
-                      <tr
-                        key={visit.id}
-                        onClick={() => setSelectedVisitId(visit.id)}
-                        className={cn(
-                          "cursor-pointer transition",
-                          selected
-                            ? "border-l-4 border-l-primary-500 bg-primary-50"
-                            : "border-l-4 border-l-transparent bg-white hover:bg-background-50"
-                        )}
+                  {visits.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={2}
+                        className="px-5 py-8 text-sm text-foreground-500"
                       >
-                        <td className="px-5 py-3.5 font-semibold tabular-nums text-foreground-900">
-                          {visit.date}
-                        </td>
-                        <td
+                        No visits found for this patient.
+                      </td>
+                    </tr>
+                  ) : (
+                    visits.map((visit) => {
+                      const selected = visit.id === selectedVisit?.id;
+
+                      return (
+                        <tr
+                          key={visit.id}
+                          onClick={() => setSelectedVisitId(visit.id)}
                           className={cn(
-                            "px-5 py-3.5",
+                            "cursor-pointer transition",
                             selected
-                              ? "font-medium text-primary-600"
-                              : "text-foreground-900"
+                              ? "border-l-4 border-l-primary-500 bg-primary-50"
+                              : "border-l-4 border-l-transparent bg-white hover:bg-background-50"
                           )}
                         >
-                          {visit.label}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          <td className="px-5 py-3.5 font-semibold tabular-nums text-foreground-900">
+                            {visit.date}
+                          </td>
+                          <td
+                            className={cn(
+                              "px-5 py-3.5",
+                              selected
+                                ? "font-medium text-primary-600"
+                                : "text-foreground-900"
+                            )}
+                          >
+                            {visit.label}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
           </Card>
         </div>
 
-        {/* Documents attached to the selected visit */}
         <div className="min-h-[18rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[22rem] sm:p-5 xl:min-h-full">
           {visitDocuments.length === 0 ? (
             <div className="flex h-full min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">

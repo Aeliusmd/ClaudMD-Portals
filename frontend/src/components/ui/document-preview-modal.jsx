@@ -10,18 +10,87 @@ import {
   Printer,
   X,
 } from "lucide-react";
-import { openDocumentInNewTab } from "@/lib/documents";
+import { getAccessToken } from "@/lib/auth-session";
+import {
+  isApiDocumentUrl,
+  openDocumentInNewTab,
+} from "@/lib/documents";
 
 function actionButtonClassName() {
   return "cursor-pointer rounded-lg p-2 text-[#6b7280] transition hover:bg-cream-deep hover:text-ink sm:p-2.5";
 }
 
+async function resolvePreviewUrl(url) {
+  if (!url) {
+    throw new Error("Document file is not available.");
+  }
+  if (!isApiDocumentUrl(url)) {
+    return { src: url, revoke: null };
+  }
+
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error("Authentication required.");
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/pdf",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Unable to load document (${response.status}).`);
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  return {
+    src: objectUrl,
+    revoke: () => URL.revokeObjectURL(objectUrl),
+  };
+}
+
 export function DocumentPreviewModal({ file, onClose }) {
   const [mounted, setMounted] = useState(false);
+  const [previewSrc, setPreviewSrc] = useState(null);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!file) return undefined;
+
+    let cancelled = false;
+    let revoke = null;
+
+    async function load() {
+      setLoadError("");
+      setPreviewSrc(null);
+      try {
+        const resolved = await resolvePreviewUrl(file.url);
+        if (cancelled) {
+          resolved.revoke?.();
+          return;
+        }
+        revoke = resolved.revoke;
+        setPreviewSrc(resolved.src);
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(error?.message || "Unable to load document.");
+          setPreviewSrc(null);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+      revoke?.();
+    };
+  }, [file]);
 
   useEffect(() => {
     if (!file) return undefined;
@@ -48,7 +117,8 @@ export function DocumentPreviewModal({ file, onClose }) {
   const displayTitle = file.title || "Clinical Document";
 
   function handleDownload() {
-    openDocumentInNewTab(file.url);
+    if (!previewSrc) return;
+    openDocumentInNewTab(previewSrc);
   }
 
   function handlePrint() {
@@ -70,7 +140,8 @@ export function DocumentPreviewModal({ file, onClose }) {
   }
 
   function handleOpenExternal() {
-    openDocumentInNewTab(file.url);
+    if (!previewSrc) return;
+    openDocumentInNewTab(previewSrc);
   }
 
   return createPortal(
@@ -153,6 +224,9 @@ export function DocumentPreviewModal({ file, onClose }) {
             Document ID:{" "}
             <span className="tabular-nums text-ink">{documentId}</span>
           </p>
+          {loadError ? (
+            <p className="mt-1 text-xs text-accent-600">{loadError}</p>
+          ) : null}
         </div>
         <p className="shrink-0 text-xs text-[#5b6470] sm:text-sm">
           Date: <span className="tabular-nums text-ink">{documentDate}</span>
@@ -160,12 +234,18 @@ export function DocumentPreviewModal({ file, onClose }) {
       </div>
 
       <div className="min-h-0 flex-1 bg-[#525659]">
-        <iframe
-          id="document-preview-frame"
-          title={`${displayTitle} preview`}
-          src={`${file.url || "/sample.pdf"}#toolbar=1&navpanes=1&scrollbar=1&view=FitH`}
-          className="h-full w-full border-0 bg-[#323639]"
-        />
+        {previewSrc ? (
+          <iframe
+            id="document-preview-frame"
+            title={`${displayTitle} preview`}
+            src={`${previewSrc}#toolbar=1&navpanes=1&scrollbar=1&view=FitH`}
+            className="h-full w-full border-0 bg-[#323639]"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center px-4 text-center text-sm text-white/80">
+            {loadError || "Loading document…"}
+          </div>
+        )}
       </div>
     </div>,
     document.body

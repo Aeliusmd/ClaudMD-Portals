@@ -14,7 +14,11 @@ from typing import Any
 from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
-from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
+from app.db.clinic import (
+    get_clinic_by_activation_key,
+    get_clinic_connection,
+    shared_documents_has_is_viewed,
+)
 from app.insurance.profile import InsuranceProfile, fetch_profile_from_clinic
 from app.insurance.schemas import (
     InsuranceMarkNotificationsReadResponse,
@@ -101,6 +105,9 @@ def _require_insurance_context(current_user: CurrentUser):
 
 
 def _mark_shared_documents_viewed(clinic, profile: InsuranceProfile) -> int:
+    if not shared_documents_has_is_viewed(clinic):
+        return 0
+
     email_norm = (profile.email or "").strip().lower() or None
     recipient_sql, recipient_params = _recipient_clause(
         profile.user_id, email_norm, alias=""
@@ -186,11 +193,13 @@ def _fetch_shared_document_notifications(
 ) -> list[InsuranceNotificationItem]:
     email_norm = (profile.email or "").strip().lower() or None
     recipient_sql, recipient_params = _recipient_clause(profile.user_id, email_norm)
+    has_is_viewed = shared_documents_has_is_viewed(clinic)
+    is_viewed_select = "sd.IsViewed" if has_is_viewed else "CAST(0 AS bit) AS IsViewed"
 
     sql = f"""
         SELECT TOP (?)
             sd.Id AS ShareId,
-            sd.IsViewed,
+            {is_viewed_select},
             CONVERT(varchar(33), sd.CreatedDateTime, 127) AS CreatedAt,
             du.FileName,
             du.ReportId,
@@ -249,13 +258,14 @@ def _fetch_shared_document_notifications(
             message = f"New document shared: {report}"
 
         created_at = _normalize_created_at(row.get("CreatedAt"))
+        unread = not bool(row.get("IsViewed")) if has_is_viewed else True
         items.append(
             InsuranceNotificationItem(
                 id=f"share-{int(row['ShareId'])}",
                 message=message,
                 created_at=created_at,
                 time_ago=_time_ago(created_at),
-                unread=not bool(row.get("IsViewed")),
+                unread=unread,
                 href=None,
                 source="shared_document",
                 source_id=int(row["ShareId"]),

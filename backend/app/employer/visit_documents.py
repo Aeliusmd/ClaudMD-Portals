@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, time
+from pathlib import Path
 
 from fastapi import HTTPException, status
+from fastapi.responses import FileResponse
 
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
@@ -67,6 +69,131 @@ def get_employee_visits(
         to_date=end.isoformat(),
         visits=visits,
     )
+
+
+def open_employee_visit_document_file(
+    current_user: CurrentUser,
+    patient_id: int,
+    document_id: int,
+) -> FileResponse:
+    """
+    Stream a published visit PDF for the logged-in employer.
+    DocterPublishes.Path is a folder; the PDF is resolved by report name.
+    """
+    clinic = get_clinic_by_activation_key(current_user.activation_key)
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found for this session.",
+        )
+
+    profile = fetch_profile_from_clinic(clinic, current_user)
+    if profile.employer_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employer not found for this user.",
+        )
+
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                dp.Id,
+                dp.CheckInId,
+                dp.ReportId,
+                dp.ReportName,
+                dp.Name,
+                dp.Path,
+                ch.PatientId,
+                ch.EmployerId
+            FROM dbo.DocterPublishes dp
+            INNER JOIN dbo.CheckInsHeader ch ON ch.Id = dp.CheckInId
+            WHERE dp.Id = ?
+              AND (dp.IsDeleted = 0 OR dp.IsDeleted IS NULL)
+              AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+            """,
+            (int(document_id),),
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found.",
+        )
+    if int(row.PatientId) != int(patient_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found for this employee.",
+        )
+    if int(row.EmployerId) != int(profile.employer_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Document is not available for this employer.",
+        )
+
+    pdf_path = _resolve_publish_pdf_path(
+        folder=(row.Path or "").strip(),
+        report_name=(row.ReportName or row.Name or "").strip(),
+    )
+    if pdf_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document file is not available on the publish share.",
+        )
+
+    download_name = pdf_path.name
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        filename=download_name,
+        content_disposition_type="inline",
+    )
+
+
+def _resolve_publish_pdf_path(*, folder: str, report_name: str) -> Path | None:
+    if not folder:
+        return None
+
+    normalized = folder.replace("/", "\\").strip()
+    root = Path(normalized)
+    if not root.exists():
+        return None
+
+    if root.is_file():
+        return root if root.suffix.lower() == ".pdf" else None
+
+    if not root.is_dir():
+        return None
+
+    # Prefer exact report-name PDF inside the publish folder (EMR layout).
+    candidates: list[str] = []
+    name = (report_name or "").strip()
+    if name:
+        candidates.append(name if name.lower().endswith(".pdf") else f"{name}.pdf")
+        # Some publishes use Name without punctuation variants.
+        cleaned = "".join(ch for ch in name if ch.isalnum() or ch in {" ", "-", "_"})
+        cleaned = " ".join(cleaned.split())
+        if cleaned and cleaned.lower() != name.lower():
+            candidates.append(f"{cleaned}.pdf")
+
+    for candidate in candidates:
+        direct = root / candidate
+        if direct.is_file():
+            return direct
+
+    # Case-insensitive match within the folder (non-recursive).
+    wanted = {c.lower() for c in candidates}
+    try:
+        for entry in root.iterdir():
+            if entry.is_file() and entry.suffix.lower() == ".pdf":
+                if entry.name.lower() in wanted:
+                    return entry
+    except OSError:
+        return None
+
+    return None
 
 
 def _fetch_visits_with_documents(
@@ -138,6 +265,10 @@ def _fetch_visits_with_documents(
             or (row.get("Name") or "").strip()
             or "Document"
         )
+        folder = (row.get("Path") or "").strip()
+        # Skip DB publish rows with no PDF on the share (e.g. Visit Note / missing V2).
+        if _resolve_publish_pdf_path(folder=folder, report_name=report_name) is None:
+            continue
         badge = _preview_badge(row.get("ReportId"), report_name)
         docs_by_checkin.setdefault(check_in_id, []).append(
             EmployeeVisitDocument(
@@ -146,7 +277,7 @@ def _fetch_visits_with_documents(
                 report_id=int(row["ReportId"]) if row.get("ReportId") is not None else None,
                 report_name=report_name,
                 name=(row.get("Name") or "").strip() or report_name,
-                path=(row.get("Path") or "").strip() or None,
+                path=folder or None,
                 preview_badge=badge,
                 preview_label=badge,
                 is_completed=bool(row.get("IsComplated")),

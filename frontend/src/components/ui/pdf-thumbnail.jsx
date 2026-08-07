@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FileText } from "lucide-react";
+import { getAccessToken } from "@/lib/auth-session";
+import { isApiDocumentUrl } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,12 +29,36 @@ function loadPdfjs() {
 /** Several thumbnails usually point at the same file — parse it once. */
 const documentCache = new Map();
 
-function loadDocument(pdfjs, url) {
-  if (!documentCache.has(url)) {
-    // v6 dropped the bare-string form of getDocument.
-    documentCache.set(url, pdfjs.getDocument({ url }).promise);
+async function resolvePdfSource(url) {
+  if (!isApiDocumentUrl(url)) {
+    return url;
   }
-  return documentCache.get(url);
+
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error("Authentication required to load document.");
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/pdf",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Unable to load document (${response.status}).`);
+  }
+  const buffer = await response.arrayBuffer();
+  return { data: new Uint8Array(buffer) };
+}
+
+function loadDocument(pdfjs, sourceKey, source) {
+  if (!documentCache.has(sourceKey)) {
+    // v6 dropped the bare-string form of getDocument.
+    const payload = typeof source === "string" ? { url: source } : source;
+    documentCache.set(sourceKey, pdfjs.getDocument(payload).promise);
+  }
+  return documentCache.get(sourceKey);
 }
 
 export function PdfThumbnail({ url, badge, title, onOpen, className }) {
@@ -52,7 +78,10 @@ export function PdfThumbnail({ url, badge, title, onOpen, className }) {
 
       try {
         const pdfjs = await loadPdfjs();
-        const pdf = await loadDocument(pdfjs, url);
+        const source = await resolvePdfSource(url);
+        if (cancelled) return;
+
+        const pdf = await loadDocument(pdfjs, url, source);
         const page = await pdf.getPage(1);
 
         const box = boxRef.current;

@@ -2,6 +2,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.employer.appointments import (
@@ -58,7 +59,7 @@ from app.employer.service import (
     get_employer_profile,
     update_employer_profile,
 )
-from app.employer.visit_documents import get_employee_visits
+from app.employer.visit_documents import get_employee_visits, open_employee_visit_document_file
 
 router = APIRouter(prefix="/api/employer", tags=["employer"])
 
@@ -191,6 +192,20 @@ def employer_employee_visits_endpoint(
         patient_id,
         from_date=from_date,
         to_date=to_date,
+    )
+
+
+@router.get("/employees/{patient_id}/visit-documents/{document_id}/file")
+def employer_employee_visit_document_file_endpoint(
+    patient_id: int,
+    document_id: int,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> FileResponse:
+    """Stream a DocterPublishes PDF from the clinic publish share (read-only)."""
+    return open_employee_visit_document_file(
+        current_user,
+        patient_id,
+        document_id,
     )
 
 

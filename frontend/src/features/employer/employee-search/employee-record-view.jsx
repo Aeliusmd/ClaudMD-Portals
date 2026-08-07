@@ -1,15 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { UserRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { SkeletonBlock } from "@/components/ui/skeleton";
-import { employees as mockEmployees } from "@/data/employer";
 import { fetchEmployeeVisits } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
-import { SAMPLE_DOCUMENT_URL } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
 function shortDocLabel(doc) {
@@ -54,7 +52,8 @@ function formatDob(value) {
 
 function VisitDocumentThumb({ doc, selectedVisit, onPreview }) {
   const badge = shortDocLabel(doc);
-  const url = doc.url || SAMPLE_DOCUMENT_URL;
+  const url = doc.url;
+  if (!url) return null;
 
   return (
     <div className="w-[8.5rem] shrink-0 sm:w-40">
@@ -202,26 +201,6 @@ export function EmployeeRecordSkeleton({
   );
 }
 
-function enrichWithMockProfile(employee) {
-  if (!employee?.name) return employee;
-  const normalized = employee.name.trim().toLowerCase();
-  const mock = mockEmployees.find(
-    (item) => item.name.trim().toLowerCase() === normalized
-  );
-  if (!mock) return employee;
-
-  return {
-    ...employee,
-    patientId: employee.patientId || mock.patientId,
-    accountNo: employee.accountNo || mock.accountNo,
-    phone: employee.phone || mock.phone,
-    address: employee.address || mock.address,
-    dateOfBirth: employee.dateOfBirth || mock.dateOfBirth,
-    gender: employee.gender || mock.gender,
-    mockEmployeeId: mock.id,
-  };
-}
-
 function resolveNumericPatientId(employee) {
   if (!employee) return null;
   if (employee.numericPatientId != null) return Number(employee.numericPatientId);
@@ -231,19 +210,12 @@ function resolveNumericPatientId(employee) {
   if (employee.id != null && /^\d+$/.test(String(employee.id))) {
     return Number(employee.id);
   }
-  const fromVisit = employee.incidents?.[0]?.visits?.[0]?.id;
-  if (fromVisit != null && /^\d+$/.test(String(fromVisit))) {
-    // visit id is check-in id, not patient — skip
-  }
   const digits = String(employee.patientId || "")
     .replace(/^p-/i, "")
     .replace(/^acc-/i, "")
     .replace(/\D/g, "");
   if (digits && /^\d+$/.test(digits) && String(employee.id) === digits) {
     return Number(digits);
-  }
-  if (employee.id != null && /^\d+$/.test(String(employee.id))) {
-    return Number(employee.id);
   }
   return null;
 }
@@ -254,44 +226,24 @@ export function EmployeeRecordView({
   backLabel = "← Back to search",
   loading = false,
 }) {
-  const profile = useMemo(
-    () => (employee ? enrichWithMockProfile(employee) : null),
-    [employee]
-  );
-
-  const fallbackVisits = useMemo(() => {
-    if (!profile) return [];
-    const incident = profile.incidents?.[0];
-    if (incident?.visits?.length) {
-      return incident.visits.map((visit) => ({
-        ...visit,
-        id: String(visit.id),
-        documents: [],
-      }));
-    }
-    return [
-      {
-        id: "base",
-        date: incident?.checkInDate || "—",
-        label: incident?.reportType || "Visit",
-        documents: [],
-      },
-    ];
-  }, [profile]);
+  const profile = employee || null;
 
   const [apiVisits, setApiVisits] = useState(null);
   const [loadingVisits, setLoadingVisits] = useState(false);
+  const [visitsError, setVisitsError] = useState("");
   const [selectedVisitId, setSelectedVisitId] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
 
-  const visits = apiVisits || fallbackVisits;
+  // Visits/documents come only from the clinic DB API — no mock/dummy rows.
+  const visits = apiVisits || [];
 
   useEffect(() => {
     if (!profile) return undefined;
 
     const patientId = resolveNumericPatientId(profile);
     if (!patientId) {
-      setApiVisits(null);
+      setApiVisits([]);
+      setVisitsError("Employee id is missing.");
       return undefined;
     }
 
@@ -302,12 +254,16 @@ export function EmployeeRecordView({
       if (!token) return;
 
       setLoadingVisits(true);
+      setVisitsError("");
       try {
         const data = await fetchEmployeeVisits(token, patientId);
         if (cancelled) return;
         setApiVisits(data.visits || []);
-      } catch {
-        if (!cancelled) setApiVisits(null);
+      } catch (error) {
+        if (!cancelled) {
+          setApiVisits([]);
+          setVisitsError(error?.message || "Unable to load visit documents.");
+        }
       } finally {
         if (!cancelled) setLoadingVisits(false);
       }
@@ -325,7 +281,9 @@ export function EmployeeRecordView({
       return;
     }
     const preferred =
-      visits.find((visit) => !visit.isUpcoming && (visit.documents || []).length > 0) ||
+      visits.find(
+        (visit) => !visit.isUpcoming && (visit.documents || []).length > 0
+      ) ||
       visits.find((visit) => !visit.isUpcoming) ||
       visits[0];
     setSelectedVisitId(preferred?.id || null);
@@ -334,7 +292,7 @@ export function EmployeeRecordView({
   const selectedVisit =
     visits.find((visit) => visit.id === selectedVisitId) || visits[0] || null;
 
-  const visitDocs = selectedVisit?.documents || [];
+  const visitDocs = (selectedVisit?.documents || []).filter((doc) => doc.url);
 
   if (loading || !profile) {
     return (
@@ -416,7 +374,7 @@ export function EmployeeRecordView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-background-200">
-                  {loadingVisits && !apiVisits ? (
+                  {loadingVisits && apiVisits == null ? (
                     <tr>
                       <td colSpan={2} className="px-5 py-4 text-muted">
                         Loading visits…
@@ -492,10 +450,12 @@ export function EmployeeRecordView({
               Documents appear after the visit is completed.
             </div>
           ) : visitDocs.length === 0 ? (
-            <div className="flex h-full min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">
-              {loadingVisits && !apiVisits
+            <div className="flex h-full min-h-[16rem] flex-col items-center justify-center gap-2 rounded-xl bg-white/5 px-4 text-center text-sm text-white/70">
+              {loadingVisits && apiVisits == null
                 ? "Loading documents…"
-                : "No documents for this visit."}
+                : visitsError
+                  ? visitsError
+                  : "No documents for this visit."}
             </div>
           ) : (
             <div className="flex flex-wrap gap-4">

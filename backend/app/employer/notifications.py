@@ -12,7 +12,11 @@ from typing import Any
 from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
-from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
+from app.db.clinic import (
+    get_clinic_by_activation_key,
+    get_clinic_connection,
+    shared_documents_has_is_viewed,
+)
 from app.employer.profile import EmployerProfile, fetch_profile_from_clinic
 from app.employer.schemas import (
     MarkNotificationsReadResponse,
@@ -129,6 +133,10 @@ def mark_notifications_read(current_user: CurrentUser) -> MarkNotificationsReadR
 
 
 def _mark_shared_documents_viewed(clinic, profile: EmployerProfile) -> int:
+    if not shared_documents_has_is_viewed(clinic):
+        # Older clinic DBs (e.g. QA Testing) have no IsViewed column.
+        return 0
+
     email_norm = (profile.email or "").strip().lower() or None
     # UPDATE has no table alias — use bare column names (not sd.*).
     recipient_sql, recipient_params = _recipient_clause(
@@ -168,6 +176,10 @@ def unread_shared_report_counts_by_patient(
     check-ins, scoped to the current portal user (email / ShareWithUserId).
     """
     if not patient_ids:
+        return {}
+
+    if not shared_documents_has_is_viewed(clinic):
+        # Without IsViewed we cannot compute unread shared-report badges.
         return {}
 
     email_norm = (email or "").strip().lower() or None
@@ -275,11 +287,13 @@ def _fetch_shared_document_notifications(
 ) -> list[NotificationItem]:
     email_norm = (profile.email or "").strip().lower() or None
     recipient_sql, recipient_params = _recipient_clause(profile.user_id, email_norm)
+    has_is_viewed = shared_documents_has_is_viewed(clinic)
+    is_viewed_select = "sd.IsViewed" if has_is_viewed else "CAST(0 AS bit) AS IsViewed"
 
     sql = f"""
         SELECT TOP (?)
             sd.Id AS ShareId,
-            sd.IsViewed,
+            {is_viewed_select},
             CONVERT(varchar(33), sd.CreatedDateTime, 127) AS CreatedAt,
             du.FileName,
             du.ReportId,
@@ -338,7 +352,8 @@ def _fetch_shared_document_notifications(
             message = f"New document shared: {report}"
 
         created_at = _normalize_created_at(row.get("CreatedAt"))
-        unread = not bool(row.get("IsViewed"))
+        # Without IsViewed, treat shared docs as unread until client last-opened heuristic.
+        unread = not bool(row.get("IsViewed")) if has_is_viewed else True
 
         items.append(
             NotificationItem(

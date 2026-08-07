@@ -26,6 +26,35 @@ _clinic_cache_lock = Lock()
 _clinic_cache: dict[str, tuple[float, ClinicConnectionInfo | None]] = {}
 _CLINIC_CACHE_TTL_SECONDS = 300.0
 
+_shared_docs_is_viewed_cache_lock = Lock()
+_shared_docs_is_viewed_cache: dict[str, bool] = {}
+
+
+def shared_documents_has_is_viewed(clinic: ClinicConnectionInfo) -> bool:
+    """True when dbo.SharedDocuments.IsViewed exists (not on all clinic DBs)."""
+    cache_key = clinic.database_name
+    with _shared_docs_is_viewed_cache_lock:
+        cached = _shared_docs_is_viewed_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT 1
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = 'dbo'
+              AND TABLE_NAME = 'SharedDocuments'
+              AND COLUMN_NAME = 'IsViewed'
+            """
+        )
+        exists = cursor.fetchone() is not None
+
+    with _shared_docs_is_viewed_cache_lock:
+        _shared_docs_is_viewed_cache[cache_key] = exists
+    return exists
+
 
 def get_master_connection() -> pyodbc.Connection:
     settings = get_settings()

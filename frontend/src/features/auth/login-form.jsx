@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ArrowRight, HeartPulse, Info } from "lucide-react";
 import {
@@ -11,11 +11,15 @@ import {
 import { loginWithCredentials, resolvePortalDestination } from "@/lib/api/auth";
 import { saveAuthSession } from "@/lib/auth-session";
 import {
+  resolvePortalFromPathname,
+} from "@/lib/portal-paths";
+import {
   clearSecureShareSession,
   getSecureShareSession,
   resolvePostLoginDestination,
   saveSecureShareSession,
 } from "@/lib/secure-share-session";
+import { isSuperAdmin } from "@/lib/user-type";
 
 const ERROR_MISSING = "Please enter both email and password.";
 const ERROR_ACTIVATION =
@@ -24,7 +28,10 @@ const ERROR_GENERIC = "Unable to sign in. Please check your credentials.";
 
 function LoginFormInner({ portal = "employer" }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  // URL path is source of truth: /employerportal | /patientportal | /insuranceportal
+  const portalFromUrl = resolvePortalFromPathname(pathname) || portal;
   const shareToken = searchParams.get("share") || "";
   const activationKey = (
     searchParams.get("activationkey") ||
@@ -117,8 +124,20 @@ function LoginFormInner({ portal = "employer" }) {
         username: normalizedEmail,
         password,
         activationKey,
-        portal,
+        portal: portalFromUrl,
       });
+
+      const typeId = result.user?.type_id;
+      // Super Admin: always open the portal matching the login URL.
+      // Others: trust API portal when allowed, else stay on this URL's portal.
+      const resolvedPortal = isSuperAdmin(typeId)
+        ? portalFromUrl
+        : result.user?.portal || portalFromUrl;
+
+      const sessionUser = {
+        ...result.user,
+        portal: resolvedPortal,
+      };
 
       saveAuthSession({
         accessToken: result.access_token,
@@ -126,13 +145,11 @@ function LoginFormInner({ portal = "employer" }) {
         tokenType: result.token_type || "Bearer",
         expiresIn: result.expires_in || null,
         scope: result.scope || null,
-        user: result.user,
+        user: sessionUser,
         clinic: result.clinic,
       });
 
-      const defaultDestination = resolvePortalDestination(
-        result.user?.portal || portal
-      );
+      const defaultDestination = resolvePortalDestination(resolvedPortal);
       const shareSession = getSecureShareSession();
       const share =
         shareSession && findSecureShare(shareSession.token)

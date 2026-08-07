@@ -71,3 +71,19 @@ export function resolvePortalDestination(portal) {
   if (portal === "insurance") return insurancePaths.dashboard;
   return employerPaths.dashboard;
 }
+
+/**
+ * Detect portal from the login URL path.
+ * /employerportal/... → employer
+ * /patientportal/...  → patient
+ * /insuranceportal/... or /insurance/... → insurance
+ */
+export function resolvePortalFromPathname(pathname) {
+  const path = String(pathname || "").toLowerCase();
+  if (path.includes("/patientportal")) return "patient";
+  if (path.includes("/insuranceportal") || path.includes("/insurance/")) {
+    return "insurance";
+  }
+  if (path.includes("/employerportal")) return "employer";
+  return null;
+}

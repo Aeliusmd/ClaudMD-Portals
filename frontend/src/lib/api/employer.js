@@ -1,3 +1,5 @@
+import { employerVisitDocumentFileUrl } from "@/lib/documents";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -496,7 +498,7 @@ export function searchRowToEmployee(row) {
         visits: row.checkInId
           ? [
               {
-                id: String(row.checkInId || row.id),
+                id: `checkin-${row.checkInId}`,
                 date: row.date || row.lastVisit || "—",
                 label: row.reportType || row.category || "Visit",
                 category: row.category,
@@ -594,29 +596,36 @@ export async function fetchEmployeeVisits(
       status: visit.status,
       durationMinutes: visit.duration_minutes,
       note: visit.note,
-      documents: (visit.documents || []).map((doc) => {
-        const path = (doc.path || "").trim();
-        const isHttpUrl = /^https?:\/\//i.test(path) || path.startsWith("/");
-        return {
-          id: String(doc.id),
-          documentId: String(doc.id),
-          checkInId: doc.check_in_id,
-          reportId: doc.report_id,
-          title: doc.report_name || doc.name,
-          name: doc.name,
-          documentType: doc.report_name,
-          previewBadge: doc.preview_badge,
-          previewLabel: doc.preview_label || doc.preview_badge,
-          badgeLabel: doc.report_name,
-          path: path || null,
-          // Browser can only preview HTTP(S) or site-relative paths; file/UNC
-          // paths from DocterPublishes fall back to the sample PDF for UI.
-          url: isHttpUrl ? path : "/sample.pdf",
-          visitDate: visit.check_in_date,
-          reportDate: visit.check_in_date,
-          isCompleted: doc.is_completed,
-        };
-      }),
+      documents: (visit.documents || [])
+        .map((doc) => {
+          const path = (doc.path || "").trim();
+          const isHttpUrl = /^https?:\/\//i.test(path) || path.startsWith("/");
+          const apiFileUrl = employerVisitDocumentFileUrl(
+            data.patient_id,
+            doc.id
+          );
+          // Only real DB-backed streams or browser-reachable HTTP paths — never sample/dummy PDFs.
+          const url = apiFileUrl || (isHttpUrl ? path : null);
+          if (!url) return null;
+          return {
+            id: String(doc.id),
+            documentId: String(doc.id),
+            checkInId: doc.check_in_id,
+            reportId: doc.report_id,
+            title: doc.report_name || doc.name,
+            name: doc.name,
+            documentType: doc.report_name,
+            previewBadge: doc.preview_badge,
+            previewLabel: doc.preview_label || doc.preview_badge,
+            badgeLabel: doc.report_name,
+            path: path || null,
+            url,
+            visitDate: visit.check_in_date,
+            reportDate: visit.check_in_date,
+            isCompleted: doc.is_completed,
+          };
+        })
+        .filter(Boolean),
     })),
   };
 }

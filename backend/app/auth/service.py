@@ -18,7 +18,6 @@ from app.auth.schemas import (
 )
 from app.auth.user_profile_type import (
     UserType,
-    portal_for_type_id,
     resolve_login_portal,
     user_type_label,
 )
@@ -53,7 +52,7 @@ def resolve_clinic(activation_key: str) -> ClinicConnectionInfo:
 def authenticate_user(payload: LoginRequest) -> LoginResponse:
     """
     Authenticate via ClaudMD IdentityServer password grant.
-    Then resolve UserProfiles.TypeId (SELECT only) to choose employer/patient portal.
+    Then resolve UserProfiles.TypeId (SELECT only) to choose employer/patient/insurance portal.
     """
     settings = get_settings()
     activation_key = (payload.activation_key or settings.default_activation_key).strip()

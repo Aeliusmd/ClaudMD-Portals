@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -10,17 +10,53 @@ import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { coverageStyles } from "@/lib/category-styles";
 import { cn } from "@/lib/utils";
 
-function DocumentThumb({ document, onPreview }) {
+function shortDocLabel(doc) {
+  if (doc.previewBadge) return doc.previewBadge;
+  if (doc.previewLabel === "PT report") return "PR";
+  if (doc.previewLabel) return doc.previewLabel;
+  if (
+    doc.badgeLabel === "Work Status" ||
+    doc.documentType?.includes("Work Status")
+  ) {
+    return "WSR";
+  }
+  if (
+    doc.documentType?.includes("Doctor First") ||
+    doc.documentType?.includes("Doctor's First")
+  ) {
+    return "DFR";
+  }
+  if (doc.documentType?.includes("Physical")) return "PR";
+  return "DOC";
+}
+
+function docCaption(doc, selectedVisit) {
+  const date = doc.visitDate || selectedVisit?.date || "";
+  const label = shortDocLabel(doc);
+  return `${date} ${label}`.trim();
+}
+
+function VisitDocumentThumb({ doc, selectedVisit, onPreview }) {
+  const badge = shortDocLabel(doc);
+  const url = doc.url;
+  if (!url) return null;
+
   return (
     <div className="w-[8.5rem] shrink-0 sm:w-40">
       <PdfThumbnail
-        url={document.url}
-        badge={document.previewBadge}
-        title={document.title}
-        onOpen={() => onPreview(document)}
+        url={url}
+        badge={badge}
+        title={doc.title || doc.name || "Document"}
+        onOpen={() =>
+          onPreview({
+            ...doc,
+            url,
+            previewBadge: badge,
+          })
+        }
       />
       <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
-        {`${document.visitDate} ${document.previewBadge}`}
+        {docCaption(doc, selectedVisit)}
       </p>
     </div>
   );
@@ -28,16 +64,28 @@ function DocumentThumb({ document, onPreview }) {
 
 export function InsurancePatientDetailView({ patient, backHref }) {
   const router = useRouter();
-  const [selectedVisitId, setSelectedVisitId] = useState(
-    patient.visits[0]?.id || null
-  );
+  const visits = patient?.visits || [];
+  const [selectedVisitId, setSelectedVisitId] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
 
+  useEffect(() => {
+    const nextVisits = patient?.visits || [];
+    if (!nextVisits.length) {
+      setSelectedVisitId(null);
+      return;
+    }
+    const preferred =
+      nextVisits.find((visit) => (visit.documents || []).length > 0) ||
+      nextVisits[0];
+    setSelectedVisitId(preferred?.id || null);
+  }, [patient?.id, patient?.visits]);
+
   const selectedVisit =
-    patient.visits.find((visit) => visit.id === selectedVisitId) ||
-    patient.visits[0] ||
-    null;
-  const visitDocuments = selectedVisit?.documents || [];
+    visits.find((visit) => visit.id === selectedVisitId) || visits[0] || null;
+  const visitDocuments = (selectedVisit?.documents || []).filter(
+    (doc) => doc.url
+  );
+  const addressLines = patient?.addressLines || [];
 
   return (
     <div className="space-y-5">
@@ -66,7 +114,9 @@ export function InsurancePatientDetailView({ patient, backHref }) {
                 {patient.patient}
               </p>
               <p className="mt-0.5 text-sm tabular-nums text-foreground-500">
-                {patient.patientId} · {patient.accountNo}
+                {[patient.patientId, patient.accountNo]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             </div>
           </div>
@@ -92,32 +142,35 @@ export function InsurancePatientDetailView({ patient, backHref }) {
               <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
                 <div className="space-y-2.5">
                   <p className="font-semibold tabular-nums text-foreground-900">
-                    {patient.accountNo}
+                    {patient.accountNo || "—"}
                   </p>
                   <p className="font-semibold tabular-nums text-foreground-900">
-                    {patient.dateOfBirth}
+                    {patient.dateOfBirth || "—"}
                   </p>
                   <p className="font-semibold text-foreground-900">
                     {patient.patient}
                   </p>
-                  {patient.addressLines.map((line) => (
-                    <p key={line} className="text-foreground-700">
-                      {line}
-                    </p>
-                  ))}
+                  {addressLines.length > 0 ? (
+                    addressLines.map((line) => (
+                      <p key={line} className="text-foreground-700">
+                        {line}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-foreground-700">—</p>
+                  )}
                   <p className="tabular-nums text-foreground-700">
-                    {patient.phone}
+                    {patient.phone || "—"}
                   </p>
                 </div>
                 <div className="space-y-2.5">
                   <p className="font-semibold tabular-nums text-foreground-900">
-                    {patient.phone}
+                    {patient.phone || "—"}
                   </p>
-                  <p className="text-foreground-900">{patient.gender}</p>
+                  <p className="text-foreground-900">{patient.gender || "—"}</p>
                 </div>
               </div>
 
-              {/* Workers comp claims run through an employer; private insurance ones do not. */}
               <div className="mt-4 grid gap-x-8 gap-y-4 border-t border-border/70 pt-4 text-sm sm:grid-cols-2">
                 {patient.employer ? (
                   <div>
@@ -134,7 +187,7 @@ export function InsurancePatientDetailView({ patient, backHref }) {
                     Insurance
                   </p>
                   <p className="mt-1 font-semibold text-foreground-900">
-                    {patient.insurance}
+                    {patient.insurance || "—"}
                   </p>
                 </div>
               </div>
@@ -151,43 +204,61 @@ export function InsurancePatientDetailView({ patient, backHref }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {patient.visits.map((visit) => {
-                    const selected = visit.id === selectedVisit?.id;
-
-                    return (
-                      <tr
-                        key={visit.id}
-                        onClick={() => setSelectedVisitId(visit.id)}
-                        className={cn(
-                          "cursor-pointer transition",
-                          selected
-                            ? "border-l-4 border-l-primary-500 bg-primary-50"
-                            : "border-l-4 border-l-transparent bg-white hover:bg-background-50"
-                        )}
+                  {visits.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={2}
+                        className="px-5 py-8 text-sm text-foreground-500"
                       >
-                        <td className="px-5 py-3.5 font-semibold tabular-nums text-foreground-900">
-                          {visit.date}
-                        </td>
-                        <td
+                        No visits found for this patient.
+                      </td>
+                    </tr>
+                  ) : (
+                    visits.map((visit) => {
+                      const selected = visit.id === selectedVisit?.id;
+                      const docCount = (visit.documents || []).filter(
+                        (doc) => doc.url
+                      ).length;
+
+                      return (
+                        <tr
+                          key={visit.id}
+                          onClick={() => setSelectedVisitId(visit.id)}
                           className={cn(
-                            "px-5 py-3.5",
+                            "cursor-pointer transition",
                             selected
-                              ? "font-medium text-primary-600"
-                              : "text-foreground-900"
+                              ? "border-l-4 border-l-primary-500 bg-primary-50"
+                              : "border-l-4 border-l-transparent bg-white hover:bg-background-50"
                           )}
                         >
-                          {visit.label}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          <td className="px-5 py-3.5 font-semibold tabular-nums text-foreground-900">
+                            {visit.date}
+                          </td>
+                          <td
+                            className={cn(
+                              "px-5 py-3.5",
+                              selected
+                                ? "font-medium text-primary-600"
+                                : "text-foreground-900"
+                            )}
+                          >
+                            {visit.label}
+                            {docCount > 0 ? (
+                              <span className="ml-2 text-[10px] font-semibold tracking-[0.06em] text-foreground-500 uppercase">
+                                {docCount} doc{docCount === 1 ? "" : "s"}
+                              </span>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
           </Card>
         </div>
 
-        {/* Documents attached to the selected visit */}
         <div className="min-h-[18rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[22rem] sm:p-5 xl:min-h-full">
           {visitDocuments.length === 0 ? (
             <div className="flex h-full min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">
@@ -195,10 +266,11 @@ export function InsurancePatientDetailView({ patient, backHref }) {
             </div>
           ) : (
             <div className="flex flex-wrap gap-4">
-              {visitDocuments.map((document) => (
-                <DocumentThumb
-                  key={document.id}
-                  document={document}
+              {visitDocuments.map((doc) => (
+                <VisitDocumentThumb
+                  key={doc.id}
+                  doc={doc}
+                  selectedVisit={selectedVisit}
                   onPreview={setPreviewDocument}
                 />
               ))}

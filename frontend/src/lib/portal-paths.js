@@ -45,6 +45,7 @@ export const insurancePaths = {
   profile: `${INSURANCE_PORTAL_BASE}/profile`,
   profilePermissions: `${INSURANCE_PORTAL_BASE}/profile?tab=permissions`,
   notifications: `${INSURANCE_PORTAL_BASE}/notifications`,
+  patients: `${INSURANCE_PORTAL_BASE}/patients`,
 };
 
 export function getLoginHref({

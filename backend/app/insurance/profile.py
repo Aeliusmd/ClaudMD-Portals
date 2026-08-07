@@ -16,6 +16,8 @@ _EMAIL_MAX = 100
 _PHONE_MAX = 20
 _PHONE_DIGITS_MIN = 10
 
+_INSURANCE_PORTAL_TYPES = {int(UserType.SuperAdmin), int(UserType.InsuranceUser)}
+
 
 @dataclass(frozen=True)
 class InsuranceProfile:
@@ -38,7 +40,7 @@ class InsuranceProfile:
 def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsuranceProfile:
     """Read-only profile: UserProfiles + InsuranceContacts + Insurances."""
     user_id = current_user.user_id
-    login = current_user.login_id.strip()
+    login = (current_user.login_id or "").strip()
     email = (current_user.email or login).strip()
 
     with get_clinic_connection(clinic) as conn:
@@ -72,17 +74,22 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsurancePro
                      OR LOWER(LTRIM(RTRIM(Email))) = LOWER(?)
                   )
                 ORDER BY
-                    CASE WHEN TypeId = ? THEN 0 ELSE 1 END,
+                    CASE WHEN TypeId IN (?, ?) THEN 0 ELSE 1 END,
                     Id DESC
                 """,
-                (login, email, int(UserType.InsuranceUser)),
+                (
+                    login,
+                    email,
+                    int(UserType.SuperAdmin),
+                    int(UserType.InsuranceUser),
+                ),
             )
             user_row = cursor.fetchone()
 
         if not user_row:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User profile not found.",
+                detail="No active user profile was found for this account.",
             )
 
         type_id = None
@@ -92,10 +99,10 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsurancePro
             except (TypeError, ValueError):
                 type_id = None
 
-        if type_id != int(UserType.InsuranceUser):
+        if type_id not in _INSURANCE_PORTAL_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="This account is not an insurance portal user.",
+                detail="This account is not enabled for the insurance portal.",
             )
 
         resolved_user_id = int(user_row.Id)
@@ -110,83 +117,81 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsurancePro
             or None
         )
 
-        # InsuranceContacts has no UserId — match by email; prefer portal-access rows.
-        contact_row = None
-        if profile_email:
-            cursor.execute(
-                """
-                SELECT TOP 1
-                    ic.Id AS ContactId,
-                    ic.FirstName,
-                    ic.LastName,
-                    ic.Email,
-                    ic.Phone,
-                    ic.Cellphone,
-                    ic.InsuranceId,
-                    ins.Name AS InsuranceName,
-                    ins.Address AS InsuranceAddress,
-                    ins.Address2 AS InsuranceAddress2,
-                    ins.City AS InsuranceCity,
-                    ins.State AS InsuranceState,
-                    ins.ZipCode AS InsuranceZipCode
-                FROM dbo.InsuranceContacts ic
-                LEFT JOIN dbo.Insurances ins
-                    ON ins.Id = ic.InsuranceId
-                   AND (ins.IsDeleted = 0 OR ins.IsDeleted IS NULL)
-                WHERE (ic.IsDeleted = 0 OR ic.IsDeleted IS NULL)
-                  AND LOWER(LTRIM(RTRIM(ic.Email))) = LOWER(?)
-                ORDER BY
-                    CASE WHEN ic.IsAllowPortalAccess = 1 THEN 0 ELSE 1 END,
-                    ic.Id
-                """,
-                (profile_email,),
-            )
-            contact_row = cursor.fetchone()
+        # InsuranceContacts has no UserId — match by email; require portal access
+        # (same as sithum branch) so dashboard counts resolve to a real InsuranceId.
+        contact_email = (profile_email or login_id or "").strip()
+        cursor.execute(
+            """
+            SELECT TOP 1
+                ic.Id AS ContactId,
+                ic.FirstName,
+                ic.LastName,
+                ic.Email,
+                ic.Phone,
+                ic.Cellphone,
+                ic.InsuranceId,
+                ins.Name AS InsuranceName,
+                ins.Address AS InsuranceAddress,
+                ins.Address2 AS InsuranceAddress2,
+                ins.City AS InsuranceCity,
+                ins.State AS InsuranceState,
+                ins.ZipCode AS InsuranceZipCode
+            FROM dbo.InsuranceContacts ic
+            INNER JOIN dbo.Insurances ins
+                ON ins.Id = ic.InsuranceId
+               AND (ins.IsDeleted = 0 OR ins.IsDeleted IS NULL)
+            WHERE (ic.IsDeleted = 0 OR ic.IsDeleted IS NULL)
+              AND ic.IsAllowPortalAccess = 1
+              AND LOWER(LTRIM(RTRIM(ic.Email))) = LOWER(?)
+            ORDER BY ic.Id DESC
+            """,
+            (contact_email,),
+        )
+        contact_row = cursor.fetchone()
 
-    insurance_id = None
-    insurance_contact_id = None
-    organization = None
-    address = None
-    if contact_row:
+        if not contact_row or contact_row.InsuranceId is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Insurance company not found for this user.",
+            )
+
+        insurance_id = int(contact_row.InsuranceId)
         insurance_contact_id = int(contact_row.ContactId)
-        if contact_row.InsuranceId is not None:
-            insurance_id = int(contact_row.InsuranceId)
         first_name = first_name or ((contact_row.FirstName or "").strip() or None)
         last_name = last_name or ((contact_row.LastName or "").strip() or None)
         profile_email = (contact_row.Email or "").strip() or profile_email
         phone = (
-            phone
-            or (contact_row.Cellphone or "").strip()
+            (contact_row.Cellphone or "").strip()
             or (contact_row.Phone or "").strip()
-            or None
+            or phone
         )
         organization = (contact_row.InsuranceName or "").strip() or None
         address = _format_insurance_address(contact_row)
 
-    full_name = " ".join(
-        part for part in [first_name, last_name] if part and str(part).strip()
-    ).strip()
-    if not full_name and current_user.display_name:
-        full_name = current_user.display_name.strip()
-    if not full_name:
-        full_name = profile_email or login_id or "Insurance User"
+        full_name = " ".join(
+            part for part in [first_name, last_name] if part and str(part).strip()
+        ).strip()
+        if not full_name and current_user.display_name:
+            full_name = current_user.display_name.strip()
+        if not full_name:
+            full_name = profile_email or login_id or "Insurance User"
 
-    return InsuranceProfile(
-        user_id=resolved_user_id,
-        insurance_id=insurance_id,
-        insurance_contact_id=insurance_contact_id,
-        full_name=full_name,
-        first_name=first_name,
-        last_name=last_name,
-        title=title,
-        email=profile_email,
-        phone=phone,
-        organization=organization,
-        address=address,
-        login_id=login_id,
-        type_id=type_id,
-        type_label=user_type_label(type_id),
-    )
+        return InsuranceProfile(
+            user_id=resolved_user_id,
+            insurance_id=insurance_id,
+            insurance_contact_id=insurance_contact_id,
+            full_name=full_name,
+            first_name=first_name,
+            last_name=last_name,
+            title=title,
+            email=profile_email,
+            phone=phone,
+            organization=organization,
+            address=address,
+            login_id=login_id,
+            type_id=type_id,
+            type_label=user_type_label(type_id),
+        )
 
 
 def update_profile_in_clinic(
@@ -247,7 +252,7 @@ def update_profile_in_clinic(
             WHERE Id = ?
               AND (IsDeleted = 0 OR IsDeleted IS NULL)
               AND RecordStatusId = 1
-              AND TypeId = ?
+              AND TypeId IN (?, ?)
             """,
             (
                 first,
@@ -258,6 +263,7 @@ def update_profile_in_clinic(
                 phone_norm,
                 actor_id,
                 actor_id,
+                int(UserType.SuperAdmin),
                 int(UserType.InsuranceUser),
             ),
         )

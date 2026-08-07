@@ -85,6 +85,10 @@ def portals_allowed_for_type_id(type_id: int | None) -> frozenset[str]:
     return USER_TYPE_ALLOWED_PORTALS.get(user_type, frozenset())
 
 
+# Back-compat alias used by earlier branch code.
+portals_for_type_id = portals_allowed_for_type_id
+
+
 def resolve_login_portal(type_id: int | None, requested_portal: str | None) -> str:
     """
     Validate requested portal against TypeId allow-list.

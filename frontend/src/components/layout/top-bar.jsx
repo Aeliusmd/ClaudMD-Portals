@@ -42,12 +42,9 @@ export function TopBar({
         <p className="truncate text-sm text-[#6b7280]">
           {portalLabel}
           {organizationLabel ? (
-            <>
-              {" "}
-              <span className="font-bold tracking-wide text-ink uppercase">
-                {organizationLabel}
-              </span>
-            </>
+            <span className="ml-3 font-bold tracking-wide text-ink uppercase sm:ml-4">
+              {organizationLabel}
+            </span>
           ) : null}
         </p>
       </div>

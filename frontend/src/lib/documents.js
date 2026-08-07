@@ -18,12 +18,26 @@ export function employerVisitDocumentFileUrl(patientId, documentId) {
   )}/visit-documents/${encodeURIComponent(documentId)}/file`;
 }
 
+/**
+ * Build an absolute URL for an authenticated insurance visit PDF.
+ * Same auth-blob flow as employer via PdfThumbnail / DocumentPreviewModal.
+ */
+export function insuranceVisitDocumentFileUrl(patientId, documentId) {
+  if (patientId == null || documentId == null) return null;
+  return `${API_BASE_URL}/api/insurance/patients/${encodeURIComponent(
+    patientId
+  )}/visit-documents/${encodeURIComponent(documentId)}/file`;
+}
+
 export function isApiDocumentUrl(url) {
   if (!url) return false;
+  const value = String(url);
+  const isVisitFile =
+    value.includes("/visit-documents/") && value.endsWith("/file");
   return (
-    String(url).includes("/api/employer/employees/") &&
-    String(url).includes("/visit-documents/") &&
-    String(url).endsWith("/file")
+    isVisitFile &&
+    (value.includes("/api/employer/employees/") ||
+      value.includes("/api/insurance/patients/"))
   );
 }
 

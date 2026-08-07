@@ -10,7 +10,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3217](http://localhost:3217).
 
 Demo logins (any password):
 
@@ -25,7 +25,7 @@ Warm cream + brand blue + coral accent (`src/app/globals.css`). Headings: **Play
 
 Mock ClaudMD share email (not real email):
 
-1. Open [http://localhost:3000/demo/secure-email](http://localhost:3000/demo/secure-email)
+1. Open [http://localhost:3217/demo/secure-email](http://localhost:3217/demo/secure-email)
 2. Click **View secure report** → login screen (report is not shown yet)
 3. Sign in as `employer@demo.com` → scoped **Shared Documents** (Maria Garcia · Annual Physical only)
 

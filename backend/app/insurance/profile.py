@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
-from app.auth.user_profile_type import UserType, user_type_label
+from app.auth.user_profile_type import UserType, is_super_admin, user_type_label
 from app.db.clinic import get_clinic_connection
 
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -16,6 +16,7 @@ _EMAIL_MAX = 100
 _PHONE_MAX = 20
 _PHONE_DIGITS_MIN = 10
 
+# Super Admin may use insurance portal; Insurance User is the dedicated role.
 _INSURANCE_PORTAL_TYPES = {int(UserType.SuperAdmin), int(UserType.InsuranceUser)}
 
 
@@ -117,56 +118,122 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsurancePro
             or None
         )
 
-        # InsuranceContacts has no UserId — match by email; require portal access
-        # (same as sithum branch) so dashboard counts resolve to a real InsuranceId.
+        # InsuranceContacts has no UserId — match by email.
+        # Regular users need IsAllowPortalAccess; Super Admin may use any portal
+        # and can match contacts without that flag / fall back to an insurer.
         contact_email = (profile_email or login_id or "").strip()
-        cursor.execute(
-            """
-            SELECT TOP 1
-                ic.Id AS ContactId,
-                ic.FirstName,
-                ic.LastName,
-                ic.Email,
-                ic.Phone,
-                ic.Cellphone,
-                ic.InsuranceId,
-                ins.Name AS InsuranceName,
-                ins.Address AS InsuranceAddress,
-                ins.Address2 AS InsuranceAddress2,
-                ins.City AS InsuranceCity,
-                ins.State AS InsuranceState,
-                ins.ZipCode AS InsuranceZipCode
-            FROM dbo.InsuranceContacts ic
-            INNER JOIN dbo.Insurances ins
-                ON ins.Id = ic.InsuranceId
-               AND (ins.IsDeleted = 0 OR ins.IsDeleted IS NULL)
-            WHERE (ic.IsDeleted = 0 OR ic.IsDeleted IS NULL)
-              AND ic.IsAllowPortalAccess = 1
-              AND LOWER(LTRIM(RTRIM(ic.Email))) = LOWER(?)
-            ORDER BY ic.Id DESC
-            """,
-            (contact_email,),
-        )
+        super_admin = is_super_admin(type_id)
+        if super_admin:
+            cursor.execute(
+                """
+                SELECT TOP 1
+                    ic.Id AS ContactId,
+                    ic.FirstName,
+                    ic.LastName,
+                    ic.Email,
+                    ic.Phone,
+                    ic.Cellphone,
+                    ic.InsuranceId,
+                    ins.Name AS InsuranceName,
+                    ins.Address AS InsuranceAddress,
+                    ins.Address2 AS InsuranceAddress2,
+                    ins.City AS InsuranceCity,
+                    ins.State AS InsuranceState,
+                    ins.ZipCode AS InsuranceZipCode
+                FROM dbo.InsuranceContacts ic
+                INNER JOIN dbo.Insurances ins
+                    ON ins.Id = ic.InsuranceId
+                   AND (ins.IsDeleted = 0 OR ins.IsDeleted IS NULL)
+                WHERE (ic.IsDeleted = 0 OR ic.IsDeleted IS NULL)
+                  AND LOWER(LTRIM(RTRIM(ic.Email))) = LOWER(?)
+                ORDER BY
+                    CASE WHEN ic.IsAllowPortalAccess = 1 THEN 0 ELSE 1 END,
+                    ic.Id DESC
+                """,
+                (contact_email,),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT TOP 1
+                    ic.Id AS ContactId,
+                    ic.FirstName,
+                    ic.LastName,
+                    ic.Email,
+                    ic.Phone,
+                    ic.Cellphone,
+                    ic.InsuranceId,
+                    ins.Name AS InsuranceName,
+                    ins.Address AS InsuranceAddress,
+                    ins.Address2 AS InsuranceAddress2,
+                    ins.City AS InsuranceCity,
+                    ins.State AS InsuranceState,
+                    ins.ZipCode AS InsuranceZipCode
+                FROM dbo.InsuranceContacts ic
+                INNER JOIN dbo.Insurances ins
+                    ON ins.Id = ic.InsuranceId
+                   AND (ins.IsDeleted = 0 OR ins.IsDeleted IS NULL)
+                WHERE (ic.IsDeleted = 0 OR ic.IsDeleted IS NULL)
+                  AND ic.IsAllowPortalAccess = 1
+                  AND LOWER(LTRIM(RTRIM(ic.Email))) = LOWER(?)
+                ORDER BY ic.Id DESC
+                """,
+                (contact_email,),
+            )
         contact_row = cursor.fetchone()
 
-        if not contact_row or contact_row.InsuranceId is None:
+        insurance_id = None
+        insurance_contact_id = None
+        organization = None
+        address = None
+
+        if contact_row and contact_row.InsuranceId is not None:
+            insurance_id = int(contact_row.InsuranceId)
+            insurance_contact_id = int(contact_row.ContactId)
+            first_name = first_name or ((contact_row.FirstName or "").strip() or None)
+            last_name = last_name or ((contact_row.LastName or "").strip() or None)
+            profile_email = (contact_row.Email or "").strip() or profile_email
+            phone = (
+                (contact_row.Cellphone or "").strip()
+                or (contact_row.Phone or "").strip()
+                or phone
+            )
+            organization = (contact_row.InsuranceName or "").strip() or None
+            address = _format_insurance_address(contact_row)
+        elif super_admin:
+            # Super Admin with no matching contact still gets into the portal
+            # using the first active insurer as organization context.
+            cursor.execute(
+                """
+                SELECT TOP 1
+                    ins.Id AS InsuranceId,
+                    ins.Name AS InsuranceName,
+                    ins.Address AS InsuranceAddress,
+                    ins.Address2 AS InsuranceAddress2,
+                    ins.City AS InsuranceCity,
+                    ins.State AS InsuranceState,
+                    ins.ZipCode AS InsuranceZipCode
+                FROM dbo.Insurances ins
+                WHERE (ins.IsDeleted = 0 OR ins.IsDeleted IS NULL)
+                ORDER BY ins.Id
+                """
+            )
+            insurer = cursor.fetchone()
+            if insurer and insurer.InsuranceId is not None:
+                insurance_id = int(insurer.InsuranceId)
+                organization = (insurer.InsuranceName or "").strip() or None
+                address = _format_insurance_address(insurer)
+        else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Insurance company not found for this user.",
             )
 
-        insurance_id = int(contact_row.InsuranceId)
-        insurance_contact_id = int(contact_row.ContactId)
-        first_name = first_name or ((contact_row.FirstName or "").strip() or None)
-        last_name = last_name or ((contact_row.LastName or "").strip() or None)
-        profile_email = (contact_row.Email or "").strip() or profile_email
-        phone = (
-            (contact_row.Cellphone or "").strip()
-            or (contact_row.Phone or "").strip()
-            or phone
-        )
-        organization = (contact_row.InsuranceName or "").strip() or None
-        address = _format_insurance_address(contact_row)
+        if insurance_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Insurance company not found for this user.",
+            )
 
         full_name = " ".join(
             part for part in [first_name, last_name] if part and str(part).strip()

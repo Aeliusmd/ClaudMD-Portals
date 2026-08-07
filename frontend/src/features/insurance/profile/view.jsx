@@ -8,14 +8,14 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonBlock, TableSkeleton } from "@/components/ui/skeleton";
-import { useEmployerProfile } from "@/hooks/use-employer-profile";
+import { useInsuranceProfile } from "@/hooks/use-insurance-profile";
 import { changePassword } from "@/lib/api/auth";
 import {
-  fetchEmployerOrganizationUsers,
-  updateEmployerProfile,
-} from "@/lib/api/employer";
+  fetchInsuranceOrganizationUsers,
+  updateInsuranceProfile,
+} from "@/lib/api/insurance";
 import { getAccessToken } from "@/lib/auth-session";
-import { LOGIN_PATH } from "@/lib/auth-routes";
+import { insurancePaths } from "@/lib/portal-paths";
 import { cn } from "@/lib/utils";
 
 const profileTabs = [
@@ -28,7 +28,6 @@ const VALID_PROFILE_TABS = new Set(profileTabs.map((tab) => tab.id));
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_DIGITS_MIN = 10;
-// Match dbo.UserProfiles / EmployerContacts column lengths.
 const NAME_MAX = 50;
 const TITLE_MAX = 100;
 const EMAIL_MAX = 100;
@@ -226,12 +225,16 @@ function validateProfile(profile) {
 function validatePassword(form) {
   const errors = {};
   if (!form.currentPassword) {
-    errors.currentPassword = "Enter your current password.";
+    errors.currentPassword = "Current password is required.";
   }
-  if ((form.newPassword || "").length < 4) {
+  if (!form.newPassword) {
+    errors.newPassword = "New password is required.";
+  } else if (form.newPassword.length < 4) {
     errors.newPassword = "New password must be at least 4 characters.";
   }
-  if (form.newPassword !== form.confirmPassword) {
+  if (!form.confirmPassword) {
+    errors.confirmPassword = "Confirm your new password.";
+  } else if (form.newPassword !== form.confirmPassword) {
     errors.confirmPassword = "Passwords do not match.";
   }
   if (
@@ -266,7 +269,7 @@ function profilesEqual(a, b) {
   );
 }
 
-export function EmployerProfileView() {
+export function InsuranceProfileView() {
   return (
     <Suspense
       fallback={
@@ -279,12 +282,12 @@ export function EmployerProfileView() {
         </div>
       }
     >
-      <EmployerProfileContent />
+      <InsuranceProfileContent />
     </Suspense>
   );
 }
 
-function EmployerProfileContent() {
+function InsuranceProfileContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -293,7 +296,7 @@ function EmployerProfileContent() {
     loading: profileLoading,
     error: profileLoadError,
     setCachedProfile,
-  } = useEmployerProfile();
+  } = useInsuranceProfile();
 
   const tabFromUrl = searchParams.get("tab");
   const initialTab =
@@ -383,13 +386,13 @@ function EmployerProfileContent() {
     async function loadOrgUsers() {
       const token = getAccessToken();
       if (!token) {
-        router.replace(LOGIN_PATH);
+        router.replace(insurancePaths.login);
         return;
       }
 
       setOrgUsersLoading(true);
       try {
-        const data = await fetchEmployerOrganizationUsers(token);
+        const data = await fetchInsuranceOrganizationUsers(token);
         if (!cancelled) {
           setOrgUsers(data.items);
           setOrgUsersLoaded(true);
@@ -398,7 +401,7 @@ function EmployerProfileContent() {
       } catch (err) {
         if (cancelled) return;
         if (err?.status === 401) {
-          router.replace(LOGIN_PATH);
+          router.replace(insurancePaths.login);
           return;
         }
         setErrorMessage(err?.message || "Unable to load organization users.");
@@ -442,13 +445,13 @@ function EmployerProfileContent() {
 
     const token = getAccessToken();
     if (!token) {
-      router.replace(LOGIN_PATH);
+      router.replace(insurancePaths.login);
       return;
     }
 
     setProfileSaving(true);
     try {
-      const updated = await updateEmployerProfile(token, {
+      const updated = await updateInsuranceProfile(token, {
         firstName: profile.firstName.trim(),
         lastName: profile.lastName.trim(),
         title: profile.title.trim(),
@@ -477,7 +480,7 @@ function EmployerProfileContent() {
       });
     } catch (err) {
       if (err?.status === 401) {
-        router.replace(LOGIN_PATH);
+        router.replace(insurancePaths.login);
         return;
       }
       const detail = err?.detail ?? err?.message;
@@ -511,7 +514,7 @@ function EmployerProfileContent() {
 
     const token = getAccessToken();
     if (!token) {
-      router.replace(LOGIN_PATH);
+      router.replace(insurancePaths.login);
       return;
     }
 
@@ -532,11 +535,12 @@ function EmployerProfileContent() {
       setMessage("");
       setSuccessToast({
         title: "Password updated",
-        message: "Your password was reset successfully. Use it the next time you sign in.",
+        message:
+          "Your password was reset successfully. Use it the next time you sign in.",
       });
     } catch (err) {
       if (err?.status === 401) {
-        router.replace(LOGIN_PATH);
+        router.replace(insurancePaths.login);
         return;
       }
       setErrorMessage(err?.message || "Unable to update password.");
@@ -584,12 +588,10 @@ function EmployerProfileContent() {
           <ProfileInfoSkeleton />
         ) : (
           <Card className="p-5 sm:p-6">
-            <h2 className="mb-5 text-lg font-semibold text-ink">
-              Profile Info
-            </h2>
+            <h2 className="mb-5 text-lg font-semibold text-ink">Profile Info</h2>
             <div className="grid gap-4 md:grid-cols-2">
               <Field
-                id="employer-first-name"
+                id="insurance-first-name"
                 label="First Name"
                 value={profile.firstName}
                 onChange={(value) => updateProfileField("firstName", value)}
@@ -598,7 +600,7 @@ function EmployerProfileContent() {
                 placeholder="Up to 50 characters"
               />
               <Field
-                id="employer-last-name"
+                id="insurance-last-name"
                 label="Last Name"
                 value={profile.lastName}
                 onChange={(value) => updateProfileField("lastName", value)}
@@ -607,13 +609,13 @@ function EmployerProfileContent() {
                 placeholder="Up to 50 characters"
               />
               <Field
-                id="employer-user-type"
+                id="insurance-user-type"
                 label="User Type"
                 value={profile.userType || "—"}
                 readOnly
               />
               <Field
-                id="employer-title"
+                id="insurance-title"
                 label="Title"
                 value={profile.title}
                 onChange={(value) => updateProfileField("title", value)}
@@ -621,13 +623,13 @@ function EmployerProfileContent() {
                 placeholder="Job title (optional, up to 100)"
               />
               <Field
-                id="employer-login-id"
+                id="insurance-login-id"
                 label="Login ID"
                 value={profile.loginId || "—"}
                 readOnly
               />
               <Field
-                id="employer-email"
+                id="insurance-email"
                 label="Email"
                 type="email"
                 value={profile.email}
@@ -637,18 +639,17 @@ function EmployerProfileContent() {
                 placeholder="Up to 100 characters"
               />
               <Field
-                id="employer-phone"
+                id="insurance-phone"
                 label="Phone"
-                type="tel"
                 value={profile.phone}
                 onChange={(value) => updateProfileField("phone", value)}
                 error={profileErrors.phone}
                 autoComplete="tel"
-                placeholder="Up to 20 characters"
+                placeholder="Optional"
               />
               <div className="md:col-span-2">
                 <Field
-                  id="employer-organization"
+                  id="insurance-organization"
                   label="Organization"
                   value={profile.organization || "—"}
                   readOnly
@@ -656,7 +657,7 @@ function EmployerProfileContent() {
               </div>
               <div className="md:col-span-2">
                 <Field
-                  id="employer-address"
+                  id="insurance-address"
                   label="Address"
                   value={profile.address || "—"}
                   readOnly
@@ -680,79 +681,63 @@ function EmployerProfileContent() {
       ) : null}
 
       {tab === "security" ? (
-        <div className="space-y-5">
-          <Card className="p-5 sm:p-6">
-            <h2 className="mb-5 text-lg font-semibold text-ink">
-              Change Password
-            </h2>
-            <div className="max-w-xl space-y-4">
-              <Field
-                id="current-password"
-                label="Current Password"
-                type="password"
-                value={passwordForm.currentPassword}
-                onChange={(value) => {
-                  clearFeedback();
-                  setPasswordForm((prev) => ({
-                    ...prev,
-                    currentPassword: value,
-                  }));
-                }}
-                error={passwordErrors.currentPassword}
-                placeholder="Enter current password"
-                autoComplete="current-password"
-              />
-              <Field
-                id="new-password"
-                label="New Password"
-                type="password"
-                value={passwordForm.newPassword}
-                onChange={(value) => {
-                  clearFeedback();
-                  setPasswordForm((prev) => ({ ...prev, newPassword: value }));
-                }}
-                error={passwordErrors.newPassword}
-                placeholder="Enter new password"
-                autoComplete="new-password"
-              />
-              <Field
-                id="confirm-password"
-                label="Confirm New Password"
-                type="password"
-                value={passwordForm.confirmPassword}
-                onChange={(value) => {
-                  clearFeedback();
-                  setPasswordForm((prev) => ({
-                    ...prev,
-                    confirmPassword: value,
-                  }));
-                }}
-                error={passwordErrors.confirmPassword}
-                placeholder="Confirm new password"
-                autoComplete="new-password"
-              />
-            </div>
-            <Button
-              className="mt-6"
-              onClick={handleUpdatePassword}
-              disabled={passwordSaving || !passwordDirty}
-            >
-              {passwordSaving ? "Updating…" : "Update Password"}
-            </Button>
-          </Card>
-
-          {/* Two-Factor Authentication — hidden for now (no 2FA in clinic DB)
-          <Card className="p-5 sm:p-6">
-            <h2 className="mb-4 text-lg font-semibold text-ink">
-              Two-Factor Authentication
-            </h2>
-            <p className="text-sm text-muted">
-              Two-factor authentication is not available in the current clinic
-              database (no 2FA tables or columns). No action is available here.
-            </p>
-          </Card>
-          */}
-        </div>
+        <Card className="p-5 sm:p-6">
+          <h2 className="mb-5 text-lg font-semibold text-ink">Change Password</h2>
+          <div className="max-w-xl space-y-4">
+            <Field
+              id="insurance-current-password"
+              label="Current Password"
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={(value) => {
+                clearFeedback();
+                setPasswordForm((prev) => ({
+                  ...prev,
+                  currentPassword: value,
+                }));
+              }}
+              error={passwordErrors.currentPassword}
+              placeholder="Enter current password"
+              autoComplete="current-password"
+            />
+            <Field
+              id="insurance-new-password"
+              label="New Password"
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={(value) => {
+                clearFeedback();
+                setPasswordForm((prev) => ({ ...prev, newPassword: value }));
+              }}
+              error={passwordErrors.newPassword}
+              placeholder="Enter new password"
+              autoComplete="new-password"
+            />
+            <Field
+              id="insurance-confirm-password"
+              label="Confirm New Password"
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(value) => {
+                clearFeedback();
+                setPasswordForm((prev) => ({
+                  ...prev,
+                  confirmPassword: value,
+                }));
+              }}
+              error={passwordErrors.confirmPassword}
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+            />
+          </div>
+          <Button
+            className="mt-6"
+            onClick={handleUpdatePassword}
+            disabled={passwordSaving || !passwordDirty}
+          >
+            {passwordSaving ? "Updating…" : "Update Password"}
+          </Button>
+        </Card>
       ) : null}
 
       {tab === "permissions" ? (
@@ -762,7 +747,7 @@ function EmployerProfileContent() {
               Organization Users
             </h2>
             <p className="mt-1 text-sm text-muted">
-              Users linked to this organization and their system roles.
+              Users linked to this insurance organization and their access.
             </p>
           </div>
 
@@ -774,7 +759,7 @@ function EmployerProfileContent() {
             <div className="px-5 py-8 sm:px-6">
               <EmptyState
                 title="No organization users found"
-                description="No contacts are linked to this organization yet."
+                description="No contacts are linked to this insurance organization yet."
               />
             </div>
           ) : (
@@ -807,18 +792,6 @@ function EmployerProfileContent() {
               </table>
             </div>
           )}
-
-          <div className="border-t border-border/60 bg-cream-deep/70 px-5 py-3.5 sm:px-6">
-            <p className="text-sm font-medium text-ink">
-              Users:{" "}
-              <span className="font-semibold">{orgUsers.length}</span>
-              {" · "}
-              Employer ID:{" "}
-              <span className="font-semibold">
-                {liveProfile?.employerId ?? "—"}
-              </span>
-            </p>
-          </div>
         </Card>
       ) : null}
     </div>

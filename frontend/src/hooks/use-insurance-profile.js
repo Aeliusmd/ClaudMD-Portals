@@ -9,18 +9,35 @@ import { insurancePaths } from "@/lib/portal-paths";
 let cachedProfile = null;
 let cachedToken = null;
 let inflightPromise = null;
+const listeners = new Set();
+
+function notifyProfileListeners() {
+  listeners.forEach((listener) => listener());
+}
 
 export function clearInsuranceProfileCache() {
   cachedProfile = null;
   cachedToken = null;
   inflightPromise = null;
+  notifyProfileListeners();
 }
+
+clearInsuranceProfileCache();
 
 export function useInsuranceProfile() {
   const router = useRouter();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [cacheVersion, setCacheVersion] = useState(0);
+
+  useEffect(() => {
+    const onCacheChange = () => setCacheVersion((version) => version + 1);
+    listeners.add(onCacheChange);
+    return () => {
+      listeners.delete(onCacheChange);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,15 +82,26 @@ export function useInsuranceProfile() {
         }
         setError(err?.message || "Unable to load profile.");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     loadProfile();
+
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, cacheVersion]);
 
-  return { profile, loading, error };
+  function setCachedProfile(next) {
+    cachedProfile = next;
+    cachedToken = getAccessToken();
+    inflightPromise = null;
+    setProfile(next);
+    notifyProfileListeners();
+  }
+
+  return { profile, loading, error, setCachedProfile };
 }

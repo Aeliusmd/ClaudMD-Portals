@@ -30,7 +30,7 @@ USER_TYPE_LABELS: dict[UserType, str] = {
     UserType.PatientUser: "Patient User",
 }
 
-# Primary portal used when login request does not specify one.
+# Default / home portal when no login-page portal is specified.
 USER_TYPE_PORTAL: dict[UserType, str] = {
     UserType.SuperAdmin: "employer",
     UserType.EmployerUser: "employer",
@@ -38,9 +38,9 @@ USER_TYPE_PORTAL: dict[UserType, str] = {
     UserType.InsuranceUser: "insurance",
 }
 
-# Portals each TypeId may sign into (Super Admin can use employer + insurance).
+# Portals each TypeId may sign into (Super Admin may use all three).
 USER_TYPE_ALLOWED_PORTALS: dict[UserType, frozenset[str]] = {
-    UserType.SuperAdmin: frozenset({"employer", "insurance"}),
+    UserType.SuperAdmin: frozenset({"employer", "patient", "insurance"}),
     UserType.EmployerUser: frozenset({"employer"}),
     UserType.PatientUser: frozenset({"patient"}),
     UserType.InsuranceUser: frozenset({"insurance"}),
@@ -63,24 +63,8 @@ def user_type_label(type_id: int | None) -> str | None:
     return USER_TYPE_LABELS.get(user_type)
 
 
-def portals_for_type_id(type_id: int | None) -> frozenset[str]:
-    """Return the set of portals a TypeId may access."""
-    if type_id is None:
-        return frozenset()
-    try:
-        user_type = UserType(int(type_id))
-    except (TypeError, ValueError):
-        return frozenset()
-    return USER_TYPE_ALLOWED_PORTALS.get(user_type, frozenset())
-
-
 def portal_for_type_id(type_id: int | None) -> str | None:
-    """Return the primary portal for a TypeId, else None.
-
-    Super Admin / Employer User → employer (primary).
-    Insurance User → insurance.
-    Patient User → patient.
-    """
+    """Return default portal key for a portal-enabled TypeId, else None."""
     if type_id is None:
         return None
     try:
@@ -90,24 +74,39 @@ def portal_for_type_id(type_id: int | None) -> str | None:
     return USER_TYPE_PORTAL.get(user_type)
 
 
+def portals_allowed_for_type_id(type_id: int | None) -> frozenset[str]:
+    """Return the set of portals this TypeId may sign into."""
+    if type_id is None:
+        return frozenset()
+    try:
+        user_type = UserType(int(type_id))
+    except (TypeError, ValueError):
+        return frozenset()
+    return USER_TYPE_ALLOWED_PORTALS.get(user_type, frozenset())
+
+
+# Back-compat alias used by earlier branch code.
+portals_for_type_id = portals_allowed_for_type_id
+
+
 def resolve_login_portal(type_id: int | None, requested_portal: str | None) -> str:
     """
-    Resolve which portal the session belongs to after login.
+    Validate requested portal against TypeId allow-list.
 
-    If a portal is requested, it must be allowed for the TypeId.
-    Otherwise the primary portal for that TypeId is used.
+    Super Admin → employer, patient, or insurance
+    Employer User → employer only
+    Patient User → patient only
+    Insurance User → insurance only
     """
-    allowed = portals_for_type_id(type_id)
+    allowed = portals_allowed_for_type_id(type_id)
     if not allowed:
-        raise ValueError("not_enabled")
+        raise ValueError("portal_disabled")
 
     expected = (requested_portal or "").strip().lower() or None
     if expected in {"employer", "patient", "insurance"}:
         if expected not in allowed:
-            raise ValueError("wrong_portal")
+            home = portal_for_type_id(type_id) or sorted(allowed)[0]
+            raise ValueError(f"portal_mismatch:{home}")
         return expected
 
-    primary = portal_for_type_id(type_id)
-    if primary is None:
-        raise ValueError("not_enabled")
-    return primary
+    return portal_for_type_id(type_id) or sorted(allowed)[0]

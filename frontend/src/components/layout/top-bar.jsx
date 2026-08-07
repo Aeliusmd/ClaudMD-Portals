@@ -12,6 +12,8 @@ export function TopBar({
   organizationLabel,
   profileUser,
   profileHref = patientPaths.profile,
+  settingsHref,
+  loginHref,
   notifications,
   notificationsViewAllHref,
   onNotificationsOpen,
@@ -72,7 +74,12 @@ export function TopBar({
           unreadCount={notificationsUnreadCount}
         />
         <span className="hidden text-sm text-[#9ca3af] sm:inline">Welcome</span>
-        <ProfileMenu user={profileUser} profileHref={profileHref} />
+        <ProfileMenu
+          user={profileUser}
+          profileHref={profileHref}
+          settingsHref={settingsHref}
+          loginHref={loginHref}
+        />
       </div>
     </header>
   );

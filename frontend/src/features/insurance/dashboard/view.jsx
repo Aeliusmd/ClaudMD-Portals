@@ -497,7 +497,7 @@ function InsuranceDashboardContent() {
                                 ? `?coverage=${encodeURIComponent(tab.coverage)}`
                                 : "";
                               router.push(
-                                `/insurance/patients/${encodeURIComponent(row.id)}${coverageQs}`
+                                `${insurancePaths.patients}/${encodeURIComponent(row.id)}${coverageQs}`
                               );
                             }
                           : undefined

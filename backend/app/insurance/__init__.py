@@ -1,1 +1,1 @@
-"""Insurance portal API (read-only clinic queries)."""
+"""Insurance portal API — profile, dashboard, patients, notifications."""

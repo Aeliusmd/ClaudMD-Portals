@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
-import { LOGIN_PATH } from "@/lib/auth-routes";
+import { PortalAccessBlocked } from "@/features/auth/portal-access-blocked";
 
 export default function HomePage() {
-  redirect(LOGIN_PATH);
+  return <PortalAccessBlocked />;
 }

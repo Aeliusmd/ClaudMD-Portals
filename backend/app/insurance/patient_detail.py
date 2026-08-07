@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException, status
+from fastapi.responses import FileResponse
 
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
@@ -12,6 +13,7 @@ from app.employer.visit_documents import (
     _format_date_iso,
     _format_display_date,
     _preview_badge,
+    _resolve_publish_pdf_path,
     _visit_category,
 )
 from app.insurance.profile import fetch_profile_from_clinic
@@ -307,6 +309,10 @@ def _fetch_visits_with_documents(
             or (row.get("Name") or "").strip()
             or "Document"
         )
+        folder = (row.get("Path") or "").strip()
+        # Match employer portal: only include publishes with a resolvable PDF.
+        if _resolve_publish_pdf_path(folder=folder, report_name=report_name) is None:
+            continue
         badge = _preview_badge(row.get("ReportId"), report_name)
         docs_by_checkin.setdefault(check_in_id, []).append(
             InsurancePatientVisitDocument(
@@ -315,7 +321,7 @@ def _fetch_visits_with_documents(
                 report_id=int(row["ReportId"]) if row.get("ReportId") is not None else None,
                 report_name=report_name,
                 name=(row.get("Name") or "").strip() or report_name,
-                path=(row.get("Path") or "").strip() or None,
+                path=folder or None,
                 preview_badge=badge,
                 preview_label=badge,
                 is_completed=bool(row.get("IsComplated")),
@@ -344,6 +350,86 @@ def _fetch_visits_with_documents(
             )
         )
     return visits
+
+
+def open_insurance_visit_document_file(
+    current_user: CurrentUser,
+    patient_id: int,
+    document_id: int,
+) -> FileResponse:
+    """
+    Stream a published visit PDF for the logged-in insurance user.
+    Same share-resolution as employer portal; scoped by InsuranceId.
+    """
+    clinic = get_clinic_by_activation_key(current_user.activation_key)
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found for this session.",
+        )
+
+    profile = fetch_profile_from_clinic(clinic, current_user)
+    if profile.insurance_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Insurance company not found for this user.",
+        )
+
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                dp.Id,
+                dp.CheckInId,
+                dp.ReportId,
+                dp.ReportName,
+                dp.Name,
+                dp.Path,
+                ch.PatientId,
+                ch.InsuranceId
+            FROM dbo.DocterPublishes dp
+            INNER JOIN dbo.CheckInsHeader ch ON ch.Id = dp.CheckInId
+            WHERE dp.Id = ?
+              AND (dp.IsDeleted = 0 OR dp.IsDeleted IS NULL)
+              AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+            """,
+            (int(document_id),),
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found.",
+        )
+    if int(row.PatientId) != int(patient_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found for this patient.",
+        )
+    if row.InsuranceId is None or int(row.InsuranceId) != int(profile.insurance_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Document is not available for this insurance company.",
+        )
+
+    pdf_path = _resolve_publish_pdf_path(
+        folder=(row.Path or "").strip(),
+        report_name=(row.ReportName or row.Name or "").strip(),
+    )
+    if pdf_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document file is not available on the publish share.",
+        )
+
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        filename=pdf_path.name,
+        content_disposition_type="inline",
+    )
 
 
 def _format_dob_slash(value) -> str | None:

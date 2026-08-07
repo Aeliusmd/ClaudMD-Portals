@@ -10,17 +10,53 @@ import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { coverageStyles } from "@/lib/category-styles";
 import { cn } from "@/lib/utils";
 
-function DocumentThumb({ document, onPreview }) {
+function shortDocLabel(doc) {
+  if (doc.previewBadge) return doc.previewBadge;
+  if (doc.previewLabel === "PT report") return "PR";
+  if (doc.previewLabel) return doc.previewLabel;
+  if (
+    doc.badgeLabel === "Work Status" ||
+    doc.documentType?.includes("Work Status")
+  ) {
+    return "WSR";
+  }
+  if (
+    doc.documentType?.includes("Doctor First") ||
+    doc.documentType?.includes("Doctor's First")
+  ) {
+    return "DFR";
+  }
+  if (doc.documentType?.includes("Physical")) return "PR";
+  return "DOC";
+}
+
+function docCaption(doc, selectedVisit) {
+  const date = doc.visitDate || selectedVisit?.date || "";
+  const label = shortDocLabel(doc);
+  return `${date} ${label}`.trim();
+}
+
+function VisitDocumentThumb({ doc, selectedVisit, onPreview }) {
+  const badge = shortDocLabel(doc);
+  const url = doc.url;
+  if (!url) return null;
+
   return (
     <div className="w-[8.5rem] shrink-0 sm:w-40">
       <PdfThumbnail
-        url={document.url}
-        badge={document.previewBadge}
-        title={document.title}
-        onOpen={() => onPreview(document)}
+        url={url}
+        badge={badge}
+        title={doc.title || doc.name || "Document"}
+        onOpen={() =>
+          onPreview({
+            ...doc,
+            url,
+            previewBadge: badge,
+          })
+        }
       />
       <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
-        {`${document.visitDate || ""} ${document.previewBadge || ""}`.trim()}
+        {docCaption(doc, selectedVisit)}
       </p>
     </div>
   );
@@ -33,12 +69,22 @@ export function InsurancePatientDetailView({ patient, backHref }) {
   const [previewDocument, setPreviewDocument] = useState(null);
 
   useEffect(() => {
-    setSelectedVisitId(patient?.visits?.[0]?.id || null);
-  }, [patient?.id, patient?.visits?.[0]?.id]);
+    const nextVisits = patient?.visits || [];
+    if (!nextVisits.length) {
+      setSelectedVisitId(null);
+      return;
+    }
+    const preferred =
+      nextVisits.find((visit) => (visit.documents || []).length > 0) ||
+      nextVisits[0];
+    setSelectedVisitId(preferred?.id || null);
+  }, [patient?.id, patient?.visits]);
 
   const selectedVisit =
     visits.find((visit) => visit.id === selectedVisitId) || visits[0] || null;
-  const visitDocuments = selectedVisit?.documents || [];
+  const visitDocuments = (selectedVisit?.documents || []).filter(
+    (doc) => doc.url
+  );
   const addressLines = patient?.addressLines || [];
 
   return (
@@ -170,6 +216,9 @@ export function InsurancePatientDetailView({ patient, backHref }) {
                   ) : (
                     visits.map((visit) => {
                       const selected = visit.id === selectedVisit?.id;
+                      const docCount = (visit.documents || []).filter(
+                        (doc) => doc.url
+                      ).length;
 
                       return (
                         <tr
@@ -194,6 +243,11 @@ export function InsurancePatientDetailView({ patient, backHref }) {
                             )}
                           >
                             {visit.label}
+                            {docCount > 0 ? (
+                              <span className="ml-2 text-[10px] font-semibold tracking-[0.06em] text-foreground-500 uppercase">
+                                {docCount} doc{docCount === 1 ? "" : "s"}
+                              </span>
+                            ) : null}
                           </td>
                         </tr>
                       );
@@ -212,10 +266,11 @@ export function InsurancePatientDetailView({ patient, backHref }) {
             </div>
           ) : (
             <div className="flex flex-wrap gap-4">
-              {visitDocuments.map((document) => (
-                <DocumentThumb
-                  key={document.id}
-                  document={document}
+              {visitDocuments.map((doc) => (
+                <VisitDocumentThumb
+                  key={doc.id}
+                  doc={doc}
+                  selectedVisit={selectedVisit}
                   onPreview={setPreviewDocument}
                 />
               ))}

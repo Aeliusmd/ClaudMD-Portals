@@ -1,12 +1,21 @@
+import { insuranceVisitDocumentFileUrl } from "@/lib/documents";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
-async function insuranceFetch(path, accessToken, fallbackMessage) {
+async function insuranceFetch(path, accessToken, fallbackMessage, options = {}) {
+  const headers = {
+    Accept: "application/json",
+    Authorization: `Bearer ${accessToken}`,
+  };
+  if (options.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
+    method: options.method || "GET",
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
   let data = null;
@@ -23,10 +32,40 @@ async function insuranceFetch(path, accessToken, fallbackMessage) {
       typeof detail === "string" ? detail : fallbackMessage
     );
     error.status = response.status;
+    error.detail = detail;
     throw error;
   }
 
   return data;
+}
+
+function mapInsuranceProfile(data) {
+  let firstName = data.first_name || "";
+  let lastName = data.last_name || "";
+  if (!firstName && !lastName && data.full_name) {
+    const parts = String(data.full_name).trim().split(/\s+/).filter(Boolean);
+    firstName = parts[0] || "";
+    lastName = parts.slice(1).join(" ");
+  }
+
+  return {
+    fullName: data.full_name,
+    firstName,
+    lastName,
+    title: data.title || "",
+    role: data.type_label || null,
+    jobTitle: data.title || null,
+    email: data.email || "",
+    phone: data.phone || "",
+    organization: data.organization || "",
+    address: data.address || "",
+    insuranceId: data.insurance_id,
+    insuranceContactId: data.insurance_contact_id,
+    userId: data.user_id,
+    loginId: data.login_id,
+    typeId: data.type_id,
+    typeLabel: data.type_label,
+  };
 }
 
 export async function fetchInsuranceProfile(accessToken) {
@@ -35,22 +74,103 @@ export async function fetchInsuranceProfile(accessToken) {
     accessToken,
     "Unable to load insurance profile."
   );
+  return mapInsuranceProfile(data);
+}
+
+export async function updateInsuranceProfile(accessToken, payload) {
+  const data = await insuranceFetch(
+    "/api/insurance/me",
+    accessToken,
+    "Unable to update insurance profile.",
+    {
+      method: "PATCH",
+      body: {
+        first_name: payload.firstName,
+        last_name: payload.lastName ?? "",
+        title: payload.title || null,
+        email: payload.email,
+        phone: payload.phone || null,
+      },
+    }
+  );
+  return mapInsuranceProfile(data);
+}
+
+export async function fetchInsuranceOrganizationUsers(accessToken) {
+  const data = await insuranceFetch(
+    "/api/insurance/organization-users",
+    accessToken,
+    "Unable to load organization users."
+  );
 
   return {
-    userId: data.user_id,
     insuranceId: data.insurance_id,
-    insuranceContactId: data.insurance_contact_id,
-    fullName: data.full_name,
-    firstName: data.first_name,
-    lastName: data.last_name,
-    title: data.title,
-    email: data.email,
-    phone: data.phone,
-    organization: data.organization,
-    address: data.address,
-    loginId: data.login_id,
-    typeId: data.type_id,
-    typeLabel: data.type_label,
+    organization: data.organization || "",
+    total: data.total ?? 0,
+    canManageAccess: Boolean(data.can_manage_access),
+    items: (data.items || []).map((row) => ({
+      id: row.id,
+      contactId: row.contact_id,
+      userId: row.user_id,
+      fullName: row.full_name,
+      email: row.email || "",
+      title: row.title || "",
+      loginId: row.login_id || "",
+      typeId: row.type_id,
+      typeLabel: row.type_label,
+      role: row.role || row.type_label || "—",
+      accessLevel: row.access_level,
+      active: Boolean(row.active),
+      contactType: row.contact_type || "",
+    })),
+  };
+}
+
+export async function fetchInsuranceNotifications(
+  accessToken,
+  { page = 1, pageSize = 10 } = {}
+) {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+  const data = await insuranceFetch(
+    `/api/insurance/notifications?${params.toString()}`,
+    accessToken,
+    "Unable to load notifications."
+  );
+
+  return {
+    items: (data.items || []).map((row) => ({
+      id: row.id,
+      message: row.message,
+      timeAgo: row.time_ago || "",
+      unread: Boolean(row.unread),
+      href: row.href || null,
+      source: row.source,
+      sourceId: row.source_id,
+      createdAt: row.created_at,
+    })),
+    total: data.total ?? 0,
+    unreadCount: data.unread_count ?? 0,
+    page: data.page ?? page,
+    pageSize: data.page_size ?? pageSize,
+    totalPages: data.total_pages ?? 1,
+    days: data.days ?? 30,
+    insuranceId: data.insurance_id,
+  };
+}
+
+export async function markInsuranceNotificationsRead(accessToken) {
+  const data = await insuranceFetch(
+    "/api/insurance/notifications/mark-read",
+    accessToken,
+    "Unable to mark notifications as read.",
+    { method: "POST" }
+  );
+
+  return {
+    updatedCount: data.updated_count ?? 0,
+    insuranceId: data.insurance_id,
   };
 }
 
@@ -62,11 +182,11 @@ export async function fetchInsuranceDashboardSummary(accessToken) {
   );
 
   return {
-    workersComp: data.workers_comp ?? 0,
-    privateInsurance: data.private_insurance ?? 0,
-    unreadReports: data.unread_reports ?? 0,
+    workersComp: data.workers_comp ?? data.workersComp ?? 0,
+    privateInsurance: data.private_insurance ?? data.privateInsurance ?? 0,
+    unreadReports: data.unread_reports ?? data.unreadReports ?? 0,
     days: data.days ?? 30,
-    insuranceId: data.insurance_id,
+    insuranceId: data.insurance_id ?? data.insuranceId ?? null,
   };
 }
 
@@ -188,26 +308,37 @@ export async function fetchInsurancePatientDetail(
       dateValue: visit.check_in_date_value,
       label: visit.visit_label || "Visit",
       category: visit.category,
-      documents: (visit.documents || []).map((doc) => {
-        const pathValue = (doc.path || "").trim();
-        const isHttpUrl =
-          /^https?:\/\//i.test(pathValue) || pathValue.startsWith("/");
-        return {
-          id: String(doc.id),
-          documentId: String(doc.id),
-          checkInId: doc.check_in_id,
-          reportId: doc.report_id,
-          title: doc.report_name || doc.name,
-          name: doc.name,
-          previewBadge: doc.preview_badge,
-          previewLabel: doc.preview_label || doc.preview_badge,
-          path: pathValue || null,
-          url: isHttpUrl ? pathValue : "/sample.pdf",
-          visitDate: visit.check_in_date,
-          reportDate: visit.check_in_date,
-          isCompleted: doc.is_completed,
-        };
-      }),
+      documents: (visit.documents || [])
+        .map((doc) => {
+          const pathValue = (doc.path || "").trim();
+          const isHttpUrl =
+            /^https?:\/\//i.test(pathValue) || pathValue.startsWith("/");
+          const apiFileUrl = insuranceVisitDocumentFileUrl(
+            data.patient_id,
+            doc.id
+          );
+          // Same as employer: auth file stream or browser-reachable HTTP — never sample PDF.
+          const url = apiFileUrl || (isHttpUrl ? pathValue : null);
+          if (!url) return null;
+          return {
+            id: String(doc.id),
+            documentId: String(doc.id),
+            checkInId: doc.check_in_id,
+            reportId: doc.report_id,
+            title: doc.report_name || doc.name,
+            name: doc.name,
+            documentType: doc.report_name,
+            previewBadge: doc.preview_badge,
+            previewLabel: doc.preview_label || doc.preview_badge,
+            badgeLabel: doc.report_name,
+            path: pathValue || null,
+            url,
+            visitDate: visit.check_in_date,
+            reportDate: visit.check_in_date,
+            isCompleted: doc.is_completed,
+          };
+        })
+        .filter(Boolean),
     })),
   };
 }

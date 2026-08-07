@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { LogOut, Settings, UserRound } from "lucide-react";
 import { LOGIN_PATH } from "@/lib/auth-routes";
+import { clearAuthSession } from "@/lib/auth-session";
 import { patientPaths } from "@/lib/portal-paths";
 import { cn } from "@/lib/utils";
 
@@ -41,9 +42,12 @@ export function ProfileDropdownCard({
   user,
   patient,
   profileHref = patientPaths.profile,
+  settingsHref,
+  loginHref = LOGIN_PATH,
   onClose,
 }) {
   const profileUser = user || patient;
+  const resolvedSettingsHref = settingsHref || profileHref;
 
   return (
     <div
@@ -68,7 +72,7 @@ export function ProfileDropdownCard({
           onClick={onClose}
         />
         <ProfileMenuItem
-          href={profileHref}
+          href={resolvedSettingsHref}
           icon={Settings}
           label="Settings"
           onClick={onClose}
@@ -77,11 +81,14 @@ export function ProfileDropdownCard({
 
       <div className="border-t border-[#f0ebe3] py-1.5">
         <ProfileMenuItem
-          href={LOGIN_PATH}
+          href={loginHref}
           icon={LogOut}
           label="Log Out"
           tone="danger"
-          onClick={onClose}
+          onClick={() => {
+            clearAuthSession();
+            onClose?.();
+          }}
         />
       </div>
     </div>

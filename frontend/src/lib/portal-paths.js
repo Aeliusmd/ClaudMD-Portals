@@ -3,14 +3,14 @@
 export const EMPLOYER_PORTAL_BASE = "/employerportal";
 /** Chanuka patient portal keeps the /patient prefix (dummy data UI). */
 export const PATIENT_PORTAL_BASE = "/patient";
-export const INSURANCE_PORTAL_BASE = "/insurance";
+export const INSURANCE_PORTAL_BASE = "/insuranceportal";
 
 export const EMPLOYER_LOGIN_PATH = `${EMPLOYER_PORTAL_BASE}/authentication/login`;
 /** Patient auth pages live under patientportal (from main); portal UI stays on /patient. */
 export const PATIENT_LOGIN_PATH = `/patientportal/authentication/login`;
 export const INSURANCE_LOGIN_PATH = `${INSURANCE_PORTAL_BASE}/authentication/login`;
 
-/** Default login used by shared entry points (root, /login, logout). */
+/** Prefer portal-specific login paths; generic /login is blocked. */
 export const LOGIN_PATH = EMPLOYER_LOGIN_PATH;
 
 export const employerPaths = {
@@ -21,6 +21,7 @@ export const employerPaths = {
   appointments: `${EMPLOYER_PORTAL_BASE}/appointments`,
   authorizations: `${EMPLOYER_PORTAL_BASE}/authorizations`,
   profile: `${EMPLOYER_PORTAL_BASE}/profile`,
+  profilePermissions: `${EMPLOYER_PORTAL_BASE}/profile?tab=permissions`,
   sharedDocuments: `${EMPLOYER_PORTAL_BASE}/shared-documents`,
   sharedDocumentsScoped: `${EMPLOYER_PORTAL_BASE}/shared-documents/scoped`,
   notifications: `${EMPLOYER_PORTAL_BASE}/notifications`,
@@ -42,6 +43,8 @@ export const insurancePaths = {
   login: INSURANCE_LOGIN_PATH,
   dashboard: `${INSURANCE_PORTAL_BASE}/dashboard`,
   profile: `${INSURANCE_PORTAL_BASE}/profile`,
+  profilePermissions: `${INSURANCE_PORTAL_BASE}/profile?tab=permissions`,
+  notifications: `${INSURANCE_PORTAL_BASE}/notifications`,
   patients: `${INSURANCE_PORTAL_BASE}/patients`,
 };
 

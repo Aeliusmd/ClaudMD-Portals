@@ -18,7 +18,6 @@ from app.auth.schemas import (
 )
 from app.auth.user_profile_type import (
     UserType,
-    portal_for_type_id,
     resolve_login_portal,
     user_type_label,
 )
@@ -87,20 +86,20 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
         portal = resolve_login_portal(type_id, payload.portal)
     except ValueError as exc:
         reason = str(exc)
-        if reason == "wrong_portal":
-            primary = portal_for_type_id(type_id) or "another"
+        if reason == "portal_disabled":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    f"This account belongs to the {primary} portal. "
-                    f"Please sign in using the {primary} portal login."
+                    "This account is not enabled for the employer, patient, or insurance portal. "
+                    "Contact your clinic administrator."
                 ),
             ) from exc
+        home = reason.split(":", 1)[-1] if reason.startswith("portal_mismatch:") else "employer"
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "This account is not enabled for the employer, patient, or "
-                "insurance portal. Contact your clinic administrator."
+                f"This account belongs to the {home} portal. "
+                f"Please sign in using the {home} portal login."
             ),
         ) from exc
 

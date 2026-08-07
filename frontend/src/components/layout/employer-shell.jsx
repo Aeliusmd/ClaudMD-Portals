@@ -150,6 +150,12 @@ export function EmployerShell({ children }) {
               ? employerPaths.sharedDocumentsScoped
               : employerPaths.profile
           }
+          settingsHref={
+            scopedSession
+              ? employerPaths.sharedDocumentsScoped
+              : employerPaths.profilePermissions
+          }
+          loginHref={employerPaths.login}
           notifications={scopedSession ? [] : notificationItems}
           notificationsViewAllHref={
             scopedSession ? undefined : employerPaths.notifications

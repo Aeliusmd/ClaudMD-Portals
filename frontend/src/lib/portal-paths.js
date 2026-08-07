@@ -10,7 +10,7 @@ export const EMPLOYER_LOGIN_PATH = `${EMPLOYER_PORTAL_BASE}/authentication/login
 export const PATIENT_LOGIN_PATH = `/patientportal/authentication/login`;
 export const INSURANCE_LOGIN_PATH = `${INSURANCE_PORTAL_BASE}/authentication/login`;
 
-/** Default login used by shared entry points (root, /login, logout). */
+/** Prefer portal-specific login paths; generic /login is blocked. */
 export const LOGIN_PATH = EMPLOYER_LOGIN_PATH;
 
 export const employerPaths = {

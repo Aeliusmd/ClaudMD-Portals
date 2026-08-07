@@ -30,11 +30,20 @@ USER_TYPE_LABELS: dict[UserType, str] = {
     UserType.PatientUser: "Patient User",
 }
 
+# Default / home portal when no login-page portal is specified.
 USER_TYPE_PORTAL: dict[UserType, str] = {
     UserType.SuperAdmin: "employer",
     UserType.EmployerUser: "employer",
     UserType.PatientUser: "patient",
     UserType.InsuranceUser: "insurance",
+}
+
+# Portals each TypeId may sign into (Super Admin may use all three).
+USER_TYPE_ALLOWED_PORTALS: dict[UserType, frozenset[str]] = {
+    UserType.SuperAdmin: frozenset({"employer", "patient", "insurance"}),
+    UserType.EmployerUser: frozenset({"employer"}),
+    UserType.PatientUser: frozenset({"patient"}),
+    UserType.InsuranceUser: frozenset({"insurance"}),
 }
 
 
@@ -55,12 +64,7 @@ def user_type_label(type_id: int | None) -> str | None:
 
 
 def portal_for_type_id(type_id: int | None) -> str | None:
-    """Return portal key for a portal-enabled TypeId, else None.
-
-    Super Admin / Employer User → employer
-    Patient User → patient
-    Insurance User → insurance
-    """
+    """Return default portal key for a portal-enabled TypeId, else None."""
     if type_id is None:
         return None
     try:
@@ -68,3 +72,37 @@ def portal_for_type_id(type_id: int | None) -> str | None:
     except (TypeError, ValueError):
         return None
     return USER_TYPE_PORTAL.get(user_type)
+
+
+def portals_allowed_for_type_id(type_id: int | None) -> frozenset[str]:
+    """Return the set of portals this TypeId may sign into."""
+    if type_id is None:
+        return frozenset()
+    try:
+        user_type = UserType(int(type_id))
+    except (TypeError, ValueError):
+        return frozenset()
+    return USER_TYPE_ALLOWED_PORTALS.get(user_type, frozenset())
+
+
+def resolve_login_portal(type_id: int | None, requested_portal: str | None) -> str:
+    """
+    Validate requested portal against TypeId allow-list.
+
+    Super Admin → employer, patient, or insurance
+    Employer User → employer only
+    Patient User → patient only
+    Insurance User → insurance only
+    """
+    allowed = portals_allowed_for_type_id(type_id)
+    if not allowed:
+        raise ValueError("portal_disabled")
+
+    expected = (requested_portal or "").strip().lower() or None
+    if expected in {"employer", "patient", "insurance"}:
+        if expected not in allowed:
+            home = portal_for_type_id(type_id) or sorted(allowed)[0]
+            raise ValueError(f"portal_mismatch:{home}")
+        return expected
+
+    return portal_for_type_id(type_id) or sorted(allowed)[0]

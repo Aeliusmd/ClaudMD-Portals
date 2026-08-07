@@ -16,7 +16,12 @@ from app.auth.schemas import (
     LoginResponse,
     UserInfo,
 )
-from app.auth.user_profile_type import UserType, portal_for_type_id, user_type_label
+from app.auth.user_profile_type import (
+    UserType,
+    portal_for_type_id,
+    resolve_login_portal,
+    user_type_label,
+)
 from app.config import get_settings
 from app.db.clinic import ClinicConnectionInfo, get_clinic_by_activation_key, get_clinic_connection
 from app.auth.dependencies import CurrentUser
@@ -78,25 +83,26 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
     )
 
     type_id = profile.get("type_id") if profile else None
-    portal = portal_for_type_id(type_id)
-    if portal is None:
+    try:
+        portal = resolve_login_portal(type_id, payload.portal)
+    except ValueError as exc:
+        reason = str(exc)
+        if reason == "portal_disabled":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "This account is not enabled for the employer, patient, or insurance portal. "
+                    "Contact your clinic administrator."
+                ),
+            ) from exc
+        home = reason.split(":", 1)[-1] if reason.startswith("portal_mismatch:") else "employer"
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "This account is not enabled for the employer, patient, or insurance portal. "
-                "Contact your clinic administrator."
+                f"This account belongs to the {home} portal. "
+                f"Please sign in using the {home} portal login."
             ),
-        )
-
-    expected = (payload.portal or "").strip().lower() or None
-    if expected in {"employer", "patient", "insurance"} and expected != portal:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"This account belongs to the {portal} portal. "
-                f"Please sign in using the {portal} portal login."
-            ),
-        )
+        ) from exc
 
     # Prefer clinic profile names when available.
     first_name = (profile or {}).get("first_name") or user_fields.get("first_name")

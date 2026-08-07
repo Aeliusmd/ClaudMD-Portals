@@ -11,15 +11,15 @@ let cachedToken = null;
 let inflightPromise = null;
 const listeners = new Set();
 
-function notifyProfileListeners() {
-  listeners.forEach((listener) => listener());
+function notifyProfileListeners(nextProfile) {
+  listeners.forEach((listener) => listener(nextProfile));
 }
 
 export function clearEmployerProfileCache() {
   cachedProfile = null;
   cachedToken = null;
   inflightPromise = null;
-  notifyProfileListeners();
+  notifyProfileListeners(null);
 }
 
 // Drop stale in-memory profile cache after profile-field shape changes.
@@ -34,7 +34,17 @@ export function useEmployerProfile() {
   const [cacheVersion, setCacheVersion] = useState(0);
 
   useEffect(() => {
-    const onCacheChange = () => setCacheVersion((version) => version + 1);
+    const onCacheChange = (nextProfile) => {
+      if (nextProfile) {
+        // Immediate push from setCachedProfile — update header without refetch.
+        setProfile(nextProfile);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+      // Cache cleared — force reload.
+      setCacheVersion((version) => version + 1);
+    };
     listeners.add(onCacheChange);
     return () => {
       listeners.delete(onCacheChange);
@@ -67,14 +77,25 @@ export function useEmployerProfile() {
           cachedToken = token;
           inflightPromise = fetchEmployerProfile(token);
         }
-        const data = await inflightPromise;
+        const request = inflightPromise;
+        const data = await request;
+        // Ignore stale responses superseded by setCachedProfile / a newer fetch.
+        if (inflightPromise !== request && cachedProfile && cachedToken === token) {
+          if (!cancelled) {
+            setProfile(cachedProfile);
+            setError(null);
+          }
+          return;
+        }
         cachedProfile = data;
         if (!cancelled) {
           setProfile(data);
           setError(null);
         }
       } catch (err) {
-        inflightPromise = null;
+        if (inflightPromise) {
+          inflightPromise = null;
+        }
         if (cancelled) return;
         if (err?.status === 401) {
           cachedProfile = null;
@@ -100,9 +121,10 @@ export function useEmployerProfile() {
   function setCachedProfile(next) {
     cachedProfile = next;
     cachedToken = getAccessToken();
-    inflightPromise = null;
+    // Resolve waiters to the saved profile so in-flight GETs cannot overwrite it.
+    inflightPromise = Promise.resolve(next);
     setProfile(next);
-    notifyProfileListeners();
+    notifyProfileListeners(next);
   }
 
   return { profile, loading, error, setCachedProfile };

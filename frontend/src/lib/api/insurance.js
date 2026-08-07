@@ -49,7 +49,10 @@ function mapInsuranceProfile(data) {
   }
 
   return {
-    fullName: data.full_name,
+    fullName:
+      data.full_name ||
+      [firstName, lastName].filter(Boolean).join(" ") ||
+      "",
     firstName,
     lastName,
     title: data.title || "",

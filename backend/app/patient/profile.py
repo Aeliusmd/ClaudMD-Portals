@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import date, datetime
 
@@ -9,12 +8,10 @@ from fastapi import HTTPException, status
 from app.auth.dependencies import CurrentUser
 from app.auth.user_profile_type import UserType, user_type_label
 from app.db.clinic import get_clinic_connection
+from app.validation.contact import email_error, phone_error
+from app.validation.text import unsafe_markup_error
 
-_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _NAME_MAX = 50
-_EMAIL_MAX = 100
-_PHONE_MAX = 20
-_PHONE_DIGITS_MIN = 10
 _ADDRESS_MAX = 500
 
 # Super Admin is employer-only; Patient User is the dedicated role.
@@ -531,29 +528,28 @@ def _validate_profile_fields(
         errors["full_name"] = f"First name must be at most {_NAME_MAX} characters."
     elif len(last_name) > _NAME_MAX:
         errors["full_name"] = f"Last name must be at most {_NAME_MAX} characters."
+    else:
+        err = unsafe_markup_error(full_name)
+        if err:
+            errors["full_name"] = err
 
     raw_dob = (date_of_birth or "").strip()
     if raw_dob and parsed_dob is None:
         errors["date_of_birth"] = "Enter a valid date of birth (YYYY-MM-DD)."
 
-    if not email:
-        errors["email"] = "Email is required."
-    elif len(email) > _EMAIL_MAX:
-        errors["email"] = f"Email must be at most {_EMAIL_MAX} characters."
-    elif not _EMAIL_RE.match(email):
-        errors["email"] = "Enter a valid email address."
+    err = email_error(email, required=True)
+    if err:
+        errors["email"] = err
 
-    if phone:
-        if len(phone) > _PHONE_MAX:
-            errors["phone"] = f"Phone must be at most {_PHONE_MAX} characters."
-        else:
-            digits = "".join(ch for ch in phone if ch.isdigit())
-            if len(digits) < _PHONE_DIGITS_MIN:
-                errors["phone"] = (
-                    f"Enter a valid phone number (at least {_PHONE_DIGITS_MIN} digits)."
-                )
+    err = phone_error(phone, required=False)
+    if err:
+        errors["phone"] = err
 
     if address and len(address) > _ADDRESS_MAX:
         errors["address"] = f"Address must be at most {_ADDRESS_MAX} characters."
+    elif address:
+        err = unsafe_markup_error(address)
+        if err:
+            errors["address"] = err
 
     return errors

@@ -20,6 +20,7 @@ import { ReportDetailPanel } from "@/features/employer/shared-documents/report-d
 import { sharedDocuments } from "@/data/employer";
 import { reportBadgeStyles } from "@/lib/report-badge-styles";
 import { openDocumentInNewTab } from "@/lib/documents";
+import { coerceToDate, daysAgoIso, todayIso } from "@/lib/date-range";
 import { cn } from "@/lib/utils";
 
 const SHARED_DOCS_PAGE_SIZE = 15;
@@ -27,8 +28,8 @@ const SHARED_DOCS_PAGE_SIZE = 15;
 export function EmployerSharedDocumentsView() {
   const [category, setCategory] = useState(null);
   const [query, setQuery] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(() => daysAgoIso(30));
+  const [toDate, setToDate] = useState(() => todayIso());
   const [selectedId, setSelectedId] = useState(null);
   const [page, setPage] = useState(1);
   const [previewFile, setPreviewFile] = useState(null);
@@ -120,14 +121,20 @@ export function EmployerSharedDocumentsView() {
             id="shared-docs-from"
             label="From"
             value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
+            max={toDate || undefined}
+            onChange={(e) => {
+              const nextFrom = e.target.value;
+              setFromDate(nextFrom);
+              setToDate((prev) => coerceToDate(nextFrom, prev));
+            }}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="shared-docs-to"
             label="To"
             value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
+            min={fromDate || undefined}
+            onChange={(e) => setToDate(coerceToDate(fromDate, e.target.value))}
           />
         </div>
       </div>

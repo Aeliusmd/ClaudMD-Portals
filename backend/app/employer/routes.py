@@ -24,6 +24,7 @@ from app.employer.employee_search import (
     default_search_date_range,
     search_employees,
 )
+from app.validation.text import sanitize_search_query
 from app.employer.notifications import (
     DEFAULT_PAGE_SIZE as NOTIF_DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE as NOTIF_MAX_PAGE_SIZE,
@@ -249,7 +250,7 @@ def employer_employee_search_endpoint(
         end,
         page=page,
         page_size=page_size,
-        search=search,
+        search=sanitize_search_query(search),
         category=category,
         patient_id=patient_id,
     )

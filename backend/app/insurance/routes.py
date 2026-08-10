@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
 
 from app.auth.dependencies import CurrentUser, get_current_user
+from app.validation.text import sanitize_search_query
 from app.insurance.notifications import (
     DEFAULT_PAGE_SIZE as NOTIF_DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE as NOTIF_MAX_PAGE_SIZE,
@@ -145,7 +146,7 @@ def insurance_patient_search_endpoint(
         coverage=coverage,
         page=page,
         page_size=page_size,
-        search=search,
+        search=sanitize_search_query(search),
     )
 
 

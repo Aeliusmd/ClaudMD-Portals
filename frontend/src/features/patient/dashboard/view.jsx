@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Filter, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +28,17 @@ import {
   workStatusStyle,
 } from "@/lib/category-styles";
 import { patientPaths } from "@/lib/portal-paths";
+import {
+  coerceToDate,
+  DATE_RANGE_ERROR,
+  daysAgoIso,
+  isInvalidDateRange,
+  todayIso,
+} from "@/lib/date-range";
+import { searchQueryError } from "@/lib/text-validation";
 import { cn } from "@/lib/utils";
+
+const emptySubscribe = () => () => {};
 
 /** Tabs that load live CheckInsHeader rows by VisitTypes.CategoryId. */
 const LIVE_VISIT_TABS = new Set([
@@ -93,13 +103,27 @@ const emptySummary = {
 export function PatientDashboardView() {
   const router = useRouter();
 
+  const defaultTo = useSyncExternalStore(emptySubscribe, todayIso, () => "");
+  const defaultFrom = useSyncExternalStore(
+    emptySubscribe,
+    () => daysAgoIso(30),
+    () => ""
+  );
+
   const [activeTab, setActiveTab] = useState("urgentCare");
   const [draftQuery, setDraftQuery] = useState("");
-  const [draftFromDate, setDraftFromDate] = useState("");
-  const [draftToDate, setDraftToDate] = useState("");
+  const [draftFromDate, setDraftFromDate] = useState(null);
+  const [draftToDate, setDraftToDate] = useState(null);
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedFromDate, setAppliedFromDate] = useState("");
-  const [appliedToDate, setAppliedToDate] = useState("");
+  const [appliedFromDate, setAppliedFromDate] = useState(null);
+  const [appliedToDate, setAppliedToDate] = useState(null);
+
+  const effectiveDraftFrom = draftFromDate ?? defaultFrom;
+  const effectiveDraftTo = draftToDate ?? defaultTo;
+  const effectiveAppliedFrom = appliedFromDate ?? defaultFrom;
+  const effectiveAppliedTo = appliedToDate ?? defaultTo;
+  const rangeReady = Boolean(defaultFrom && defaultTo);
+
   const [visitPage, setVisitPage] = useState(1);
   const [appointmentPage, setAppointmentPage] = useState(1);
   const [createdAppointments, setCreatedAppointments] = useState([]);
@@ -110,6 +134,7 @@ export function PatientDashboardView() {
   const [liveVisits, setLiveVisits] = useState([]);
   const [loadingVisits, setLoadingVisits] = useState(false);
   const [visitsError, setVisitsError] = useState(null);
+  const [filterError, setFilterError] = useState(null);
   const [liveAppointments, setLiveAppointments] = useState([]);
   const [appointmentsTotal, setAppointmentsTotal] = useState(0);
   const [appointmentsTotalPages, setAppointmentsTotalPages] = useState(1);
@@ -167,6 +192,10 @@ export function PatientDashboardView() {
         return;
       }
 
+      if (!rangeReady || !effectiveAppliedFrom || !effectiveAppliedTo) {
+        return;
+      }
+
       const token = getAccessToken();
       if (!token) {
         router.replace(patientPaths.login);
@@ -177,8 +206,8 @@ export function PatientDashboardView() {
       try {
         const data = await fetchPatientDashboardVisits(token, {
           category: activeTab,
-          fromDate: appliedFromDate || undefined,
-          toDate: appliedToDate || undefined,
+          fromDate: effectiveAppliedFrom,
+          toDate: effectiveAppliedTo,
           search: appliedQuery || undefined,
         });
         if (!cancelled) {
@@ -202,7 +231,14 @@ export function PatientDashboardView() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, appliedFromDate, appliedQuery, appliedToDate, router]);
+  }, [
+    activeTab,
+    appliedQuery,
+    effectiveAppliedFrom,
+    effectiveAppliedTo,
+    rangeReady,
+    router,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -297,10 +333,48 @@ export function PatientDashboardView() {
   }
 
   function applyFilters() {
+    const from = effectiveDraftFrom;
+    const to = effectiveDraftTo;
+    if (isInvalidDateRange(from, to)) {
+      setFilterError(DATE_RANGE_ERROR);
+      return;
+    }
+    const searchErr = searchQueryError(draftQuery);
+    if (searchErr) {
+      setFilterError(searchErr);
+      return;
+    }
+    setFilterError(null);
     setAppliedQuery(draftQuery.trim());
-    setAppliedFromDate(draftFromDate);
-    setAppliedToDate(draftToDate);
+    setAppliedFromDate(from);
+    setAppliedToDate(to);
     setVisitPage(1);
+  }
+
+  function handleSearchChange(event) {
+    const next = event.target.value;
+    setDraftQuery(next);
+    const searchErr = searchQueryError(next);
+    setFilterError((prev) => {
+      if (searchErr) return searchErr;
+      if (prev === DATE_RANGE_ERROR) return prev;
+      return null;
+    });
+  }
+
+  function handleFromDateChange(event) {
+    const nextFrom = event.target.value;
+    setDraftFromDate(nextFrom);
+    setDraftToDate((prev) => {
+      const currentTo = prev ?? defaultTo;
+      return coerceToDate(nextFrom, currentTo);
+    });
+    setFilterError(null);
+  }
+
+  function handleToDateChange(event) {
+    setDraftToDate(coerceToDate(effectiveDraftFrom, event.target.value));
+    setFilterError(null);
   }
 
   function handleCreateAppointment(appointment) {
@@ -416,7 +490,7 @@ export function PatientDashboardView() {
           <input
             type="search"
             value={draftQuery}
-            onChange={(event) => setDraftQuery(event.target.value)}
+            onChange={handleSearchChange}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
@@ -431,15 +505,17 @@ export function PatientDashboardView() {
           <DateRangeInput
             id="patient-dashboard-from"
             label="From"
-            value={draftFromDate}
-            onChange={(event) => setDraftFromDate(event.target.value)}
+            value={effectiveDraftFrom}
+            max={effectiveDraftTo || undefined}
+            onChange={handleFromDateChange}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="patient-dashboard-to"
             label="To"
-            value={draftToDate}
-            onChange={(event) => setDraftToDate(event.target.value)}
+            value={effectiveDraftTo}
+            min={effectiveDraftFrom || undefined}
+            onChange={handleToDateChange}
           />
           <Button
             type="button"
@@ -452,6 +528,12 @@ export function PatientDashboardView() {
           </Button>
         </div>
       </div>
+
+      {filterError ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {filterError}
+        </p>
+      ) : null}
 
       <div className="grid items-start gap-4 sm:gap-5 xl:grid-cols-[1.45fr_1fr]">
         <Card className="overflow-hidden">

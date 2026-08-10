@@ -11,6 +11,7 @@ import { Pagination, paginateItems } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
 import { employerAppointments } from "@/data/employer";
 import { categoryStyles } from "@/lib/category-styles";
+import { coerceToDate, daysAgoIso, todayIso } from "@/lib/date-range";
 import { cn } from "@/lib/utils";
 
 const employerAppointmentStatusStyles = {
@@ -21,8 +22,8 @@ const employerAppointmentStatusStyles = {
 
 export function EmployerAppointmentsView() {
   const [query, setQuery] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(() => daysAgoIso(30));
+  const [toDate, setToDate] = useState(() => todayIso());
   const [page, setPage] = useState(1);
 
   const rows = useMemo(() => {
@@ -65,14 +66,20 @@ export function EmployerAppointmentsView() {
             id="appointments-from"
             label="From"
             value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
+            max={toDate || undefined}
+            onChange={(e) => {
+              const nextFrom = e.target.value;
+              setFromDate(nextFrom);
+              setToDate((prev) => coerceToDate(nextFrom, prev));
+            }}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="appointments-to"
             label="To"
             value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
+            min={fromDate || undefined}
+            onChange={(e) => setToDate(coerceToDate(fromDate, e.target.value))}
           />
         </div>
       </div>

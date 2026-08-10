@@ -13,6 +13,12 @@ import { changePassword } from "@/lib/api/auth";
 import { updatePatientProfile } from "@/lib/api/patient";
 import { getAccessToken } from "@/lib/auth-session";
 import { patientPaths } from "@/lib/portal-paths";
+import {
+  emailError,
+  phoneError,
+  sanitizePhoneInput,
+} from "@/lib/contact-validation";
+import { unsafeMarkupError } from "@/lib/text-validation";
 import { cn } from "@/lib/utils";
 
 const profileTabs = [
@@ -21,10 +27,6 @@ const profileTabs = [
   { id: "notifications", label: "Notifications", icon: Bell },
 ];
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_DIGITS_MIN = 10;
-const EMAIL_MAX = 100;
-const PHONE_MAX = 20;
 const ADDRESS_MAX = 500;
 const NAME_MAX = 101;
 
@@ -243,24 +245,23 @@ export function PatientProfileView() {
     if (!fullName) errors.fullName = "Full name is required.";
     else if (fullName.length > NAME_MAX) {
       errors.fullName = `Full name must be at most ${NAME_MAX} characters.`;
+    } else {
+      const err = unsafeMarkupError(fullName);
+      if (err) errors.fullName = err;
     }
 
-    const email = values.email.trim();
-    if (!EMAIL_PATTERN.test(email)) {
-      errors.email = "Enter a valid email address.";
-    } else if (email.length > EMAIL_MAX) {
-      errors.email = `Email must be at most ${EMAIL_MAX} characters.`;
-    }
+    const emailErr = emailError(values.email);
+    if (emailErr) errors.email = emailErr;
 
-    const phoneDigits = values.phone.replace(/\D/g, "");
-    if (phoneDigits && phoneDigits.length < PHONE_DIGITS_MIN) {
-      errors.phone = "Enter a valid phone number.";
-    } else if (values.phone.trim().length > PHONE_MAX) {
-      errors.phone = `Phone must be at most ${PHONE_MAX} characters.`;
-    }
+    const phoneErr = phoneError(values.phone);
+    if (phoneErr) errors.phone = phoneErr;
 
-    if (values.address.trim().length > ADDRESS_MAX) {
+    const address = values.address.trim();
+    if (address.length > ADDRESS_MAX) {
       errors.address = `Address must be at most ${ADDRESS_MAX} characters.`;
+    } else if (address) {
+      const err = unsafeMarkupError(address);
+      if (err) errors.address = err;
     }
 
     return errors;
@@ -423,7 +424,9 @@ export function PatientProfileView() {
                   label="Phone"
                   type="tel"
                   value={profile.phone}
-                  onChange={(value) => updateProfileField("phone", value)}
+                  onChange={(value) =>
+                    updateProfileField("phone", sanitizePhoneInput(value))
+                  }
                   error={profileErrors.phone}
                   autoComplete="tel"
                 />

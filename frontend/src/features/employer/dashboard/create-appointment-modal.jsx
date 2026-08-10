@@ -337,6 +337,10 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
           resourceId: Number(form.resourceId),
           date: form.date,
           durationMinutes: duration,
+          patientId:
+            !useNewPatient && form.patientId
+              ? Number(form.patientId)
+              : undefined,
         });
         if (cancelled) return;
         setSlots(data.items);
@@ -369,7 +373,15 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [open, form.locationId, form.date, form.resourceId, form.duration]);
+  }, [
+    open,
+    form.locationId,
+    form.date,
+    form.resourceId,
+    form.duration,
+    form.patientId,
+    useNewPatient,
+  ]);
 
   function resetAndClose() {
     setForm({ ...emptyForm, employerName });

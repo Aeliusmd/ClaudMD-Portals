@@ -96,7 +96,7 @@ export function useInsuranceProfile() {
           inflightPromise = null;
         }
         if (cancelled) return;
-        if (err?.status === 401) {
+        if (err?.status === 401 || err?.status === 403) {
           cachedProfile = null;
           cachedToken = null;
           router.replace(insurancePaths.login);

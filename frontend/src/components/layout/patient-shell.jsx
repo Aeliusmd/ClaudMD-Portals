@@ -4,13 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
-import { notifications as patientNotifications } from "@/data/notifications";
 import { patientNavItems } from "@/data/navigation";
+import { usePatientNotifications } from "@/hooks/use-patient-notifications";
+import { usePatientProfile } from "@/hooks/use-patient-profile";
 import {
   clearAuthSession,
   getAccessToken,
   getAuthSession,
 } from "@/lib/auth-session";
+import { portalAccessRedirect } from "@/lib/portal-access";
 import { patientPaths } from "@/lib/portal-paths";
 import { userTypeLabel } from "@/lib/user-type";
 
@@ -50,15 +52,27 @@ export function PatientShell({ children }) {
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
   const [ready, setReady] = useState(false);
-  const [profileUser, setProfileUser] = useState(() => sessionProfileUser());
+  const [sessionUser, setSessionUser] = useState(() => sessionProfileUser());
+  const { profile } = usePatientProfile();
+  const {
+    items: notificationItems,
+    markAsRead,
+    total: notificationTotal,
+    unreadCount: notificationUnread,
+  } = usePatientNotifications();
 
   useEffect(() => {
+    const redirectTo = portalAccessRedirect("patient");
+    if (redirectTo) {
+      router.replace(redirectTo);
+      return;
+    }
     const token = getAccessToken();
     if (!token) {
       router.replace(patientPaths.login);
       return;
     }
-    setProfileUser(sessionProfileUser());
+    setSessionUser(sessionProfileUser());
     setReady(true);
   }, [router]);
 
@@ -81,6 +95,15 @@ export function PatientShell({ children }) {
   }, [navOpen]);
 
   const profileHref = useMemo(() => patientPaths.profile, []);
+
+  const profileUser = useMemo(() => {
+    if (!profile) return sessionUser;
+    return {
+      fullName: profile.fullName || sessionUser.fullName,
+      title: profile.typeLabel || sessionUser.title || "",
+      role: profile.typeLabel || sessionUser.role,
+    };
+  }, [profile, sessionUser]);
 
   if (!ready) {
     return (
@@ -110,7 +133,11 @@ export function PatientShell({ children }) {
           profileUser={profileUser}
           profileHref={profileHref}
           loginHref={patientPaths.login}
-          notifications={patientNotifications}
+          notifications={notificationItems}
+          notificationsViewAllHref={patientPaths.notifications}
+          onNotificationsOpen={markAsRead}
+          notificationsTotalCount={notificationTotal}
+          notificationsUnreadCount={notificationUnread}
           showSearch={false}
         />
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6">

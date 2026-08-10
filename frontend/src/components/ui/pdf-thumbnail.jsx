@@ -22,12 +22,19 @@ function loadThumbnailObjectUrl(thumbUrl) {
     if (!token) {
       throw new Error("Authentication required to load document.");
     }
-    const response = await fetch(thumbUrl, {
-      headers: {
-        Accept: "image/png",
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    let response;
+    try {
+      response = await fetch(thumbUrl, {
+        headers: {
+          Accept: "image/png",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch {
+      throw new Error(
+        "Unable to load preview. The server appears to be unavailable."
+      );
+    }
     if (!response.ok) {
       throw new Error(`Unable to load preview (${response.status}).`);
     }

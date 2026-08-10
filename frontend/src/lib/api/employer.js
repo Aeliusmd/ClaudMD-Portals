@@ -1,3 +1,4 @@
+import { fetchJson } from "@/lib/api/http";
 import { employerVisitDocumentFileUrl } from "@/lib/documents";
 
 const API_BASE_URL =
@@ -17,33 +18,15 @@ async function employerFetch(
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-
-  let data = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const detail =
-      (data && (data.detail || data.message)) || fallbackMessage;
-    const error = new Error(
-      typeof detail === "string"
-        ? detail
-        : detail?.message || fallbackMessage
-    );
-    error.status = response.status;
-    error.detail = detail;
-    throw error;
-  }
-
-  return data;
+  return fetchJson(
+    `${API_BASE_URL}${path}`,
+    {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    },
+    fallbackMessage
+  );
 }
 
 export async function fetchEmployerProfile(accessToken) {
@@ -670,7 +653,7 @@ export async function updateEmployerOrganizationUserAccess(
   contactId,
   accessLevel
 ) {
-  const response = await fetch(
+  const data = await fetchJson(
     `${API_BASE_URL}/api/employer/organization-users/${encodeURIComponent(
       contactId
     )}/access`,
@@ -682,26 +665,9 @@ export async function updateEmployerOrganizationUserAccess(
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({ access_level: accessLevel }),
-    }
+    },
+    "Unable to update portal access."
   );
-
-  let data = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const detail =
-      (data && (data.detail || data.message)) ||
-      "Unable to update portal access.";
-    const error = new Error(
-      typeof detail === "string" ? detail : "Unable to update portal access."
-    );
-    error.status = response.status;
-    throw error;
-  }
 
   return {
     canManageAccess: Boolean(data.can_manage_access),

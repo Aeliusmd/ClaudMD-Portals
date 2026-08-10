@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, time
 from pathlib import Path
+from threading import Lock
 
 from fastapi import HTTPException, status
 from fastapi.responses import FileResponse, Response
@@ -16,6 +17,9 @@ from app.employer.schemas import (
     EmployeeVisitsResponse,
 )
 from app.employer.profile import fetch_profile_from_clinic
+
+# pdfium is not safe for concurrent renders in-process (Windows heap crashes).
+_PDF_RENDER_LOCK = Lock()
 
 
 def get_employee_visits(
@@ -182,26 +186,30 @@ def render_pdf_first_page_png(pdf_path: Path, *, scale: float = 1.25) -> bytes:
 
     import pypdfium2 as pdfium
 
-    pdf = pdfium.PdfDocument(str(pdf_path))
-    try:
-        if len(pdf) < 1:
-            raise ValueError("PDF has no pages.")
-        page = pdf[0]
-        pil_image = page.render(scale=scale).to_pil()
-        # Keep tiles light: shrink very large pages.
-        max_edge = 900
-        w, h = pil_image.size
-        longest = max(w, h)
-        if longest > max_edge:
-            ratio = max_edge / float(longest)
-            pil_image = pil_image.resize(
-                (max(1, int(w * ratio)), max(1, int(h * ratio)))
-            )
-        buffer = BytesIO()
-        pil_image.save(buffer, format="PNG", optimize=True)
-        return buffer.getvalue()
-    finally:
-        pdf.close()
+    with _PDF_RENDER_LOCK:
+        pdf = pdfium.PdfDocument(str(pdf_path))
+        try:
+            if len(pdf) < 1:
+                raise ValueError("PDF has no pages.")
+            page = pdf[0]
+            try:
+                pil_image = page.render(scale=scale).to_pil()
+            finally:
+                page.close()
+            # Keep tiles light: shrink very large pages.
+            max_edge = 900
+            w, h = pil_image.size
+            longest = max(w, h)
+            if longest > max_edge:
+                ratio = max_edge / float(longest)
+                pil_image = pil_image.resize(
+                    (max(1, int(w * ratio)), max(1, int(h * ratio)))
+                )
+            buffer = BytesIO()
+            pil_image.save(buffer, format="PNG", optimize=True)
+            return buffer.getvalue()
+        finally:
+            pdf.close()
 
 
 def _resolve_publish_pdf_path(*, folder: str, report_name: str) -> Path | None:

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { fetchEmployerProfile } from "@/lib/api/employer";
+import { fetchPatientProfile } from "@/lib/api/patient";
 import { getAccessToken } from "@/lib/auth-session";
-import { LOGIN_PATH } from "@/lib/auth-routes";
+import { patientPaths } from "@/lib/portal-paths";
 
 let cachedProfile = null;
 let cachedToken = null;
@@ -15,7 +15,7 @@ function notifyProfileListeners(nextProfile) {
   listeners.forEach((listener) => listener(nextProfile));
 }
 
-export function clearEmployerProfileCache() {
+export function clearPatientProfileCache() {
   cachedProfile = null;
   cachedToken = null;
   inflightPromise = null;
@@ -23,11 +23,10 @@ export function clearEmployerProfileCache() {
 }
 
 // Drop stale in-memory profile cache after profile-field shape changes.
-clearEmployerProfileCache();
+clearPatientProfileCache();
 
-export function useEmployerProfile() {
+export function usePatientProfile() {
   const router = useRouter();
-  // Always start equal on server + client to avoid hydration mismatches.
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -36,13 +35,11 @@ export function useEmployerProfile() {
   useEffect(() => {
     const onCacheChange = (nextProfile) => {
       if (nextProfile) {
-        // Immediate push from setCachedProfile — update header without refetch.
         setProfile(nextProfile);
         setLoading(false);
         setError(null);
         return;
       }
-      // Cache cleared — force reload.
       setCacheVersion((version) => version + 1);
     };
     listeners.add(onCacheChange);
@@ -57,7 +54,7 @@ export function useEmployerProfile() {
     async function loadProfile() {
       const token = getAccessToken();
       if (!token) {
-        router.replace(LOGIN_PATH);
+        router.replace(patientPaths.login);
         return;
       }
 
@@ -75,11 +72,10 @@ export function useEmployerProfile() {
       try {
         if (!inflightPromise || cachedToken !== token) {
           cachedToken = token;
-          inflightPromise = fetchEmployerProfile(token);
+          inflightPromise = fetchPatientProfile(token);
         }
         const request = inflightPromise;
         const data = await request;
-        // Ignore stale responses superseded by setCachedProfile / a newer fetch.
         if (inflightPromise !== request && cachedProfile && cachedToken === token) {
           if (!cancelled) {
             setProfile(cachedProfile);
@@ -100,7 +96,7 @@ export function useEmployerProfile() {
         if (err?.status === 401 || err?.status === 403) {
           cachedProfile = null;
           cachedToken = null;
-          router.replace(LOGIN_PATH);
+          router.replace(patientPaths.login);
           return;
         }
         setError(err?.message || "Unable to load profile.");
@@ -121,7 +117,6 @@ export function useEmployerProfile() {
   function setCachedProfile(next) {
     cachedProfile = next;
     cachedToken = getAccessToken();
-    // Resolve waiters to the saved profile so in-flight GETs cannot overwrite it.
     inflightPromise = Promise.resolve(next);
     setProfile(next);
     notifyProfileListeners(next);

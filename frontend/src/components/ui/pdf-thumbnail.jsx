@@ -1,158 +1,123 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { FileText } from "lucide-react";
 import { getAccessToken } from "@/lib/auth-session";
-import { isApiDocumentUrl } from "@/lib/documents";
+import {
+  isApiDocumentUrl,
+  visitDocumentThumbnailUrlFromFileUrl,
+} from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
-/**
- * pdf.js is heavy and browser-only, so it is imported on first use rather than
- * bundled into the page. Its worker is served from `public/` (kept in sync by
- * the `postinstall` script) — the worker build must match the API version.
- */
-let pdfjsPromise = null;
+/** Shared thumbnail blob URLs so remounts do not cancel in-flight fetches. */
+const thumbCache = new Map();
 
-function loadPdfjs() {
-  if (!pdfjsPromise) {
-    pdfjsPromise = import("pdfjs-dist").then((pdfjs) => {
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-        "pdfjs-dist/build/pdf.worker.min.mjs",
-        import.meta.url
-      ).toString();
-      return pdfjs;
+function loadThumbnailObjectUrl(thumbUrl) {
+  if (thumbCache.has(thumbUrl)) {
+    return thumbCache.get(thumbUrl);
+  }
+
+  const pending = (async () => {
+    const token = getAccessToken();
+    if (!token) {
+      throw new Error("Authentication required to load document.");
+    }
+    const response = await fetch(thumbUrl, {
+      headers: {
+        Accept: "image/png",
+        Authorization: `Bearer ${token}`,
+      },
     });
-  }
-  return pdfjsPromise;
-}
+    if (!response.ok) {
+      throw new Error(`Unable to load preview (${response.status}).`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  })();
 
-/** Several thumbnails usually point at the same file — parse it once. */
-const documentCache = new Map();
-
-async function resolvePdfSource(url) {
-  if (!isApiDocumentUrl(url)) {
-    return url;
-  }
-
-  const token = getAccessToken();
-  if (!token) {
-    throw new Error("Authentication required to load document.");
-  }
-
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/pdf",
-      Authorization: `Bearer ${token}`,
-    },
+  thumbCache.set(thumbUrl, pending);
+  pending.catch(() => {
+    thumbCache.delete(thumbUrl);
   });
-  if (!response.ok) {
-    throw new Error(`Unable to load document (${response.status}).`);
-  }
-  const buffer = await response.arrayBuffer();
-  return { data: new Uint8Array(buffer) };
+  return pending;
 }
 
-function loadDocument(pdfjs, sourceKey, source) {
-  if (!documentCache.has(sourceKey)) {
-    // v6 dropped the bare-string form of getDocument.
-    const payload = typeof source === "string" ? { url: source } : source;
-    documentCache.set(sourceKey, pdfjs.getDocument(payload).promise);
-  }
-  return documentCache.get(sourceKey);
-}
-
+/**
+ * Shows page-1 content as a static image (no scrollbar).
+ * Click opens the full PDF preview modal.
+ */
 export function PdfThumbnail({ url, badge, title, onOpen, className }) {
-  const boxRef = useRef(null);
-  const canvasRef = useRef(null);
+  const [src, setSrc] = useState(null);
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
-    let cancelled = false;
-    let renderTask = null;
+    let alive = true;
 
-    async function renderFirstPage() {
-      if (!url) {
+    async function load() {
+      const thumbUrl = isApiDocumentUrl(url)
+        ? visitDocumentThumbnailUrlFromFileUrl(url)
+        : null;
+
+      if (!thumbUrl) {
         setStatus("error");
+        setSrc(null);
         return;
       }
 
+      setStatus("loading");
       try {
-        const pdfjs = await loadPdfjs();
-        const source = await resolvePdfSource(url);
-        if (cancelled) return;
-
-        const pdf = await loadDocument(pdfjs, url, source);
-        const page = await pdf.getPage(1);
-
-        const box = boxRef.current;
-        const canvas = canvasRef.current;
-        if (cancelled || !box || !canvas) return;
-
-        // Letterbox the page inside the thumbnail box, then draw at device
-        // resolution so the preview stays sharp on retina screens.
-        const base = page.getViewport({ scale: 1 });
-        const fit = Math.min(
-          box.clientWidth / base.width,
-          box.clientHeight / base.height
-        );
-        const dpr = window.devicePixelRatio || 1;
-        const viewport = page.getViewport({ scale: fit * dpr });
-
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        canvas.style.width = `${Math.floor(base.width * fit)}px`;
-        canvas.style.height = `${Math.floor(base.height * fit)}px`;
-
-        renderTask = page.render({ canvas, viewport });
-        await renderTask.promise;
-
-        if (!cancelled) setStatus("ready");
-      } catch (error) {
-        if (!cancelled && error?.name !== "RenderingCancelledException") {
-          setStatus("error");
-        }
+        const objectUrl = await loadThumbnailObjectUrl(thumbUrl);
+        if (!alive) return;
+        setSrc(objectUrl);
+        setStatus("ready");
+      } catch {
+        if (!alive) return;
+        setSrc(null);
+        setStatus("error");
       }
     }
 
-    renderFirstPage();
-
+    load();
     return () => {
-      cancelled = true;
-      renderTask?.cancel();
+      alive = false;
     };
   }, [url]);
 
   return (
     <div
-      ref={boxRef}
       className={cn(
         "group relative flex aspect-[17/22] w-full items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm",
         className
       )}
     >
-      <canvas
-        ref={canvasRef}
-        aria-hidden="true"
-        className={cn(
-          "block transition-opacity",
-          status === "ready" ? "opacity-100" : "opacity-0"
-        )}
-      />
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          className="max-h-full max-w-full object-contain"
+          draggable={false}
+        />
+      ) : null}
 
       {status !== "ready" ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-foreground-500">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white text-foreground-500">
           <FileText className="h-6 w-6" />
           <span className="text-[10px] font-semibold tracking-wide">
-            {badge || "PDF"}
+            {status === "loading" ? "Loading…" : badge || "PDF"}
           </span>
         </div>
+      ) : badge ? (
+        <span className="pointer-events-none absolute top-2 left-2 z-10 rounded-md bg-foreground-900/75 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">
+          {badge}
+        </span>
       ) : null}
 
       <button
         type="button"
         onClick={onOpen}
         aria-label={`Open ${title}`}
-        className="absolute inset-0 h-full w-full cursor-pointer rounded-xl ring-inset transition group-hover:ring-2 group-hover:ring-primary-400/60"
+        className="absolute inset-0 z-20 h-full w-full cursor-pointer rounded-xl ring-inset transition group-hover:ring-2 group-hover:ring-primary-400/60"
       />
     </div>
   );

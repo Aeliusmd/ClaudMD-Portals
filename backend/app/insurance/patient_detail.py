@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from fastapi import HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
@@ -15,6 +16,7 @@ from app.employer.visit_documents import (
     _preview_badge,
     _resolve_publish_pdf_path,
     _visit_category,
+    render_pdf_first_page_png,
 )
 from app.insurance.profile import fetch_profile_from_clinic
 from app.insurance.schemas import (
@@ -430,6 +432,26 @@ def open_insurance_visit_document_file(
         filename=pdf_path.name,
         content_disposition_type="inline",
     )
+
+
+def open_insurance_visit_document_thumbnail(
+    current_user: CurrentUser,
+    patient_id: int,
+    document_id: int,
+) -> Response:
+    """PNG of page 1 for insurance visit document tiles."""
+    # Reuse auth + path resolution from the file stream helper.
+    file_response = open_insurance_visit_document_file(
+        current_user, patient_id, document_id
+    )
+    try:
+        png_bytes = render_pdf_first_page_png(Path(file_response.path))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document preview is not available.",
+        ) from exc
+    return Response(content=png_bytes, media_type="image/png")
 
 
 def _format_dob_slash(value) -> str | None:

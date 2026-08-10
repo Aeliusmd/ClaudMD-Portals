@@ -59,7 +59,7 @@ from app.employer.service import (
     get_employer_profile,
     update_employer_profile,
 )
-from app.employer.visit_documents import get_employee_visits, open_employee_visit_document_file
+from app.employer.visit_documents import get_employee_visits, open_employee_visit_document_file, open_employee_visit_document_thumbnail
 
 router = APIRouter(prefix="/api/employer", tags=["employer"])
 
@@ -203,6 +203,20 @@ def employer_employee_visit_document_file_endpoint(
 ) -> FileResponse:
     """Stream a DocterPublishes PDF from the clinic publish share (read-only)."""
     return open_employee_visit_document_file(
+        current_user,
+        patient_id,
+        document_id,
+    )
+
+
+@router.get("/employees/{patient_id}/visit-documents/{document_id}/thumbnail")
+def employer_employee_visit_document_thumbnail_endpoint(
+    patient_id: int,
+    document_id: int,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """PNG of the first PDF page for employee visit document tiles."""
+    return open_employee_visit_document_thumbnail(
         current_user,
         patient_id,
         document_id,

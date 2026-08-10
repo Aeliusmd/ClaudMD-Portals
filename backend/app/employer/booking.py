@@ -283,6 +283,7 @@ def list_available_slots(
     resource_id: int,
     on_date: date,
     duration_minutes: int,
+    patient_id: int | None = None,
 ) -> AppointmentSlotsResponse:
     clinic, _profile = _clinic_and_employer(current_user)
     _ensure_booking_date_not_past(clinic, on_date)
@@ -298,6 +299,12 @@ def list_available_slots(
         resource = _fetch_resource(cursor, resource_id, location_id)
         shifts = _fetch_shifts(cursor, resource_id, work_day)
         booked = _fetch_booked_intervals(cursor, resource_id, on_date)
+        # Additive: when a patient is selected, also hide times they already hold.
+        patient_booked = (
+            _fetch_patient_booked_intervals(cursor, int(patient_id), on_date)
+            if patient_id is not None
+            else []
+        )
         server_now = _fetch_server_now(cursor)
 
     slot_minutes = max(1, int(round(resource.time_slot_minutes)))
@@ -332,6 +339,14 @@ def list_available_slots(
                 capacity,
                 booked,
             )
+            if ok and patient_booked:
+                ok, reason = _block_is_available(
+                    cursor_start,
+                    block_minutes,
+                    slot_minutes,
+                    capacity,
+                    patient_booked,
+                )
             if ok:
                 options.append(
                     AppointmentSlotOption(
@@ -686,6 +701,45 @@ def _fetch_booked_intervals(cursor, resource_id: int, on_date: date) -> list[_Bo
           AND (IsDeleted = 0 OR IsDeleted IS NULL)
         """,
         (resource_id, on_date),
+    )
+    booked: list[_BookedInterval] = []
+    for row in cursor.fetchall():
+        status_id = int(row.AppointmentStatusId) if row.AppointmentStatusId is not None else None
+        if status_id in CANCELLED_STATUS_IDS:
+            continue
+        start = row.StartTime if isinstance(row.StartTime, time) else _parse_time(str(row.StartTime))
+        end = row.EndTime if isinstance(row.EndTime, time) else _parse_time(str(row.EndTime))
+        if not start or not end or end <= start:
+            continue
+        booked.append(
+            _BookedInterval(
+                start_minutes=_time_to_minutes(start),
+                end_minutes=_time_to_minutes(end),
+            )
+        )
+    return booked
+
+
+def _fetch_patient_booked_intervals(
+    cursor,
+    patient_id: int,
+    on_date: date,
+) -> list[_BookedInterval]:
+    """
+    Existing non-cancelled schedules for a patient on a date (any provider/location).
+    Used only as an additive filter after provider availability is computed.
+    """
+    cursor.execute(
+        """
+        SELECT s.StartTime, s.EndTime, s.AppointmentStatusId
+        FROM dbo.AppointmentSchedules s
+        LEFT JOIN dbo.Appointments a ON a.Id = s.AppointmentId
+        LEFT JOIN dbo.CheckInsHeader ch ON ch.Id = s.CheckInId
+        WHERE s.Date = ?
+          AND (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
+          AND COALESCE(a.PatientId, ch.PatientId) = ?
+        """,
+        (on_date, int(patient_id)),
     )
     booked: list[_BookedInterval] = []
     for row in cursor.fetchall():

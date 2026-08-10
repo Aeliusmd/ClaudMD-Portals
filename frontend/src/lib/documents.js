@@ -45,17 +45,38 @@ export function insuranceVisitDocumentThumbnailUrl(patientId, documentId) {
   )}/visit-documents/${encodeURIComponent(documentId)}/thumbnail`;
 }
 
+/**
+ * Build an absolute URL for an authenticated patient visit PDF.
+ * PdfThumbnail / preview fetch this with the bearer token and use a blob URL.
+ */
+export function patientVisitDocumentFileUrl(checkInId, documentId) {
+  if (checkInId == null || documentId == null) return null;
+  return `${API_BASE_URL}/api/patient/visits/${encodeURIComponent(
+    checkInId
+  )}/documents/${encodeURIComponent(documentId)}/file`;
+}
+
+/** First-page PNG for patient visit document tiles. */
+export function patientVisitDocumentThumbnailUrl(checkInId, documentId) {
+  if (checkInId == null || documentId == null) return null;
+  return `${API_BASE_URL}/api/patient/visits/${encodeURIComponent(
+    checkInId
+  )}/documents/${encodeURIComponent(documentId)}/thumbnail`;
+}
+
 export function isApiDocumentUrl(url) {
   if (!url) return false;
   const value = String(url);
-  const isVisitFile =
+  const isEmployerOrInsurance =
     value.includes("/visit-documents/") &&
-    (value.endsWith("/file") || value.endsWith("/thumbnail"));
-  return (
-    isVisitFile &&
+    (value.endsWith("/file") || value.endsWith("/thumbnail")) &&
     (value.includes("/api/employer/employees/") ||
-      value.includes("/api/insurance/patients/"))
-  );
+      value.includes("/api/insurance/patients/"));
+  const isPatient =
+    value.includes("/api/patient/visits/") &&
+    value.includes("/documents/") &&
+    (value.endsWith("/file") || value.endsWith("/thumbnail"));
+  return isEmployerOrInsurance || isPatient;
 }
 
 /** Derive thumbnail URL from a visit document file URL. */

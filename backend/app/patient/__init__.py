@@ -1,1 +1,1 @@
-"""Patient portal API (self profile via activation-key clinic DB)."""
+"""Patient portal: dashboard, visits, appointments, profile, my-info, notifications."""

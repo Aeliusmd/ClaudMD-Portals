@@ -288,13 +288,16 @@ export async function fetchAppointmentProviders(
 
 export async function fetchAppointmentSlots(
   accessToken,
-  { locationId, resourceId, date, durationMinutes }
+  { locationId, resourceId, date, durationMinutes, patientId }
 ) {
   const params = new URLSearchParams();
   params.set("locationId", String(locationId));
   params.set("resourceId", String(resourceId));
   params.set("date", date);
   params.set("durationMinutes", String(durationMinutes || 15));
+  if (patientId != null && patientId !== "") {
+    params.set("patientId", String(patientId));
+  }
   const data = await employerFetch(
     `/api/employer/appointments/slots?${params.toString()}`,
     accessToken,

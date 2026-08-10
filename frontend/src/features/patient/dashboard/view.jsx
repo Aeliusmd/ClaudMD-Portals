@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Plus, Search } from "lucide-react";
+import { FileText, Filter, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DateRangeInput } from "@/components/ui/date-range-input";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/api/patient";
 import { getAccessToken } from "@/lib/auth-session";
 import {
+  appointmentStatusStyles,
   categoryStyles,
   specialtyStyle,
   workStatusStyle,
@@ -68,7 +70,7 @@ const kpiTabs = [
   {
     key: "appointments",
     label: "Appointments",
-    title: "Visits with Upcoming Appointments",
+    title: "Upcoming Appointments",
     showAdd: true,
   },
   /** Read-only counter — it does not filter the table. */
@@ -92,9 +94,12 @@ export function PatientDashboardView() {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState("urgentCare");
-  const [query, setQuery] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [draftQuery, setDraftQuery] = useState("");
+  const [draftFromDate, setDraftFromDate] = useState("");
+  const [draftToDate, setDraftToDate] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [appliedFromDate, setAppliedFromDate] = useState("");
+  const [appliedToDate, setAppliedToDate] = useState("");
   const [visitPage, setVisitPage] = useState(1);
   const [appointmentPage, setAppointmentPage] = useState(1);
   const [createdAppointments, setCreatedAppointments] = useState([]);
@@ -105,17 +110,13 @@ export function PatientDashboardView() {
   const [liveVisits, setLiveVisits] = useState([]);
   const [loadingVisits, setLoadingVisits] = useState(false);
   const [visitsError, setVisitsError] = useState(null);
-  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [liveAppointments, setLiveAppointments] = useState([]);
   const [appointmentsTotal, setAppointmentsTotal] = useState(0);
   const [appointmentsTotalPages, setAppointmentsTotalPages] = useState(1);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
   const [appointmentsError, setAppointmentsError] = useState(null);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
-    return () => clearTimeout(timer);
-  }, [query]);
+  const [appointmentsReloadKey, setAppointmentsReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,9 +177,9 @@ export function PatientDashboardView() {
       try {
         const data = await fetchPatientDashboardVisits(token, {
           category: activeTab,
-          fromDate: fromDate || undefined,
-          toDate: toDate || undefined,
-          search: debouncedQuery || undefined,
+          fromDate: appliedFromDate || undefined,
+          toDate: appliedToDate || undefined,
+          search: appliedQuery || undefined,
         });
         if (!cancelled) {
           setLiveVisits(data.items || []);
@@ -201,7 +202,7 @@ export function PatientDashboardView() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, debouncedQuery, fromDate, router, toDate]);
+  }, [activeTab, appliedFromDate, appliedQuery, appliedToDate, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -246,10 +247,10 @@ export function PatientDashboardView() {
     return () => {
       cancelled = true;
     };
-  }, [appointmentPage, router]);
+  }, [appointmentPage, appointmentsReloadKey, router]);
 
   const upcomingAppointments = useMemo(() => {
-    // In-session creates from the modal stay visible until booking API exists.
+    // In-session creates from the modal stay visible until list reloads.
     if (appointmentPage !== 1 || createdAppointments.length === 0) {
       return liveAppointments;
     }
@@ -260,8 +261,8 @@ export function PatientDashboardView() {
 
   const stats = summary || emptySummary;
 
+  const isAppointmentsTab = activeTab === "appointments";
   const filteredVisits = LIVE_VISIT_TABS.has(activeTab) ? liveVisits : [];
-
   const pagedVisits = paginateItems(filteredVisits, visitPage, PAGE_SIZE);
 
   const appointmentStart =
@@ -275,23 +276,30 @@ export function PatientDashboardView() {
   const tableTitle = activeTabConfig?.title || "All Visits";
   const showWorkStatus = !activeTabConfig?.hideWorkStatus;
 
+  const leftLoading = isAppointmentsTab
+    ? loadingAppointments
+    : loadingVisits && LIVE_VISIT_TABS.has(activeTab);
+  const leftError = isAppointmentsTab
+    ? appointmentsError
+    : LIVE_VISIT_TABS.has(activeTab)
+      ? visitsError
+      : null;
+  const leftCount = isAppointmentsTab
+    ? appointmentsTotal
+    : filteredVisits.length;
+  const leftEmpty = isAppointmentsTab
+    ? !loadingAppointments && upcomingAppointments.length === 0
+    : !leftLoading && filteredVisits.length === 0;
+
   function handleTabClick(key) {
     setActiveTab((prev) => (prev === key ? null : key));
     setVisitPage(1);
   }
 
-  function handleQueryChange(event) {
-    setQuery(event.target.value);
-    setVisitPage(1);
-  }
-
-  function handleFromDateChange(event) {
-    setFromDate(event.target.value);
-    setVisitPage(1);
-  }
-
-  function handleToDateChange(event) {
-    setToDate(event.target.value);
+  function applyFilters() {
+    setAppliedQuery(draftQuery.trim());
+    setAppliedFromDate(draftFromDate);
+    setAppliedToDate(draftToDate);
     setVisitPage(1);
   }
 
@@ -299,6 +307,12 @@ export function PatientDashboardView() {
     setCreatedAppointments((prev) => [appointment, ...prev]);
     setActiveTab("appointments");
     setAppointmentPage(1);
+    setAppointmentsReloadKey((key) => key + 1);
+    setSummary((prev) =>
+      prev
+        ? { ...prev, appointments: (prev.appointments || 0) + 1 }
+        : prev
+    );
   }
 
   return (
@@ -401,8 +415,14 @@ export function PatientDashboardView() {
           <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted" />
           <input
             type="search"
-            value={query}
-            onChange={handleQueryChange}
+            value={draftQuery}
+            onChange={(event) => setDraftQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                applyFilters();
+              }
+            }}
             placeholder="Search visits by provider, location, or ID..."
             className="w-full rounded-xl border border-border/80 bg-white py-2.5 pr-4 pl-10 text-sm text-ink outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/15"
           />
@@ -411,16 +431,25 @@ export function PatientDashboardView() {
           <DateRangeInput
             id="patient-dashboard-from"
             label="From"
-            value={fromDate}
-            onChange={handleFromDateChange}
+            value={draftFromDate}
+            onChange={(event) => setDraftFromDate(event.target.value)}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="patient-dashboard-to"
             label="To"
-            value={toDate}
-            onChange={handleToDateChange}
+            value={draftToDate}
+            onChange={(event) => setDraftToDate(event.target.value)}
           />
+          <Button
+            type="button"
+            onClick={applyFilters}
+            className="h-[2.625rem] shrink-0 gap-1.5 rounded-xl px-3.5 py-0 text-sm"
+            aria-label="Apply filters"
+          >
+            <Filter className="h-3.5 w-3.5" strokeWidth={2.25} />
+            Filter
+          </Button>
         </div>
       </div>
 
@@ -429,19 +458,17 @@ export function PatientDashboardView() {
           <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
             <h2 className="text-lg font-semibold text-ink">{tableTitle}</h2>
             <p className="text-sm text-muted">
-              {loadingVisits && LIVE_VISIT_TABS.has(activeTab)
-                ? "Loading…"
-                : `${filteredVisits.length} results`}
+              {leftLoading ? "Loading…" : `${leftCount} results`}
             </p>
           </div>
 
-          {visitsError && LIVE_VISIT_TABS.has(activeTab) ? (
+          {leftError ? (
             <p className="mx-4 mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:mx-5">
-              {visitsError}
+              {leftError}
             </p>
           ) : null}
 
-          {loadingVisits && LIVE_VISIT_TABS.has(activeTab) ? (
+          {leftLoading ? (
             <div className="space-y-3 px-4 pb-5 sm:px-5">
               {Array.from({ length: 4 }).map((_, index) => (
                 <div
@@ -450,12 +477,94 @@ export function PatientDashboardView() {
                 />
               ))}
             </div>
-          ) : filteredVisits.length === 0 ? (
+          ) : leftEmpty ? (
             <EmptyState
-              title="No visits match this filter"
-              description="Try another category, clear the filter, or adjust the date range."
+              title={
+                isAppointmentsTab
+                  ? "No upcoming appointments"
+                  : "No visits match this filter"
+              }
+              description={
+                isAppointmentsTab
+                  ? "Use + to schedule an Urgent Care or Personal Injury appointment."
+                  : "Try another category, clear the filter, or adjust the date range."
+              }
               className="min-h-64 rounded-none border-0"
             />
+          ) : isAppointmentsTab ? (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-[40rem] w-full text-left text-sm">
+                  <thead className="border-y border-border/70 bg-cream/50 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
+                    <tr>
+                      <th className="px-4 py-3 sm:px-5">Provider / Location</th>
+                      <th className="px-4 py-3 sm:px-5">Type</th>
+                      <th className="px-4 py-3 sm:px-5">Date & Time</th>
+                      <th className="px-4 py-3 sm:px-5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {upcomingAppointments.map((appointment) => (
+                      <tr
+                        key={appointment.id}
+                        className="bg-white transition hover:bg-cream/40"
+                      >
+                        <td className="px-4 py-3.5 sm:px-5 sm:py-4">
+                          <p className="font-semibold text-ink">
+                            {appointment.doctor}
+                          </p>
+                          <p className="mt-0.5 text-sm text-muted">
+                            {appointment.location || "—"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3.5 sm:px-5 sm:py-4">
+                          <Badge
+                            className={
+                              categoryStyles[appointment.category] ||
+                              specialtyStyle(appointment.specialty) ||
+                              categoryStyles.Other
+                            }
+                          >
+                            {appointment.category ||
+                              appointment.specialty ||
+                              appointment.type ||
+                              "Appointment"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3.5 sm:px-5 sm:py-4">
+                          <p className="font-semibold text-ink">
+                            {appointment.date}
+                          </p>
+                          <p className="mt-0.5 text-sm text-muted">
+                            {appointment.time}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3.5 sm:px-5 sm:py-4">
+                          <Badge
+                            className={
+                              appointmentStatusStyles[appointment.status] ||
+                              "bg-stone-100 text-stone-600"
+                            }
+                          >
+                            {appointment.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <Pagination
+                alwaysShow
+                page={appointmentPage}
+                totalPages={appointmentsTotalPages}
+                total={appointmentsTotal}
+                start={appointmentStart}
+                end={appointmentEnd}
+                onChange={setAppointmentPage}
+              />
+            </>
           ) : (
             <>
               <div className="overflow-x-auto">

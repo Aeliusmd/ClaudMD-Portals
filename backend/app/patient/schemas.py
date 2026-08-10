@@ -195,3 +195,15 @@ class PatientUpcomingAppointmentsResponse(BaseModel):
     page_size: int = 10
     total_pages: int = 1
     patient_id: int | None = None
+
+
+class PatientAppointmentBookRequest(BaseModel):
+    location_id: int
+    resource_id: int
+    visit_type_id: int
+    date: str
+    start_time: str
+    duration_minutes: int
+    appointment_status_id: int | None = 4
+    schedule_type_id: int | None = 1
+    note: str | None = None

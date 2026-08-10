@@ -88,7 +88,6 @@ export function PatientVisitDetailLoader({ checkInId }) {
       showEmployer={visit.showEmployer}
       showInsurance={visit.showInsurance}
       showWorkStatus={visit.showWorkStatus}
-      otherVisits={visit.otherVisits}
       backHref={patientPaths.dashboard}
     />
   );

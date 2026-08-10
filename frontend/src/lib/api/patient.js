@@ -329,14 +329,29 @@ export async function fetchPatientUpcomingAppointments(
   accessToken,
   { page = 1, pageSize = 10 } = {}
 ) {
+  return fetchPatientAppointments(accessToken, {
+    scope: "upcoming",
+    page,
+    pageSize,
+  });
+}
+
+/**
+ * Patient appointments table (all | upcoming | completed).
+ */
+export async function fetchPatientAppointments(
+  accessToken,
+  { scope = "all", page = 1, pageSize = 10 } = {}
+) {
   const params = new URLSearchParams();
+  params.set("scope", scope || "all");
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));
 
   const data = await patientFetch(
-    `/api/patient/appointments/upcoming?${params.toString()}`,
+    `/api/patient/appointments?${params.toString()}`,
     accessToken,
-    "Unable to load upcoming appointments."
+    "Unable to load appointments."
   );
 
   return {
@@ -348,7 +363,7 @@ export async function fetchPatientUpcomingAppointments(
       specialty: row.specialty || row.category || "Appointment",
       type: row.type || "Appointment",
       category: row.category || null,
-      location: row.location || null,
+      location: row.location || "—",
       date: row.date || null,
       dateValue: row.date_value ?? row.dateValue ?? null,
       time: row.time || "—",
@@ -359,5 +374,141 @@ export async function fetchPatientUpcomingAppointments(
     pageSize: data.page_size ?? data.pageSize ?? pageSize,
     totalPages: data.total_pages ?? data.totalPages ?? 1,
     patientId: data.patient_id ?? data.patientId ?? null,
+  };
+}
+
+export async function fetchPatientAppointmentLocations(accessToken) {
+  const data = await patientFetch(
+    "/api/patient/appointments/locations",
+    accessToken,
+    "Unable to load locations."
+  );
+  return (data || []).map((row) => ({
+    id: row.id,
+    name: row.short_name
+      ? `${row.name} (${row.short_name})`
+      : row.name,
+    shortName: row.short_name ?? row.shortName ?? null,
+  }));
+}
+
+export async function fetchPatientAppointmentVisitTypes(accessToken) {
+  const data = await patientFetch(
+    "/api/patient/appointments/visit-types",
+    accessToken,
+    "Unable to load visit types."
+  );
+  return (data || []).map((row) => {
+    const categoryId = row.category_id ?? row.categoryId ?? null;
+    const categoryLabel =
+      categoryId === 3
+        ? "Urgent Care"
+        : categoryId === 4
+          ? "Personal Injury"
+          : null;
+    const name = row.name || "Visit type";
+    return {
+      id: row.id,
+      code: row.code,
+      name,
+      categoryId,
+      label: categoryLabel
+        ? `${name} (${categoryLabel})`
+        : row.code
+          ? `${name} (${row.code})`
+          : name,
+    };
+  });
+}
+
+export async function fetchPatientAppointmentProviders(
+  accessToken,
+  { locationId, date }
+) {
+  const params = new URLSearchParams();
+  params.set("locationId", String(locationId));
+  params.set("date", date);
+  const data = await patientFetch(
+    `/api/patient/appointments/providers?${params.toString()}`,
+    accessToken,
+    "Unable to load providers for this date."
+  );
+  return (data || []).map((row) => ({
+    resourceId: row.resource_id ?? row.resourceId,
+    providerId: row.provider_id ?? row.providerId,
+    name: row.name,
+    resourceName: row.resource_name ?? row.resourceName,
+    providerName: row.provider_name ?? row.providerName,
+    locationId: row.location_id ?? row.locationId,
+    timeSlotMinutes: row.time_slot_minutes ?? row.timeSlotMinutes ?? 15,
+    patientsPerSlot: row.patients_per_slot ?? row.patientsPerSlot ?? 1,
+    shifts: row.shifts || [],
+  }));
+}
+
+export async function fetchPatientAppointmentSlots(
+  accessToken,
+  { locationId, resourceId, date, durationMinutes }
+) {
+  const params = new URLSearchParams();
+  params.set("locationId", String(locationId));
+  params.set("resourceId", String(resourceId));
+  params.set("date", date);
+  params.set("durationMinutes", String(durationMinutes || 15));
+  const data = await patientFetch(
+    `/api/patient/appointments/slots?${params.toString()}`,
+    accessToken,
+    "Unable to load available time slots."
+  );
+  return {
+    date: data.date,
+    locationId: data.location_id ?? data.locationId,
+    resourceId: data.resource_id ?? data.resourceId,
+    durationMinutes: data.duration_minutes ?? data.durationMinutes,
+    timeSlotMinutes: data.time_slot_minutes ?? data.timeSlotMinutes,
+    patientsPerSlot: data.patients_per_slot ?? data.patientsPerSlot,
+    slotsNeeded: data.slots_needed ?? data.slotsNeeded,
+    items: (data.items || []).map((row) => ({
+      start: row.start,
+      end: row.end,
+      label: row.label,
+      slotsUsed: row.slots_used ?? row.slotsUsed,
+    })),
+  };
+}
+
+export async function bookPatientAppointment(accessToken, payload) {
+  const data = await patientFetch(
+    "/api/patient/appointments/book",
+    accessToken,
+    "Unable to book appointment.",
+    {
+      method: "POST",
+      body: {
+        location_id: payload.locationId,
+        resource_id: payload.resourceId,
+        visit_type_id: payload.visitTypeId,
+        date: payload.date,
+        start_time: payload.startTime,
+        duration_minutes: payload.durationMinutes,
+        appointment_status_id: payload.appointmentStatusId ?? 4,
+        schedule_type_id: payload.scheduleTypeId ?? 1,
+        note: payload.note || null,
+      },
+    }
+  );
+
+  return {
+    executed: data.executed ?? true,
+    message: data.message || "Appointment booked successfully.",
+    patientId: data.patient_id ?? data.patientId ?? null,
+    appointmentId: data.appointment_id ?? data.appointmentId ?? null,
+    scheduleId: data.schedule_id ?? data.scheduleId ?? null,
+    locationId: data.location_id ?? data.locationId ?? null,
+    resourceId: data.resource_id ?? data.resourceId ?? null,
+    date: data.date || null,
+    startTime: data.start_time ?? data.startTime ?? null,
+    endTime: data.end_time ?? data.endTime ?? null,
+    durationMinutes: data.duration_minutes ?? data.durationMinutes ?? null,
   };
 }

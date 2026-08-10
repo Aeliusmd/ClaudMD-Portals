@@ -31,6 +31,13 @@ const DURATION_OPTIONS = [
   { value: "60", label: "60 minutes" },
 ];
 
+/** US mobile/cell numbers: digits only, exactly 10. */
+const CELL_PHONE_DIGITS = 10;
+
+function digitsOnly(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 const GENDER_OPTIONS = [
   { value: "M", label: "Male" },
   { value: "F", label: "Female" },
@@ -445,7 +452,12 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
     if (!newPatient.city.trim()) next.city = "Enter city.";
     if (!newPatient.state) next.state = "Select state.";
     if (!newPatient.zipCode.trim()) next.zipCode = "Enter zip.";
-    if (!newPatient.phone.trim()) next.phone = "Enter cell phone.";
+    const phoneDigits = digitsOnly(newPatient.phone);
+    if (!phoneDigits) {
+      next.phone = "Enter cell phone.";
+    } else if (phoneDigits.length !== CELL_PHONE_DIGITS) {
+      next.phone = `Enter a ${CELL_PHONE_DIGITS}-digit cell phone number.`;
+    }
     return next;
   }
 
@@ -537,7 +549,7 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
               gender: newPatient.gender,
               ssn: newPatient.ssn.trim(),
               accountNo: newPatient.accountNo.trim() || null,
-              phone: newPatient.phone.trim(),
+              phone: digitsOnly(newPatient.phone),
               address1: newPatient.address1.trim(),
               address2: newPatient.address2.trim() || null,
               city: newPatient.city.trim(),
@@ -962,8 +974,17 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                   <input
                     id="new-phone"
                     type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    maxLength={CELL_PHONE_DIGITS}
+                    placeholder="10-digit number"
                     value={newPatient.phone}
-                    onChange={(e) => setPatientField("phone", e.target.value)}
+                    onChange={(e) =>
+                      setPatientField(
+                        "phone",
+                        digitsOnly(e.target.value).slice(0, CELL_PHONE_DIGITS)
+                      )
+                    }
                     className={cn(
                       controlClass,
                       patientErrors.phone ? "border-rose-400" : "border-border"

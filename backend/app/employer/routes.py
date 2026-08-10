@@ -341,11 +341,13 @@ def employer_appointment_slots_endpoint(
     resource_id: int = Query(alias="resourceId"),
     on_date: date = Query(alias="date"),
     duration_minutes: int = Query(default=15, ge=1, le=480, alias="durationMinutes"),
+    patient_id: int | None = Query(default=None, alias="patientId"),
 ):
     """
     Available start slots for a provider on a date (SELECT only).
     Honors working hours, TimeSlot size, NumberOfPatientsPerSlot, and existing bookings.
     Duration longer than one slot requires contiguous free neighbor slots.
+    When patientId is provided, also excludes times the patient already holds.
     """
     return list_available_slots(
         current_user,
@@ -353,6 +355,7 @@ def employer_appointment_slots_endpoint(
         resource_id=resource_id,
         on_date=on_date,
         duration_minutes=duration_minutes,
+        patient_id=patient_id,
     )
 
 

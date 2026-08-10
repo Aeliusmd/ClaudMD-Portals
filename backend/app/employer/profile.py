@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
-from app.auth.user_profile_type import user_type_label
+from app.auth.user_profile_type import UserType, user_type_label
 from app.db.clinic import get_clinic_connection
 
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -15,6 +15,9 @@ _TITLE_MAX = 100
 _EMAIL_MAX = 100
 _PHONE_MAX = 20
 _PHONE_DIGITS_MIN = 10
+
+# Super Admin may use employer portal; Employer User is the dedicated role.
+_EMPLOYER_PORTAL_TYPES = {int(UserType.SuperAdmin), int(UserType.EmployerUser)}
 
 
 @dataclass(frozen=True)
@@ -71,14 +74,48 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> EmployerProf
                         LOWER(LTRIM(RTRIM(LoginId))) = LOWER(?)
                      OR LOWER(LTRIM(RTRIM(Email))) = LOWER(?)
                   )
+                ORDER BY
+                    CASE WHEN TypeId IN (?, ?) THEN 0 ELSE 1 END,
+                    Id DESC
                 """,
-                (login, email),
+                (
+                    login,
+                    email,
+                    int(UserType.SuperAdmin),
+                    int(UserType.EmployerUser),
+                ),
             )
             user_row = cursor.fetchone()
 
-        resolved_user_id = int(user_row.Id) if user_row else user_id
-        profile_email = (
-            ((user_row.Email or "").strip() if user_row else None) or email or None
+        if not user_row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active user profile was found for this account.",
+            )
+
+        type_id = None
+        if user_row.TypeId is not None:
+            try:
+                type_id = int(user_row.TypeId)
+            except (TypeError, ValueError):
+                type_id = None
+
+        if type_id not in _EMPLOYER_PORTAL_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This account is not enabled for the employer portal.",
+            )
+
+        resolved_user_id = int(user_row.Id)
+        profile_email = (user_row.Email or "").strip() or email or None
+        login_id = (user_row.LoginId or "").strip() or login or None
+        first_name = (user_row.FirstName or "").strip() or None
+        last_name = (user_row.LastName or "").strip() or None
+        title = (user_row.Title or "").strip() or None
+        phone = (
+            (user_row.CellPhone or "").strip()
+            or (user_row.Phone or "").strip()
+            or None
         )
 
         # One round-trip for contact + employer (+ address).
@@ -121,34 +158,20 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> EmployerProf
         )
         contact_row = cursor.fetchone()
 
-    first_name = None
-    last_name = None
-    title = None
-    phone = None
-    login_id = login or None
-    type_id = None
-
-    if user_row:
-        first_name = user_row.FirstName
-        last_name = user_row.LastName
-        title = user_row.Title
-        profile_email = (user_row.Email or "").strip() or profile_email
-        login_id = user_row.LoginId or login_id
-        phone = user_row.CellPhone or user_row.Phone
-        if user_row.TypeId is not None:
-            try:
-                type_id = int(user_row.TypeId)
-            except (TypeError, ValueError):
-                type_id = None
+    if contact_row:
+        first_name = first_name or ((contact_row.FirstName or "").strip() or None)
+        last_name = last_name or ((contact_row.LastName or "").strip() or None)
+        profile_email = (contact_row.Email or "").strip() or profile_email
+        phone = (
+            (contact_row.CellPhone or "").strip()
+            or (contact_row.Phone or "").strip()
+            or phone
+        )
 
     employer_id = None
     organization = None
     address = None
     if contact_row:
-        first_name = first_name or contact_row.FirstName
-        last_name = last_name or contact_row.LastName
-        profile_email = (contact_row.Email or "").strip() or profile_email
-        phone = phone or contact_row.CellPhone or contact_row.Phone
         if contact_row.ResolvedEmployerId is not None:
             employer_id = int(contact_row.ResolvedEmployerId)
         organization = (contact_row.EmployerName or "").strip() or None

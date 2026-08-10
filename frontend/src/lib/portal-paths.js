@@ -36,6 +36,7 @@ export const patientPaths = {
   appointments: `${PATIENT_PORTAL_BASE}/appointments`,
   documentShare: `${PATIENT_PORTAL_BASE}/document-share`,
   profile: `${PATIENT_PORTAL_BASE}/profile`,
+  notifications: `${PATIENT_PORTAL_BASE}/notifications`,
 };
 
 export const insurancePaths = {

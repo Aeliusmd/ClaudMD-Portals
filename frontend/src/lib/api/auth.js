@@ -1,3 +1,5 @@
+import { fetchJson } from "@/lib/api/http";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -7,39 +9,23 @@ export async function loginWithCredentials({
   activationKey,
   portal,
 }) {
-  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
+  return fetchJson(
+    `${API_BASE_URL}/api/auth/login`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        username,
+        password,
+        activationKey,
+        ...(portal ? { portal } : {}),
+      }),
     },
-    body: JSON.stringify({
-      username,
-      password,
-      activationKey,
-      ...(portal ? { portal } : {}),
-    }),
-  });
-
-  let data = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const detail =
-      (data && (data.detail || data.message)) ||
-      "Unable to sign in. Please try again.";
-    const error = new Error(
-      typeof detail === "string" ? detail : "Unable to sign in. Please try again."
-    );
-    error.status = response.status;
-    throw error;
-  }
-
-  return data;
+    "Unable to sign in. Please try again."
+  );
 }
 
 export async function changePassword({
@@ -48,42 +34,23 @@ export async function changePassword({
   newPassword,
   confirmPassword,
 }) {
-  const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${accessToken}`,
+  return fetchJson(
+    `${API_BASE_URL}/api/auth/change-password`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      }),
     },
-    body: JSON.stringify({
-      currentPassword,
-      newPassword,
-      confirmPassword,
-    }),
-  });
-
-  let data = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const detail =
-      (data && (data.detail || data.message)) ||
-      "Unable to update password. Please try again.";
-    const error = new Error(
-      typeof detail === "string"
-        ? detail
-        : "Unable to update password. Please try again."
-    );
-    error.status = response.status;
-    throw error;
-  }
-
-  return data;
+    "Unable to update password. Please try again."
+  );
 }
 
 export { resolvePortalDestination } from "@/lib/portal-paths";
-

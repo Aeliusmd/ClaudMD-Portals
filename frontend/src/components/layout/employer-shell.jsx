@@ -19,6 +19,7 @@ import {
   clearSecureShareSession,
   getSecureShareSession,
 } from "@/lib/secure-share-session";
+import { portalAccessRedirect } from "@/lib/portal-access";
 import { employerPaths } from "@/lib/portal-paths";
 import { userTypeLabel } from "@/lib/user-type";
 
@@ -89,6 +90,13 @@ export function EmployerShell({ children }) {
       role: typeLabel,
     };
   }, [profile, profileLoading, sessionTypeLabel]);
+
+  useEffect(() => {
+    const redirectTo = portalAccessRedirect("employer");
+    if (redirectTo) {
+      router.replace(redirectTo);
+    }
+  }, [router]);
 
   useEffect(() => {
     const session = getSecureShareSession();

@@ -40,9 +40,9 @@ USER_TYPE_PORTAL: dict[UserType, str] = {
 
 ALL_PORTALS: frozenset[str] = frozenset({"employer", "patient", "insurance"})
 
-# Portals each TypeId may sign into (Super Admin may use all three).
+# Portals each TypeId may sign into (Super Admin → employer only).
 USER_TYPE_ALLOWED_PORTALS: dict[UserType, frozenset[str]] = {
-    UserType.SuperAdmin: ALL_PORTALS,
+    UserType.SuperAdmin: frozenset({"employer"}),
     UserType.EmployerUser: frozenset({"employer"}),
     UserType.PatientUser: frozenset({"patient"}),
     UserType.InsuranceUser: frozenset({"insurance"}),
@@ -64,7 +64,7 @@ def _as_user_type(type_id: int | None) -> UserType | None:
 
 
 def is_super_admin(type_id: int | None) -> bool:
-    """True when UserProfiles.TypeId is Super Admin (may use any portal)."""
+    """True when UserProfiles.TypeId is Super Admin."""
     return _as_user_type(type_id) is UserType.SuperAdmin
 
 
@@ -97,8 +97,6 @@ def can_access_portal(type_id: int | None, portal: str | None) -> bool:
     expected = (portal or "").strip().lower() or None
     if expected not in ALL_PORTALS:
         return False
-    if is_super_admin(type_id):
-        return True
     return expected in portals_allowed_for_type_id(type_id)
 
 
@@ -110,18 +108,11 @@ def resolve_login_portal(type_id: int | None, requested_portal: str | None) -> s
     """
     Validate requested portal against TypeId allow-list.
 
-    Super Admin → any of employer, patient, insurance
+    Super Admin → employer only
     Employer User → employer only
     Patient User → patient only
     Insurance User → insurance only
     """
-    # Super Admin may sign into whichever portal login page they opened.
-    if is_super_admin(type_id):
-        expected = (requested_portal or "").strip().lower() or None
-        if expected in ALL_PORTALS:
-            return expected
-        return portal_for_type_id(type_id) or "employer"
-
     allowed = portals_allowed_for_type_id(type_id)
     if not allowed:
         raise ValueError("portal_disabled")

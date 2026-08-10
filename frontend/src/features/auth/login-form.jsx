@@ -19,7 +19,6 @@ import {
   resolvePostLoginDestination,
   saveSecureShareSession,
 } from "@/lib/secure-share-session";
-import { isSuperAdmin } from "@/lib/user-type";
 
 const ERROR_MISSING = "Please enter both email and password.";
 const ERROR_ACTIVATION =
@@ -127,12 +126,8 @@ function LoginFormInner({ portal = "employer" }) {
         portal: portalFromUrl,
       });
 
-      const typeId = result.user?.type_id;
-      // Super Admin: always open the portal matching the login URL.
-      // Others: trust API portal when allowed, else stay on this URL's portal.
-      const resolvedPortal = isSuperAdmin(typeId)
-        ? portalFromUrl
-        : result.user?.portal || portalFromUrl;
+      // API already validates portal access; prefer returned portal, else login URL.
+      const resolvedPortal = result.user?.portal || portalFromUrl;
 
       const sessionUser = {
         ...result.user,

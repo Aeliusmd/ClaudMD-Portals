@@ -1,1 +1,1 @@
-"""Patient portal API — dashboard summary (read-only)."""
+"""Patient portal: dashboard, visits, appointments, profile, my-info, notifications."""

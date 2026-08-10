@@ -47,6 +47,11 @@ def list_upcoming_appointments(
         )
 
     profile = fetch_profile_from_clinic(clinic, current_user)
+    if profile.patient_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient record not found for this account.",
+        )
     patient_id = int(profile.patient_id)
 
     page_size = min(max(int(page_size or DEFAULT_PAGE_SIZE), 1), MAX_PAGE_SIZE)

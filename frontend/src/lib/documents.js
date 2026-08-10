@@ -110,12 +110,19 @@ export async function resolveDocumentObjectUrl(url, { getToken } = {}) {
     if (!token) {
       throw new Error("Authentication required to load document.");
     }
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/pdf",
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          Accept: "application/pdf",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch {
+      throw new Error(
+        "Unable to load document. The server appears to be unavailable. Please try again."
+      );
+    }
     if (!response.ok) {
       throw new Error(`Unable to load document (${response.status}).`);
     }

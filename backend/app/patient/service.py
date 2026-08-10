@@ -1,4 +1,4 @@
-"""Patient portal dashboard summary + visits (SELECT only)."""
+"""Patient portal dashboard, visits, and profile service."""
 
 from __future__ import annotations
 
@@ -13,9 +13,13 @@ from app.db.clinic import (
     shared_documents_has_is_viewed,
 )
 from app.employer.shift_type import shift_type_label
-from app.patient.profile import PatientProfile, fetch_profile_from_clinic
+from app.patient.information import get_patient_information
+from app.patient.profile import PatientProfile, fetch_profile_from_clinic, update_profile_in_clinic
 from app.patient.schemas import (
     PatientDashboardSummaryResponse,
+    PatientInformationResponse,
+    PatientProfileResponse,
+    PatientProfileUpdateRequest,
     PatientVisitListResponse,
     PatientVisitRow,
 )
@@ -48,9 +52,10 @@ def get_dashboard_summary(
 ) -> PatientDashboardSummaryResponse:
     clinic = _require_clinic(current_user)
     profile = fetch_profile_from_clinic(clinic, current_user)
+    patient_id = _require_patient_id(profile)
 
-    counts = _fetch_checkin_counts(clinic, profile.patient_id)
-    appointments = _count_upcoming_appointments(clinic, profile.patient_id)
+    counts = _fetch_checkin_counts(clinic, patient_id)
+    appointments = _count_upcoming_appointments(clinic, patient_id)
     unread_reports = _count_unread_shared_reports(clinic, profile)
 
     return PatientDashboardSummaryResponse(
@@ -61,7 +66,7 @@ def get_dashboard_summary(
         appointments=appointments,
         unread_reports=unread_reports,
         days=LOOKBACK_DAYS,
-        patient_id=profile.patient_id,
+        patient_id=patient_id,
     )
 
 
@@ -82,6 +87,7 @@ def list_dashboard_visits(
     """
     clinic = _require_clinic(current_user)
     profile = fetch_profile_from_clinic(clinic, current_user)
+    patient_id = _require_patient_id(profile)
 
     cat_key = _normalize_category_key(category)
     filter_info = _VISIT_CATEGORY_FILTERS.get(cat_key)
@@ -98,7 +104,7 @@ def list_dashboard_visits(
     start, end = _resolve_date_range(from_date, to_date)
     items = _fetch_visit_rows(
         clinic=clinic,
-        patient_id=profile.patient_id,
+        patient_id=patient_id,
         category_sql=category_sql,
         category_label=category_label,
         from_date=start,
@@ -111,7 +117,7 @@ def list_dashboard_visits(
         category=category_label,
         from_date=start.isoformat(),
         to_date=end.isoformat(),
-        patient_id=profile.patient_id,
+        patient_id=patient_id,
     )
 
 
@@ -270,6 +276,61 @@ def _format_display_date(value) -> str | None:
         return parsed.strftime("%b %d, %Y")
     except ValueError:
         return iso
+
+
+
+def get_patient_profile(current_user: CurrentUser) -> PatientProfileResponse:
+    clinic = _require_clinic(current_user)
+    profile = fetch_profile_from_clinic(clinic, current_user)
+    return _to_response(profile)
+
+
+def update_patient_profile(
+    current_user: CurrentUser,
+    payload: PatientProfileUpdateRequest,
+) -> PatientProfileResponse:
+    clinic = _require_clinic(current_user)
+    profile = update_profile_in_clinic(
+        clinic,
+        current_user,
+        full_name=payload.full_name,
+        date_of_birth=payload.date_of_birth,
+        email=payload.email,
+        phone=payload.phone,
+        address=payload.address,
+    )
+    return _to_response(profile)
+
+
+def get_my_information(current_user: CurrentUser) -> PatientInformationResponse:
+    clinic = _require_clinic(current_user)
+    return get_patient_information(clinic, current_user)
+
+
+def _to_response(profile) -> PatientProfileResponse:
+    return PatientProfileResponse(
+        user_id=profile.user_id,
+        patient_id=profile.patient_id,
+        full_name=profile.full_name,
+        first_name=profile.first_name,
+        last_name=profile.last_name,
+        date_of_birth=profile.date_of_birth,
+        email=profile.email,
+        phone=profile.phone,
+        address=profile.address,
+        login_id=profile.login_id,
+        type_id=profile.type_id,
+        type_label=profile.type_label,
+    )
+
+
+def _require_patient_id(profile: PatientProfile) -> int:
+    if profile.patient_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient record not found for this account.",
+        )
+    return int(profile.patient_id)
 
 
 def _require_clinic(current_user: CurrentUser):

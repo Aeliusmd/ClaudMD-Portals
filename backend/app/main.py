@@ -32,8 +32,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(employer_router)
-app.include_router(insurance_router)
 app.include_router(patient_router)
+app.include_router(insurance_router)
 
 
 @app.get("/health")

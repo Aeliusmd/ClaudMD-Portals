@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 import { insuranceNavItems } from "@/data/navigation";
 import { useInsuranceNotifications } from "@/hooks/use-insurance-notifications";
 import { useInsuranceProfile } from "@/hooks/use-insurance-profile";
 import { clearAuthSession } from "@/lib/auth-session";
+import { portalAccessRedirect } from "@/lib/portal-access";
 import { insurancePaths } from "@/lib/portal-paths";
 import { userTypeLabel } from "@/lib/user-type";
 
@@ -15,6 +17,7 @@ function handleLogout() {
 }
 
 export function InsuranceShell({ children }) {
+  const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
   const { profile, loading: profileLoading } = useInsuranceProfile();
   const {
@@ -23,6 +26,13 @@ export function InsuranceShell({ children }) {
     total: notificationTotal,
     unreadCount: notificationUnread,
   } = useInsuranceNotifications();
+
+  useEffect(() => {
+    const redirectTo = portalAccessRedirect("insurance");
+    if (redirectTo) {
+      router.replace(redirectTo);
+    }
+  }, [router]);
 
   useEffect(() => {
     if (!navOpen) return undefined;

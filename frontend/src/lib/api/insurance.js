@@ -1,3 +1,4 @@
+import { fetchJson } from "@/lib/api/http";
 import { insuranceVisitDocumentFileUrl } from "@/lib/documents";
 
 const API_BASE_URL =
@@ -12,31 +13,15 @@ async function insuranceFetch(path, accessToken, fallbackMessage, options = {}) 
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: options.method || "GET",
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
-
-  let data = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const detail =
-      (data && (data.detail || data.message)) || fallbackMessage;
-    const error = new Error(
-      typeof detail === "string" ? detail : fallbackMessage
-    );
-    error.status = response.status;
-    error.detail = detail;
-    throw error;
-  }
-
-  return data;
+  return fetchJson(
+    `${API_BASE_URL}${path}`,
+    {
+      method: options.method || "GET",
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    },
+    fallbackMessage
+  );
 }
 
 function mapInsuranceProfile(data) {

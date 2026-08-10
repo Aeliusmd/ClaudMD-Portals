@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Bell, Check, Shield, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonBlock } from "@/components/ui/skeleton";
 import { currentPatient } from "@/data/patient";
+import { usePatientProfile } from "@/hooks/use-patient-profile";
+import { changePassword } from "@/lib/api/auth";
+import { updatePatientProfile } from "@/lib/api/patient";
+import { getAccessToken } from "@/lib/auth-session";
+import { patientPaths } from "@/lib/portal-paths";
 import { cn } from "@/lib/utils";
 
 const profileTabs = [
@@ -15,6 +22,21 @@ const profileTabs = [
 ];
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_DIGITS_MIN = 10;
+const EMAIL_MAX = 100;
+const PHONE_MAX = 20;
+const ADDRESS_MAX = 500;
+const NAME_MAX = 101;
+
+function emptyProfileForm() {
+  return {
+    fullName: "",
+    dateOfBirth: "",
+    email: "",
+    phone: "",
+    address: "",
+  };
+}
 
 function ProfileTabBar({ value, onChange }) {
   return (
@@ -123,17 +145,35 @@ function CheckboxPreference({ title, description, checked, onChange }) {
   );
 }
 
+function fieldErrorsFromApi(detail) {
+  if (!detail || typeof detail !== "object") return {};
+  const errors = detail.errors || detail;
+  if (!errors || typeof errors !== "object" || Array.isArray(errors)) return {};
+  const mapped = {};
+  if (errors.full_name) mapped.fullName = errors.full_name;
+  if (errors.date_of_birth) mapped.dateOfBirth = errors.date_of_birth;
+  if (errors.email) mapped.email = errors.email;
+  if (errors.phone) mapped.phone = errors.phone;
+  if (errors.address) mapped.address = errors.address;
+  return mapped;
+}
+
 export function PatientProfileView() {
+  const router = useRouter();
+  const {
+    profile: liveProfile,
+    loading: profileLoading,
+    error: profileLoadError,
+    setCachedProfile,
+  } = usePatientProfile();
+
   const [tab, setTab] = useState("profile");
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [profile, setProfile] = useState({
-    fullName: currentPatient.fullName,
-    dateOfBirth: currentPatient.dateOfBirth,
-    email: currentPatient.email,
-    phone: currentPatient.phone,
-    address: currentPatient.address,
-  });
+  const [hydrated, setHydrated] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [profile, setProfile] = useState(emptyProfileForm);
   const [profileErrors, setProfileErrors] = useState({});
   const [notifications, setNotifications] = useState(
     currentPatient.notifications
@@ -144,6 +184,32 @@ export function PatientProfileView() {
     confirmPassword: "",
   });
   const [passwordErrors, setPasswordErrors] = useState({});
+
+  useEffect(() => {
+    if (!liveProfile) return;
+    setProfile({
+      fullName: liveProfile.fullName || "",
+      dateOfBirth: liveProfile.dateOfBirth || "",
+      email: liveProfile.email || "",
+      phone: liveProfile.phone || "",
+      address: liveProfile.address || "",
+    });
+    setHydrated(true);
+  }, [liveProfile]);
+
+  useEffect(() => {
+    if (profileLoadError) {
+      setErrorMessage(profileLoadError);
+    }
+  }, [profileLoadError]);
+
+  useEffect(() => {
+    if (!message) return undefined;
+    const timer = window.setTimeout(() => {
+      setMessage("");
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   function clearFeedback() {
     setMessage("");
@@ -171,29 +237,87 @@ export function PatientProfileView() {
     setNotifications((prev) => ({ ...prev, [field]: !prev[field] }));
   }
 
-  function handleSaveProfile() {
-    clearFeedback();
+  function validateProfileForm(values) {
     const errors = {};
-    if (!profile.fullName.trim()) errors.fullName = "Full name is required.";
-    if (!profile.dateOfBirth.trim()) {
-      errors.dateOfBirth = "Date of birth is required.";
+    const fullName = values.fullName.trim();
+    if (!fullName) errors.fullName = "Full name is required.";
+    else if (fullName.length > NAME_MAX) {
+      errors.fullName = `Full name must be at most ${NAME_MAX} characters.`;
     }
-    if (!EMAIL_PATTERN.test(profile.email.trim())) {
+
+    const email = values.email.trim();
+    if (!EMAIL_PATTERN.test(email)) {
       errors.email = "Enter a valid email address.";
+    } else if (email.length > EMAIL_MAX) {
+      errors.email = `Email must be at most ${EMAIL_MAX} characters.`;
     }
-    if (profile.phone.replace(/\D/g, "").length < 10) {
+
+    const phoneDigits = values.phone.replace(/\D/g, "");
+    if (phoneDigits && phoneDigits.length < PHONE_DIGITS_MIN) {
       errors.phone = "Enter a valid phone number.";
+    } else if (values.phone.trim().length > PHONE_MAX) {
+      errors.phone = `Phone must be at most ${PHONE_MAX} characters.`;
     }
-    if (!profile.address.trim()) errors.address = "Address is required.";
+
+    if (values.address.trim().length > ADDRESS_MAX) {
+      errors.address = `Address must be at most ${ADDRESS_MAX} characters.`;
+    }
+
+    return errors;
+  }
+
+  async function handleSaveProfile() {
+    if (profileSaving) return;
+    clearFeedback();
+    const errors = validateProfileForm(profile);
     setProfileErrors(errors);
     if (Object.keys(errors).length > 0) {
       setErrorMessage("Please fix the highlighted fields before saving.");
       return;
     }
-    setMessage("Profile changes saved successfully.");
+
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(patientPaths.login);
+      return;
+    }
+
+    setProfileSaving(true);
+    try {
+      const updated = await updatePatientProfile(token, {
+        fullName: profile.fullName.trim(),
+        dateOfBirth: profile.dateOfBirth.trim() || null,
+        email: profile.email.trim(),
+        phone: profile.phone.trim() || null,
+        address: profile.address.trim() || null,
+      });
+      setCachedProfile?.(updated);
+      setProfile({
+        fullName: updated.fullName || "",
+        dateOfBirth: updated.dateOfBirth || "",
+        email: updated.email || "",
+        phone: updated.phone || "",
+        address: updated.address || "",
+      });
+      setProfileErrors({});
+      setMessage("Profile changes saved successfully.");
+    } catch (err) {
+      if (err?.status === 401) {
+        router.replace(patientPaths.login);
+        return;
+      }
+      const apiErrors = fieldErrorsFromApi(err?.detail);
+      if (Object.keys(apiErrors).length > 0) {
+        setProfileErrors(apiErrors);
+      }
+      setErrorMessage(err?.message || "Unable to save profile changes.");
+    } finally {
+      setProfileSaving(false);
+    }
   }
 
-  function handleUpdatePassword() {
+  async function handleUpdatePassword() {
+    if (passwordSaving) return;
     clearFeedback();
     const errors = {};
     if (!passwordForm.currentPassword) {
@@ -210,14 +334,40 @@ export function PatientProfileView() {
       setErrorMessage("Please fix the password fields before updating.");
       return;
     }
-    setPasswordForm({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
-    setPasswordErrors({});
-    setMessage("Password updated successfully.");
+
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(patientPaths.login);
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      await changePassword({
+        accessToken: token,
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword,
+      });
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setPasswordErrors({});
+      setMessage("Password updated successfully.");
+    } catch (err) {
+      if (err?.status === 401) {
+        router.replace(patientPaths.login);
+        return;
+      }
+      setErrorMessage(err?.message || "Unable to update password.");
+    } finally {
+      setPasswordSaving(false);
+    }
   }
+
+  const showProfileSkeleton = profileLoading && !hydrated;
 
   return (
     <div>
@@ -232,54 +382,69 @@ export function PatientProfileView() {
           <h2 className="mb-5 text-lg font-semibold text-ink">
             Personal Information
           </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              id="fullName"
-              label="Full Name"
-              value={profile.fullName}
-              onChange={(value) => updateProfileField("fullName", value)}
-              error={profileErrors.fullName}
-              autoComplete="name"
-            />
-            <Field
-              id="dateOfBirth"
-              label="Date of Birth"
-              value={profile.dateOfBirth}
-              onChange={(value) => updateProfileField("dateOfBirth", value)}
-              error={profileErrors.dateOfBirth}
-            />
-            <Field
-              id="email"
-              label="Email"
-              type="email"
-              value={profile.email}
-              onChange={(value) => updateProfileField("email", value)}
-              error={profileErrors.email}
-              autoComplete="email"
-            />
-            <Field
-              id="phone"
-              label="Phone"
-              type="tel"
-              value={profile.phone}
-              onChange={(value) => updateProfileField("phone", value)}
-              error={profileErrors.phone}
-              autoComplete="tel"
-            />
-            <div className="sm:col-span-2">
-              <Field
-                id="address"
-                label="Address"
-                value={profile.address}
-                onChange={(value) => updateProfileField("address", value)}
-                error={profileErrors.address}
-                autoComplete="street-address"
-              />
+          {showProfileSkeleton ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SkeletonBlock className="h-16" />
+              <SkeletonBlock className="h-16" />
+              <SkeletonBlock className="h-16" />
+              <SkeletonBlock className="h-16" />
+              <SkeletonBlock className="h-16 sm:col-span-2" />
             </div>
-          </div>
-          <div className="mt-6 flex justify-end">
-            <Button onClick={handleSaveProfile}>Save Changes</Button>
-          </div>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  id="fullName"
+                  label="Full Name"
+                  value={profile.fullName}
+                  onChange={(value) => updateProfileField("fullName", value)}
+                  error={profileErrors.fullName}
+                  autoComplete="name"
+                />
+                <Field
+                  id="dateOfBirth"
+                  label="Date of Birth"
+                  type="date"
+                  value={profile.dateOfBirth}
+                  onChange={(value) => updateProfileField("dateOfBirth", value)}
+                  error={profileErrors.dateOfBirth}
+                />
+                <Field
+                  id="email"
+                  label="Email"
+                  type="email"
+                  value={profile.email}
+                  onChange={(value) => updateProfileField("email", value)}
+                  error={profileErrors.email}
+                  autoComplete="email"
+                />
+                <Field
+                  id="phone"
+                  label="Phone"
+                  type="tel"
+                  value={profile.phone}
+                  onChange={(value) => updateProfileField("phone", value)}
+                  error={profileErrors.phone}
+                  autoComplete="tel"
+                />
+                <div className="sm:col-span-2">
+                  <Field
+                    id="address"
+                    label="Address"
+                    value={profile.address}
+                    onChange={(value) => updateProfileField("address", value)}
+                    error={profileErrors.address}
+                    autoComplete="street-address"
+                  />
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <Button onClick={handleSaveProfile} disabled={profileSaving}>
+                  {profileSaving ? "Saving…" : "Save Changes"}
+                </Button>
+              </div>
+            </>
+          )}
         </Card>
       ) : null}
 
@@ -336,7 +501,9 @@ export function PatientProfileView() {
             />
           </div>
           <div className="mt-6 flex justify-end">
-            <Button onClick={handleUpdatePassword}>Update Password</Button>
+            <Button onClick={handleUpdatePassword} disabled={passwordSaving}>
+              {passwordSaving ? "Updating…" : "Update Password"}
+            </Button>
           </div>
         </Card>
       ) : null}

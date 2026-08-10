@@ -1,6 +1,7 @@
 const STORAGE_KEYS = {
   employer: "employer.notifications.lastOpenedAt",
   insurance: "insurance.notifications.lastOpenedAt",
+  patient: "patient.notifications.lastOpenedAt",
 };
 
 function storageKey(portal = "employer") {

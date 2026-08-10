@@ -25,9 +25,9 @@ export const USER_TYPE_LABELS = Object.freeze({
 /** Must match backend app.auth.user_profile_type.ALL_PORTALS */
 export const ALL_PORTALS = Object.freeze(["employer", "patient", "insurance"]);
 
-/** Must match backend USER_TYPE_ALLOWED_PORTALS (Super Admin → any portal). */
+/** Must match backend USER_TYPE_ALLOWED_PORTALS (Super Admin → employer only). */
 export const USER_TYPE_ALLOWED_PORTALS = Object.freeze({
-  [UserType.SuperAdmin]: ALL_PORTALS,
+  [UserType.SuperAdmin]: Object.freeze(["employer"]),
   [UserType.EmployerUser]: Object.freeze(["employer"]),
   [UserType.PatientUser]: Object.freeze(["patient"]),
   [UserType.InsuranceUser]: Object.freeze(["insurance"]),
@@ -45,7 +45,6 @@ export function isSuperAdmin(typeId) {
 }
 
 export function portalsAllowedForTypeId(typeId) {
-  if (isSuperAdmin(typeId)) return ALL_PORTALS;
   const id = Number(typeId);
   if (!Number.isFinite(id)) return [];
   return USER_TYPE_ALLOWED_PORTALS[id] || [];
@@ -56,6 +55,5 @@ export function canAccessPortal(typeId, portal) {
     .trim()
     .toLowerCase();
   if (!ALL_PORTALS.includes(expected)) return false;
-  if (isSuperAdmin(typeId)) return true;
   return portalsAllowedForTypeId(typeId).includes(expected);
 }

@@ -16,8 +16,8 @@ _EMAIL_MAX = 100
 _PHONE_MAX = 20
 _PHONE_DIGITS_MIN = 10
 
-# Super Admin may use insurance portal; Insurance User is the dedicated role.
-_INSURANCE_PORTAL_TYPES = {int(UserType.SuperAdmin), int(UserType.InsuranceUser)}
+# Super Admin is employer-only; Insurance User is the dedicated role.
+_INSURANCE_PORTAL_TYPES = {int(UserType.InsuranceUser)}
 
 
 @dataclass(frozen=True)
@@ -75,13 +75,12 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsurancePro
                      OR LOWER(LTRIM(RTRIM(Email))) = LOWER(?)
                   )
                 ORDER BY
-                    CASE WHEN TypeId IN (?, ?) THEN 0 ELSE 1 END,
+                    CASE WHEN TypeId = ? THEN 0 ELSE 1 END,
                     Id DESC
                 """,
                 (
                     login,
                     email,
-                    int(UserType.SuperAdmin),
                     int(UserType.InsuranceUser),
                 ),
             )
@@ -319,7 +318,7 @@ def update_profile_in_clinic(
             WHERE Id = ?
               AND (IsDeleted = 0 OR IsDeleted IS NULL)
               AND RecordStatusId = 1
-              AND TypeId IN (?, ?)
+              AND TypeId = ?
             """,
             (
                 first,
@@ -330,7 +329,6 @@ def update_profile_in_clinic(
                 phone_norm,
                 actor_id,
                 actor_id,
-                int(UserType.SuperAdmin),
                 int(UserType.InsuranceUser),
             ),
         )

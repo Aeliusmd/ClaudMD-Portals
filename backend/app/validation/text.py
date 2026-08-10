@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from fastapi import HTTPException, status
+
 # Angle brackets and common XSS vectors in plain-text profile fields.
 _HTML_MARKERS_RE = re.compile(
     r"<|>|"
@@ -24,6 +26,7 @@ _HTML_MARKERS_RE = re.compile(
 )
 
 SAFE_TEXT_ERROR = "HTML, scripts, or unsafe markup are not allowed."
+SEARCH_MAX = 100
 
 
 def unsafe_markup_error(value: str | None) -> str | None:
@@ -34,3 +37,25 @@ def unsafe_markup_error(value: str | None) -> str | None:
     if _HTML_MARKERS_RE.search(text):
         return SAFE_TEXT_ERROR
     return None
+
+
+def sanitize_search_query(search: str | None) -> str | None:
+    """
+    Normalize a search query for API use.
+    Raises HTTP 400 if the value contains unsafe markup.
+    """
+    cleaned = (search or "").strip() or None
+    if not cleaned:
+        return None
+    if len(cleaned) > SEARCH_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Search must be at most {SEARCH_MAX} characters.",
+        )
+    err = unsafe_markup_error(cleaned)
+    if err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=err,
+        )
+    return cleaned

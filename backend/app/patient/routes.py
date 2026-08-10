@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
 
 from app.auth.dependencies import CurrentUser, get_current_user
+from app.validation.text import sanitize_search_query
 from app.employer.schemas import (
     AppointmentLocationOption,
     AppointmentPrepareResponse,
@@ -153,7 +154,7 @@ def patient_dashboard_visits_endpoint(
         category=category,
         from_date=from_date or default_from,
         to_date=to_date or default_to,
-        search=search,
+        search=sanitize_search_query(search),
     )
 
 

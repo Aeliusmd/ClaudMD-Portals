@@ -27,6 +27,7 @@ import {
   DATE_RANGE_ERROR,
   isInvalidDateRange,
 } from "@/lib/date-range";
+import { searchQueryError } from "@/lib/text-validation";
 import { cn } from "@/lib/utils";
 
 const emptySubscribe = () => () => {};
@@ -341,11 +342,27 @@ function InsuranceDashboardContent() {
       setFilterError(DATE_RANGE_ERROR);
       return;
     }
+    const searchErr = searchQueryError(draftQuery);
+    if (searchErr) {
+      setFilterError(searchErr);
+      return;
+    }
     setFilterError(null);
     setAppliedQuery(draftQuery.trim());
     setAppliedFromDate(from);
     setAppliedToDate(to);
     setPage(1);
+  }
+
+  function handleSearchChange(event) {
+    const next = event.target.value;
+    setDraftQuery(next);
+    const searchErr = searchQueryError(next);
+    setFilterError((prev) => {
+      if (searchErr) return searchErr;
+      if (prev === DATE_RANGE_ERROR) return prev;
+      return null;
+    });
   }
 
   function handleFromDateChange(event) {
@@ -441,7 +458,7 @@ function InsuranceDashboardContent() {
           <input
             type="search"
             value={draftQuery}
-            onChange={(event) => setDraftQuery(event.target.value)}
+            onChange={handleSearchChange}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();

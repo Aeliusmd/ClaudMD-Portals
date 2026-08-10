@@ -9,6 +9,8 @@ export function DateRangeInput({
   label,
   value,
   onChange,
+  min,
+  max,
   className,
 }) {
   const inputRef = useRef(null);
@@ -51,6 +53,8 @@ export function DateRangeInput({
           id={id}
           type="date"
           value={value}
+          min={min || undefined}
+          max={max || undefined}
           onChange={onChange}
           aria-label={`${label} date`}
           className={cn(

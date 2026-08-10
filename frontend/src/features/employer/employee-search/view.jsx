@@ -19,6 +19,11 @@ import {
 } from "@/lib/api/employer";
 import { LOGIN_PATH } from "@/lib/auth-routes";
 import { getAccessToken } from "@/lib/auth-session";
+import {
+  coerceToDate,
+  DATE_RANGE_ERROR,
+  isInvalidDateRange,
+} from "@/lib/date-range";
 import { employerPaths } from "@/lib/portal-paths";
 import { reportBadgeStyles } from "@/lib/report-badge-styles";
 import { workStatusStyles } from "@/lib/category-styles";
@@ -99,6 +104,7 @@ function EmployeeSearchContent() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [filterError, setFilterError] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(Boolean(employeeParam));
 
@@ -168,10 +174,32 @@ function EmployeeSearchContent() {
   }, [categoryFilter]);
 
   function applyFilters() {
+    const from = effectiveDraftFrom;
+    const to = effectiveDraftTo;
+    if (isInvalidDateRange(from, to)) {
+      setFilterError(DATE_RANGE_ERROR);
+      return;
+    }
+    setFilterError("");
     setAppliedQuery(draftQuery.trim());
-    setAppliedFromDate(effectiveDraftFrom);
-    setAppliedToDate(effectiveDraftTo);
+    setAppliedFromDate(from);
+    setAppliedToDate(to);
     setPage(1);
+  }
+
+  function handleFromDateChange(event) {
+    const nextFrom = event.target.value;
+    setDraftFromDate(nextFrom);
+    setDraftToDate((prev) => {
+      const currentTo = prev ?? defaultTo;
+      return coerceToDate(nextFrom, currentTo);
+    });
+    setFilterError("");
+  }
+
+  function handleToDateChange(event) {
+    setDraftToDate(coerceToDate(effectiveDraftFrom, event.target.value));
+    setFilterError("");
   }
 
   useEffect(() => {
@@ -292,14 +320,16 @@ function EmployeeSearchContent() {
             id="employee-search-from"
             label="From"
             value={effectiveDraftFrom}
-            onChange={(e) => setDraftFromDate(e.target.value)}
+            max={effectiveDraftTo || undefined}
+            onChange={handleFromDateChange}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="employee-search-to"
             label="To"
             value={effectiveDraftTo}
-            onChange={(e) => setDraftToDate(e.target.value)}
+            min={effectiveDraftFrom || undefined}
+            onChange={handleToDateChange}
           />
           <Button
               type="button"
@@ -312,6 +342,12 @@ function EmployeeSearchContent() {
           </Button>
         </div>
       </div>
+
+      {filterError ? (
+        <Card className="mb-4 border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {filterError}
+        </Card>
+      ) : null}
 
       {loadError ? (
         <Card className="mb-4 border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">

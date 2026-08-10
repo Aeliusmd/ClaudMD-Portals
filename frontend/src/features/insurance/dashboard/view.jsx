@@ -22,6 +22,11 @@ import {
   coverageStyles,
   workStatusStyle,
 } from "@/lib/category-styles";
+import {
+  coerceToDate,
+  DATE_RANGE_ERROR,
+  isInvalidDateRange,
+} from "@/lib/date-range";
 import { cn } from "@/lib/utils";
 
 const emptySubscribe = () => () => {};
@@ -164,6 +169,7 @@ function InsuranceDashboardContent() {
   const [liveTotalPages, setLiveTotalPages] = useState(1);
   const [loadingLive, setLoadingLive] = useState(false);
   const [liveError, setLiveError] = useState(null);
+  const [filterError, setFilterError] = useState(null);
 
   const defaultTo = useSyncExternalStore(
     emptySubscribe,
@@ -329,10 +335,32 @@ function InsuranceDashboardContent() {
     : mockPaged.end;
 
   function applyFilters() {
+    const from = effectiveDraftFrom;
+    const to = effectiveDraftTo;
+    if (isInvalidDateRange(from, to)) {
+      setFilterError(DATE_RANGE_ERROR);
+      return;
+    }
+    setFilterError(null);
     setAppliedQuery(draftQuery.trim());
-    setAppliedFromDate(effectiveDraftFrom);
-    setAppliedToDate(effectiveDraftTo);
+    setAppliedFromDate(from);
+    setAppliedToDate(to);
     setPage(1);
+  }
+
+  function handleFromDateChange(event) {
+    const nextFrom = event.target.value;
+    setDraftFromDate(nextFrom);
+    setDraftToDate((prev) => {
+      const currentTo = prev || defaultTo;
+      return coerceToDate(nextFrom, currentTo);
+    });
+    setFilterError(null);
+  }
+
+  function handleToDateChange(event) {
+    setDraftToDate(coerceToDate(effectiveDraftFrom, event.target.value));
+    setFilterError(null);
   }
 
   function selectTab(key) {
@@ -429,14 +457,16 @@ function InsuranceDashboardContent() {
             id="insurance-from"
             label="From"
             value={effectiveDraftFrom}
-            onChange={(event) => setDraftFromDate(event.target.value)}
+            max={effectiveDraftTo || undefined}
+            onChange={handleFromDateChange}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="insurance-to"
             label="To"
             value={effectiveDraftTo}
-            onChange={(event) => setDraftToDate(event.target.value)}
+            min={effectiveDraftFrom || undefined}
+            onChange={handleToDateChange}
           />
           <Button
             type="button"
@@ -449,6 +479,12 @@ function InsuranceDashboardContent() {
           </Button>
         </div>
       </div>
+
+      {filterError ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {filterError}
+        </p>
+      ) : null}
 
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">

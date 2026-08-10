@@ -30,6 +30,11 @@ import {
   categoryStyles,
   workStatusStyles,
 } from "@/lib/category-styles";
+import {
+  coerceToDate,
+  DATE_RANGE_ERROR,
+  isInvalidDateRange,
+} from "@/lib/date-range";
 import { cn } from "@/lib/utils";
 
 const emptySubscribe = () => () => {};
@@ -176,6 +181,7 @@ export function EmployerDashboardView() {
   const [employees, setEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [filterError, setFilterError] = useState(null);
   const [showCreateAppt, setShowCreateAppt] = useState(false);
 
   useEffect(() => {
@@ -350,10 +356,33 @@ export function EmployerDashboardView() {
   }, [loadEmployees]);
 
   function applyFilters() {
+    const from = effectiveDraftFrom;
+    const to = effectiveDraftTo;
+    if (isInvalidDateRange(from, to)) {
+      setFilterError(DATE_RANGE_ERROR);
+      return;
+    }
+    setFilterError(null);
     setAppliedQuery(draftQuery.trim());
-    setAppliedFromDate(effectiveDraftFrom);
-    setAppliedToDate(effectiveDraftTo);
+    setAppliedFromDate(from);
+    setAppliedToDate(to);
     setEmployeePage(1);
+  }
+
+  function handleFromDateChange(event) {
+    const nextFrom = event.target.value;
+    setDraftFromDate(nextFrom);
+    setDraftToDate((prev) => {
+      const currentTo = prev ?? defaultTo;
+      return coerceToDate(nextFrom, currentTo);
+    });
+    setFilterError(null);
+  }
+
+  function handleToDateChange(event) {
+    const nextTo = event.target.value;
+    setDraftToDate(coerceToDate(effectiveDraftFrom, nextTo));
+    setFilterError(null);
   }
 
   const stats = {
@@ -561,14 +590,16 @@ export function EmployerDashboardView() {
             id="dashboard-from"
             label="From"
             value={effectiveDraftFrom}
-            onChange={(e) => setDraftFromDate(e.target.value)}
+            max={effectiveDraftTo || undefined}
+            onChange={handleFromDateChange}
           />
           <span className="text-sm text-muted">to</span>
           <DateRangeInput
             id="dashboard-to"
             label="To"
             value={effectiveDraftTo}
-            onChange={(e) => setDraftToDate(e.target.value)}
+            min={effectiveDraftFrom || undefined}
+            onChange={handleToDateChange}
           />
           <Button
             type="button"
@@ -581,6 +612,12 @@ export function EmployerDashboardView() {
           </Button>
         </div>
       </div>
+
+      {filterError ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {filterError}
+        </p>
+      ) : null}
 
       {loadError ? (
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">

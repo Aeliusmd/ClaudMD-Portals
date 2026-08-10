@@ -18,6 +18,14 @@ export function employerVisitDocumentFileUrl(patientId, documentId) {
   )}/visit-documents/${encodeURIComponent(documentId)}/file`;
 }
 
+/** First-page PNG for employer visit document tiles. */
+export function employerVisitDocumentThumbnailUrl(patientId, documentId) {
+  if (patientId == null || documentId == null) return null;
+  return `${API_BASE_URL}/api/employer/employees/${encodeURIComponent(
+    patientId
+  )}/visit-documents/${encodeURIComponent(documentId)}/thumbnail`;
+}
+
 /**
  * Build an absolute URL for an authenticated insurance visit PDF.
  * Same auth-blob flow as employer via PdfThumbnail / DocumentPreviewModal.
@@ -29,16 +37,79 @@ export function insuranceVisitDocumentFileUrl(patientId, documentId) {
   )}/visit-documents/${encodeURIComponent(documentId)}/file`;
 }
 
+/** First-page PNG for insurance visit document tiles. */
+export function insuranceVisitDocumentThumbnailUrl(patientId, documentId) {
+  if (patientId == null || documentId == null) return null;
+  return `${API_BASE_URL}/api/insurance/patients/${encodeURIComponent(
+    patientId
+  )}/visit-documents/${encodeURIComponent(documentId)}/thumbnail`;
+}
+
 export function isApiDocumentUrl(url) {
   if (!url) return false;
   const value = String(url);
   const isVisitFile =
-    value.includes("/visit-documents/") && value.endsWith("/file");
+    value.includes("/visit-documents/") &&
+    (value.endsWith("/file") || value.endsWith("/thumbnail"));
   return (
     isVisitFile &&
     (value.includes("/api/employer/employees/") ||
       value.includes("/api/insurance/patients/"))
   );
+}
+
+/** Derive thumbnail URL from a visit document file URL. */
+export function visitDocumentThumbnailUrlFromFileUrl(fileUrl) {
+  if (!fileUrl || !String(fileUrl).endsWith("/file")) return null;
+  return `${String(fileUrl).slice(0, -"/file".length)}/thumbnail`;
+}
+
+/** In-flight / resolved blob fetches keyed by API URL. */
+const blobUrlCache = new Map();
+
+/**
+ * Fetch a document URL (Bearer for API streams) and return a browser object URL.
+ * Callers must not revoke shared cached URLs.
+ */
+export async function resolveDocumentObjectUrl(url, { getToken } = {}) {
+  if (!url) {
+    throw new Error("Document file is not available.");
+  }
+
+  if (!isApiDocumentUrl(url)) {
+    return { src: url, cached: false };
+  }
+
+  if (blobUrlCache.has(url)) {
+    return { src: await blobUrlCache.get(url), cached: true };
+  }
+
+  const pending = (async () => {
+    const token = typeof getToken === "function" ? getToken() : null;
+    if (!token) {
+      throw new Error("Authentication required to load document.");
+    }
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/pdf",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Unable to load document (${response.status}).`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  })();
+
+  blobUrlCache.set(url, pending);
+  try {
+    const src = await pending;
+    return { src, cached: true };
+  } catch (error) {
+    blobUrlCache.delete(url);
+    throw error;
+  }
 }
 
 /** Short code stamped on a document thumbnail while its first page renders. */

@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import { getAccessToken } from "@/lib/auth-session";
 import {
-  isApiDocumentUrl,
   openDocumentInNewTab,
+  resolveDocumentObjectUrl,
 } from "@/lib/documents";
 
 function actionButtonClassName() {
@@ -21,33 +21,10 @@ function actionButtonClassName() {
 }
 
 async function resolvePreviewUrl(url) {
-  if (!url) {
-    throw new Error("Document file is not available.");
-  }
-  if (!isApiDocumentUrl(url)) {
-    return { src: url, revoke: null };
-  }
-
-  const token = getAccessToken();
-  if (!token) {
-    throw new Error("Authentication required.");
-  }
-
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/pdf",
-      Authorization: `Bearer ${token}`,
-    },
+  const resolved = await resolveDocumentObjectUrl(url, {
+    getToken: getAccessToken,
   });
-  if (!response.ok) {
-    throw new Error(`Unable to load document (${response.status}).`);
-  }
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  return {
-    src: objectUrl,
-    revoke: () => URL.revokeObjectURL(objectUrl),
-  };
+  return { src: resolved.src, revoke: null };
 }
 
 export function DocumentPreviewModal({ file, onClose }) {

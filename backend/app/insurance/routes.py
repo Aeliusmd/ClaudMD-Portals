@@ -13,7 +13,7 @@ from app.insurance.notifications import (
     list_notifications,
     mark_notifications_read,
 )
-from app.insurance.patient_detail import get_patient_detail, open_insurance_visit_document_file
+from app.insurance.patient_detail import get_patient_detail, open_insurance_visit_document_file, open_insurance_visit_document_thumbnail
 from app.insurance.patients import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -182,6 +182,20 @@ def insurance_patient_visit_document_file_endpoint(
 ) -> FileResponse:
     """Stream a DocterPublishes PDF from the clinic publish share (read-only)."""
     return open_insurance_visit_document_file(
+        current_user,
+        patient_id,
+        document_id,
+    )
+
+
+@router.get("/patients/{patient_id}/visit-documents/{document_id}/thumbnail")
+def insurance_patient_visit_document_thumbnail_endpoint(
+    patient_id: int,
+    document_id: int,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """PNG of the first PDF page for insurance visit document tiles."""
+    return open_insurance_visit_document_thumbnail(
         current_user,
         patient_id,
         document_id,

@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, time
 from pathlib import Path
 
 from fastapi import HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
@@ -80,6 +80,37 @@ def open_employee_visit_document_file(
     Stream a published visit PDF for the logged-in employer.
     DocterPublishes.Path is a folder; the PDF is resolved by report name.
     """
+    pdf_path = _require_employee_publish_pdf(current_user, patient_id, document_id)
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        filename=pdf_path.name,
+        content_disposition_type="inline",
+    )
+
+
+def open_employee_visit_document_thumbnail(
+    current_user: CurrentUser,
+    patient_id: int,
+    document_id: int,
+) -> Response:
+    """PNG of page 1 for visit-document tiles (no client-side PDF.js)."""
+    pdf_path = _require_employee_publish_pdf(current_user, patient_id, document_id)
+    try:
+        png_bytes = render_pdf_first_page_png(pdf_path)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document preview is not available.",
+        ) from exc
+    return Response(content=png_bytes, media_type="image/png")
+
+
+def _require_employee_publish_pdf(
+    current_user: CurrentUser,
+    patient_id: int,
+    document_id: int,
+) -> Path:
     clinic = get_clinic_by_activation_key(current_user.activation_key)
     if not clinic:
         raise HTTPException(
@@ -142,55 +173,84 @@ def open_employee_visit_document_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document file is not available on the publish share.",
         )
+    return pdf_path
 
-    download_name = pdf_path.name
-    return FileResponse(
-        path=str(pdf_path),
-        media_type="application/pdf",
-        filename=download_name,
-        content_disposition_type="inline",
-    )
+
+def render_pdf_first_page_png(pdf_path: Path, *, scale: float = 1.25) -> bytes:
+    """Rasterize page 1 of a PDF to PNG bytes."""
+    from io import BytesIO
+
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(str(pdf_path))
+    try:
+        if len(pdf) < 1:
+            raise ValueError("PDF has no pages.")
+        page = pdf[0]
+        pil_image = page.render(scale=scale).to_pil()
+        # Keep tiles light: shrink very large pages.
+        max_edge = 900
+        w, h = pil_image.size
+        longest = max(w, h)
+        if longest > max_edge:
+            ratio = max_edge / float(longest)
+            pil_image = pil_image.resize(
+                (max(1, int(w * ratio)), max(1, int(h * ratio)))
+            )
+        buffer = BytesIO()
+        pil_image.save(buffer, format="PNG", optimize=True)
+        return buffer.getvalue()
+    finally:
+        pdf.close()
 
 
 def _resolve_publish_pdf_path(*, folder: str, report_name: str) -> Path | None:
+    """
+    Resolve a DocterPublishes folder/file to a PDF on disk.
+
+    Never raises for missing/unreachable shares (common on hosted servers
+    without \\claudmdfs01 access) — returns None so visit listing can continue.
+    """
     if not folder:
         return None
 
     normalized = folder.replace("/", "\\").strip()
     root = Path(normalized)
-    if not root.exists():
-        return None
 
-    if root.is_file():
-        return root if root.suffix.lower() == ".pdf" else None
-
-    if not root.is_dir():
-        return None
-
-    # Prefer exact report-name PDF inside the publish folder (EMR layout).
-    candidates: list[str] = []
-    name = (report_name or "").strip()
-    if name:
-        candidates.append(name if name.lower().endswith(".pdf") else f"{name}.pdf")
-        # Some publishes use Name without punctuation variants.
-        cleaned = "".join(ch for ch in name if ch.isalnum() or ch in {" ", "-", "_"})
-        cleaned = " ".join(cleaned.split())
-        if cleaned and cleaned.lower() != name.lower():
-            candidates.append(f"{cleaned}.pdf")
-
-    for candidate in candidates:
-        direct = root / candidate
-        if direct.is_file():
-            return direct
-
-    # Case-insensitive match within the folder (non-recursive).
-    wanted = {c.lower() for c in candidates}
     try:
+        if not root.exists():
+            return None
+
+        if root.is_file():
+            return root if root.suffix.lower() == ".pdf" else None
+
+        if not root.is_dir():
+            return None
+
+        # Prefer exact report-name PDF inside the publish folder (EMR layout).
+        candidates: list[str] = []
+        name = (report_name or "").strip()
+        if name:
+            candidates.append(name if name.lower().endswith(".pdf") else f"{name}.pdf")
+            # Some publishes use Name without punctuation variants.
+            cleaned = "".join(ch for ch in name if ch.isalnum() or ch in {" ", "-", "_"})
+            cleaned = " ".join(cleaned.split())
+            if cleaned and cleaned.lower() != name.lower():
+                candidates.append(f"{cleaned}.pdf")
+
+        for candidate in candidates:
+            direct = root / candidate
+            if direct.is_file():
+                return direct
+
+        # Case-insensitive match within the folder (non-recursive).
+        wanted = {c.lower() for c in candidates}
         for entry in root.iterdir():
             if entry.is_file() and entry.suffix.lower() == ".pdf":
                 if entry.name.lower() in wanted:
                     return entry
     except OSError:
+        # UNC share offline / access denied / path too long, etc.
         return None
 
     return None

@@ -404,6 +404,37 @@ def book_appointment(
     if start_time is None:
         raise HTTPException(status_code=400, detail="Invalid start time.")
 
+    # Re-validate slot availability with current DB reads.
+    slots = list_available_slots(
+        current_user,
+        location_id=payload.location_id,
+        resource_id=payload.resource_id,
+        on_date=on_date,
+        duration_minutes=duration,
+    )
+    start_key = _format_time(start_time)
+    matching = next((s for s in slots.items if s.start == start_key), None)
+    if matching is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Selected start time is not available for this provider/duration. "
+                "Neighboring slot(s) may already be booked, or the time is in the past."
+            ),
+        )
+
+    created_user_id = int(current_user.user_id or 0)
+    slot_minutes = slots.time_slot_minutes
+    slots_needed = slots.slots_needed
+    booked_duration = slots_needed * slot_minutes
+    end_time = (
+        datetime.combine(on_date, start_time) + timedelta(minutes=booked_duration)
+    ).time()
+    status_id = int(payload.appointment_status_id or 4)
+    schedule_type_id = int(payload.schedule_type_id or 1)
+    note_value = (payload.note or "").strip() or None
+    warnings: list[str] = []
+
     location_id = _require_int(payload.location_id, "location")
     resource_id = _require_int(payload.resource_id, "provider/resource")
     visit_type_id = _require_int(payload.visit_type_id, "visit type")
@@ -420,39 +451,6 @@ def book_appointment(
 
     if new_patient is not None:
         _validate_new_patient_payload(new_patient)
-
-    # Re-validate slot availability with current DB reads (provider + selected patient).
-    slots = list_available_slots(
-        current_user,
-        location_id=location_id,
-        resource_id=resource_id,
-        on_date=on_date,
-        duration_minutes=duration,
-        patient_id=patient_id,
-    )
-    start_key = _format_time(start_time)
-    matching = next((s for s in slots.items if s.start == start_key), None)
-    if matching is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Selected start time is not available for this provider/duration. "
-                "The provider or patient may already be booked, neighboring slot(s) "
-                "may be taken, or the time is in the past."
-            ),
-        )
-
-    created_user_id = int(current_user.user_id or 0)
-    slot_minutes = slots.time_slot_minutes
-    slots_needed = slots.slots_needed
-    booked_duration = slots_needed * slot_minutes
-    end_time = (
-        datetime.combine(on_date, start_time) + timedelta(minutes=booked_duration)
-    ).time()
-    status_id = int(payload.appointment_status_id or 4)
-    schedule_type_id = int(payload.schedule_type_id or 1)
-    note_value = (payload.note or "").strip() or None
-    warnings: list[str] = []
 
     recurring_id = None
     appointment_id = None

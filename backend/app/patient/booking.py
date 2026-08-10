@@ -56,6 +56,11 @@ def _clinic_and_patient(current_user: CurrentUser):
             detail="Clinic not found for this session.",
         )
     profile = fetch_profile_from_clinic(clinic, current_user)
+    if profile.patient_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient record not found for this account.",
+        )
     return clinic, profile
 
 

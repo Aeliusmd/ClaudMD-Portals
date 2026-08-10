@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -12,22 +12,29 @@ import {
   Pagination,
   paginateItems,
 } from "@/components/ui/pagination";
+import { KpiSkeletonStrip } from "@/components/ui/skeleton";
 import { CreatePatientAppointmentModal } from "@/features/patient/appointments/create-appointment-modal";
-import { unreadReportCount } from "@/features/patient/dashboard/dashboard-utils";
-import { appointments as allAppointments } from "@/data/appointments";
 import {
-  DASHBOARD_APPOINTMENT_WINDOW_DAYS,
-  DASHBOARD_VISIT_WINDOW_DAYS,
-  PATIENT_DEMO_TODAY,
-} from "@/data/patient";
-import { visits as allVisits } from "@/data/visits";
+  fetchPatientDashboardSummary,
+  fetchPatientDashboardVisits,
+  fetchPatientUpcomingAppointments,
+} from "@/lib/api/patient";
+import { getAccessToken } from "@/lib/auth-session";
 import {
   categoryStyles,
   specialtyStyle,
   workStatusStyle,
 } from "@/lib/category-styles";
-import { isWithinRange, shiftIsoDate, toIsoDate } from "@/lib/dates";
+import { patientPaths } from "@/lib/portal-paths";
 import { cn } from "@/lib/utils";
+
+/** Tabs that load live CheckInsHeader rows by VisitTypes.CategoryId. */
+const LIVE_VISIT_TABS = new Set([
+  "urgentCare",
+  "personalInjury",
+  "physicals",
+  "injury",
+]);
 
 /** Work status only applies to injury-related care, so the other tabs drop that column. */
 const kpiTabs = [
@@ -72,13 +79,14 @@ const kpiTabs = [
   },
 ];
 
-/** Appointments created in-session have no ISO date, so they always stay visible. */
-function isUpcoming(appointment, windowEndIso) {
-  if (appointment.status === "Completed") return false;
-  const isoDate = toIsoDate(appointment.date);
-  if (!isoDate) return true;
-  return isoDate >= PATIENT_DEMO_TODAY && isoDate <= windowEndIso;
-}
+const emptySummary = {
+  urgentCare: 0,
+  personalInjury: 0,
+  physicals: 0,
+  injury: 0,
+  appointments: 0,
+  unreadReports: 0,
+};
 
 export function PatientDashboardView() {
   const router = useRouter();
@@ -91,86 +99,176 @@ export function PatientDashboardView() {
   const [appointmentPage, setAppointmentPage] = useState(1);
   const [createdAppointments, setCreatedAppointments] = useState([]);
   const [showCreateAppt, setShowCreateAppt] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [loadingSummary, setLoadingSummary] = useState(true);
+  const [summaryError, setSummaryError] = useState(null);
+  const [liveVisits, setLiveVisits] = useState([]);
+  const [loadingVisits, setLoadingVisits] = useState(false);
+  const [visitsError, setVisitsError] = useState(null);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [liveAppointments, setLiveAppointments] = useState([]);
+  const [appointmentsTotal, setAppointmentsTotal] = useState(0);
+  const [appointmentsTotalPages, setAppointmentsTotalPages] = useState(1);
+  const [loadingAppointments, setLoadingAppointments] = useState(true);
+  const [appointmentsError, setAppointmentsError] = useState(null);
 
-  const recentVisits = useMemo(() => {
-    const windowStart = shiftIsoDate(
-      PATIENT_DEMO_TODAY,
-      -DASHBOARD_VISIT_WINDOW_DAYS
-    );
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
 
-    return allVisits
-      .map((visit) => ({
-        ...visit,
-        isoDate: toIsoDate(visit.date),
-        documentCount: visit.documents?.length || 0,
-        unreadCount: unreadReportCount(visit),
-      }))
-      .filter((visit) => isWithinRange(visit.isoDate, windowStart, PATIENT_DEMO_TODAY));
-  }, []);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSummary() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(patientPaths.login);
+        return;
+      }
+
+      setLoadingSummary(true);
+      try {
+        const data = await fetchPatientDashboardSummary(token);
+        if (!cancelled) {
+          setSummary(data);
+          setSummaryError(null);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(patientPaths.login);
+          return;
+        }
+        setSummaryError(
+          err?.message || "Unable to load dashboard counts."
+        );
+        setSummary(emptySummary);
+      } finally {
+        if (!cancelled) setLoadingSummary(false);
+      }
+    }
+
+    loadSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadVisits() {
+      if (!activeTab || !LIVE_VISIT_TABS.has(activeTab)) {
+        setLiveVisits([]);
+        setVisitsError(null);
+        setLoadingVisits(false);
+        return;
+      }
+
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(patientPaths.login);
+        return;
+      }
+
+      setLoadingVisits(true);
+      try {
+        const data = await fetchPatientDashboardVisits(token, {
+          category: activeTab,
+          fromDate: fromDate || undefined,
+          toDate: toDate || undefined,
+          search: debouncedQuery || undefined,
+        });
+        if (!cancelled) {
+          setLiveVisits(data.items || []);
+          setVisitsError(null);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(patientPaths.login);
+          return;
+        }
+        setLiveVisits([]);
+        setVisitsError(err?.message || "Unable to load visits.");
+      } finally {
+        if (!cancelled) setLoadingVisits(false);
+      }
+    }
+
+    loadVisits();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, debouncedQuery, fromDate, router, toDate]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAppointments() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(patientPaths.login);
+        return;
+      }
+
+      setLoadingAppointments(true);
+      try {
+        const data = await fetchPatientUpcomingAppointments(token, {
+          page: appointmentPage,
+          pageSize: PAGE_SIZE,
+        });
+        if (!cancelled) {
+          setLiveAppointments(data.items || []);
+          setAppointmentsTotal(data.total || 0);
+          setAppointmentsTotalPages(data.totalPages || 1);
+          setAppointmentsError(null);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(patientPaths.login);
+          return;
+        }
+        setLiveAppointments([]);
+        setAppointmentsTotal(0);
+        setAppointmentsTotalPages(1);
+        setAppointmentsError(
+          err?.message || "Unable to load upcoming appointments."
+        );
+      } finally {
+        if (!cancelled) setLoadingAppointments(false);
+      }
+    }
+
+    loadAppointments();
+    return () => {
+      cancelled = true;
+    };
+  }, [appointmentPage, router]);
 
   const upcomingAppointments = useMemo(() => {
-    const windowEnd = shiftIsoDate(
-      PATIENT_DEMO_TODAY,
-      DASHBOARD_APPOINTMENT_WINDOW_DAYS
-    );
+    // In-session creates from the modal stay visible until booking API exists.
+    if (appointmentPage !== 1 || createdAppointments.length === 0) {
+      return liveAppointments;
+    }
+    const liveIds = new Set(liveAppointments.map((item) => item.id));
+    const extras = createdAppointments.filter((item) => !liveIds.has(item.id));
+    return [...extras, ...liveAppointments];
+  }, [appointmentPage, createdAppointments, liveAppointments]);
 
-    return [
-      ...createdAppointments,
-      ...allAppointments.filter((appointment) =>
-        isUpcoming(appointment, windowEnd)
-      ),
-    ];
-  }, [createdAppointments]);
+  const stats = summary || emptySummary;
 
-  const stats = useMemo(() => {
-    const byCategory = (category) =>
-      recentVisits.filter((visit) => visit.category === category).length;
-
-    return {
-      urgentCare: byCategory("Urgent Care"),
-      personalInjury: byCategory("Personal Injury"),
-      physicals: byCategory("Physical"),
-      injury: byCategory("Injury"),
-      appointments: upcomingAppointments.length,
-      unreadReports: recentVisits.reduce(
-        (total, visit) => total + visit.unreadCount,
-        0
-      ),
-    };
-  }, [recentVisits, upcomingAppointments]);
-
-  const filteredVisits = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    const tab = kpiTabs.find((item) => item.key === activeTab);
-
-    return recentVisits.filter((visit) => {
-      if (!isWithinRange(visit.isoDate, fromDate || null, toDate || null)) {
-        return false;
-      }
-
-      if (tab?.category && visit.category !== tab.category) return false;
-      if (activeTab === "appointments") {
-        const hasAppointment = upcomingAppointments.some(
-          (appointment) => appointment.doctor === visit.provider
-        );
-        if (!hasAppointment) return false;
-      }
-
-      if (normalized) {
-        const haystack =
-          `${visit.provider} ${visit.location} ${visit.id}`.toLowerCase();
-        if (!haystack.includes(normalized)) return false;
-      }
-
-      return true;
-    });
-  }, [activeTab, fromDate, query, recentVisits, toDate, upcomingAppointments]);
+  const filteredVisits = LIVE_VISIT_TABS.has(activeTab) ? liveVisits : [];
 
   const pagedVisits = paginateItems(filteredVisits, visitPage, PAGE_SIZE);
-  const pagedAppointments = paginateItems(
-    upcomingAppointments,
-    appointmentPage,
-    PAGE_SIZE
+
+  const appointmentStart =
+    appointmentsTotal === 0 ? 0 : (appointmentPage - 1) * PAGE_SIZE + 1;
+  const appointmentEnd = Math.min(
+    appointmentPage * PAGE_SIZE,
+    appointmentsTotal
   );
 
   const activeTabConfig = kpiTabs.find((item) => item.key === activeTab);
@@ -209,83 +307,93 @@ export function PatientDashboardView() {
         Last 30 Days
       </h1>
 
-      <div className="overflow-hidden rounded-2xl bg-primary-800 text-white shadow-sm">
-        <div className="grid grid-cols-3 lg:grid-cols-6">
-          {kpiTabs.map((item, index) => {
-            const active = activeTab === item.key;
-            // Mobile/tablet: 3-col grid → two rows of 3; desktop: single row of 6.
-            const isTopRowMobile = index < 3;
-            const isNotLastInRowMobile = index % 3 !== 2;
-            const isNotLastDesktop = index < kpiTabs.length - 1;
+      {summaryError ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {summaryError}
+        </p>
+      ) : null}
 
-            const cellClass = cn(
-              "relative px-3 py-4 text-center transition sm:px-4 sm:py-5 lg:px-5",
-              item.readOnly
-                ? "cursor-default"
-                : cn(
-                    "cursor-pointer",
-                    active ? "bg-primary-700" : "hover:bg-white/5"
-                  ),
-              isTopRowMobile && "border-b border-white/10 lg:border-b-0",
-              isNotLastInRowMobile && "border-r border-white/10 lg:border-r-0",
-              isNotLastDesktop && "lg:border-r lg:border-white/10"
-            );
+      {loadingSummary || !summary ? (
+        <KpiSkeletonStrip count={6} />
+      ) : (
+        <div className="overflow-hidden rounded-2xl bg-primary-800 text-white shadow-sm">
+          <div className="grid grid-cols-3 lg:grid-cols-6">
+            {kpiTabs.map((item, index) => {
+              const active = activeTab === item.key;
+              // Mobile/tablet: 3-col grid → two rows of 3; desktop: single row of 6.
+              const isTopRowMobile = index < 3;
+              const isNotLastInRowMobile = index % 3 !== 2;
 
-            const cellContent = (
-              <>
-                <div className="flex items-center justify-center gap-1.5">
-                  <p className="text-[10px] font-semibold tracking-[0.12em] text-white/70 uppercase sm:text-[11px] sm:tracking-[0.14em]">
-                    {item.label}
-                  </p>
-                  {item.showAdd ? (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label="Create appointment"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setShowCreateAppt(true);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
+              const cellClass = cn(
+                "relative px-3 py-4 text-center transition sm:px-4 sm:py-5 lg:px-5",
+                item.readOnly
+                  ? "cursor-default"
+                  : cn(
+                      "cursor-pointer",
+                      active ? "bg-primary-700" : "hover:bg-white/5"
+                    ),
+                // Mobile row separators only. Avoid border-r + lg:border-r-0 conflicts
+                // that left a lone white divider between Physicals and Injury on desktop.
+                isTopRowMobile && "border-b border-white/10 lg:border-b-0",
+                isNotLastInRowMobile && "max-lg:border-r max-lg:border-white/10"
+              );
+
+              const cellContent = (
+                <>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <p className="text-[10px] font-semibold tracking-[0.12em] text-white/70 uppercase sm:text-[11px] sm:tracking-[0.14em]">
+                      {item.label}
+                    </p>
+                    {item.showAdd ? (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Create appointment"
+                        onClick={(event) => {
                           event.stopPropagation();
                           setShowCreateAppt(true);
-                        }
-                      }}
-                      className="inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary-500 text-white ring-2 ring-white/25"
-                    >
-                      <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-3 font-sans text-4xl font-semibold tabular-nums leading-none sm:text-5xl lg:text-[3.25rem]">
-                  {stats[item.key]}
-                </p>
-              </>
-            );
-
-            if (item.readOnly) {
-              return (
-                <div key={item.key} className={cellClass}>
-                  {cellContent}
-                </div>
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setShowCreateAppt(true);
+                          }
+                        }}
+                        className="inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary-500 text-white ring-2 ring-white/25"
+                      >
+                        <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 font-sans text-4xl font-semibold tabular-nums leading-none sm:text-5xl lg:text-[3.25rem]">
+                    {stats[item.key]}
+                  </p>
+                </>
               );
-            }
 
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => handleTabClick(item.key)}
-                className={cellClass}
-              >
-                {cellContent}
-              </button>
-            );
-          })}
+              if (item.readOnly) {
+                return (
+                  <div key={item.key} className={cellClass}>
+                    {cellContent}
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => handleTabClick(item.key)}
+                  className={cellClass}
+                >
+                  {cellContent}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-col gap-2.5 rounded-2xl border border-border/70 bg-white p-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-4 sm:py-3">
         <label className="relative block min-w-0 flex-1 sm:min-w-[12rem]">
@@ -321,11 +429,28 @@ export function PatientDashboardView() {
           <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
             <h2 className="text-lg font-semibold text-ink">{tableTitle}</h2>
             <p className="text-sm text-muted">
-              {filteredVisits.length} results
+              {loadingVisits && LIVE_VISIT_TABS.has(activeTab)
+                ? "Loading…"
+                : `${filteredVisits.length} results`}
             </p>
           </div>
 
-          {filteredVisits.length === 0 ? (
+          {visitsError && LIVE_VISIT_TABS.has(activeTab) ? (
+            <p className="mx-4 mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:mx-5">
+              {visitsError}
+            </p>
+          ) : null}
+
+          {loadingVisits && LIVE_VISIT_TABS.has(activeTab) ? (
+            <div className="space-y-3 px-4 pb-5 sm:px-5">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-14 animate-pulse rounded-xl bg-cream/80"
+                />
+              ))}
+            </div>
+          ) : filteredVisits.length === 0 ? (
             <EmptyState
               title="No visits match this filter"
               description="Try another category, clear the filter, or adjust the date range."
@@ -366,7 +491,12 @@ export function PatientDashboardView() {
                           </p>
                         </td>
                         <td className="px-4 py-3.5 sm:px-5 sm:py-4">
-                          <Badge className={categoryStyles[visit.category]}>
+                          <Badge
+                            className={
+                              categoryStyles[visit.category] ||
+                              categoryStyles.Other
+                            }
+                          >
                             {visit.category}
                           </Badge>
                         </td>
@@ -425,7 +555,22 @@ export function PatientDashboardView() {
             </button>
           </div>
 
-          {pagedAppointments.total === 0 ? (
+          {appointmentsError ? (
+            <p className="mx-4 my-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:mx-5">
+              {appointmentsError}
+            </p>
+          ) : null}
+
+          {loadingAppointments ? (
+            <div className="space-y-3 px-4 py-5 sm:px-5">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-16 animate-pulse rounded-xl bg-cream/80"
+                />
+              ))}
+            </div>
+          ) : upcomingAppointments.length === 0 ? (
             <EmptyState
               title="No upcoming appointments"
               description="Use + to schedule a new appointment."
@@ -434,7 +579,7 @@ export function PatientDashboardView() {
           ) : (
             <>
               <div className="divide-y divide-border/60">
-                {pagedAppointments.items.map((appointment) => (
+                {upcomingAppointments.map((appointment) => (
                   <div
                     key={appointment.id}
                     className="flex items-end justify-between gap-3 px-4 py-4 transition hover:bg-cream/40 sm:px-5"
@@ -469,11 +614,11 @@ export function PatientDashboardView() {
 
               <Pagination
                 alwaysShow
-                page={pagedAppointments.currentPage}
-                totalPages={pagedAppointments.totalPages}
-                total={pagedAppointments.total}
-                start={pagedAppointments.start}
-                end={pagedAppointments.end}
+                page={appointmentPage}
+                totalPages={appointmentsTotalPages}
+                total={appointmentsTotal}
+                start={appointmentStart}
+                end={appointmentEnd}
                 onChange={setAppointmentPage}
               />
             </>

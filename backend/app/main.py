@@ -5,6 +5,7 @@ from app.auth.routes import router as auth_router
 from app.config import get_settings
 from app.employer.routes import router as employer_router
 from app.insurance.routes import router as insurance_router
+from app.patient.routes import router as patient_router
 
 settings = get_settings()
 
@@ -32,6 +33,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(employer_router)
 app.include_router(insurance_router)
+app.include_router(patient_router)
 
 
 @app.get("/health")

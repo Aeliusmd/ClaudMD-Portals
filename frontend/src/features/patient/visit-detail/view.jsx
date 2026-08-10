@@ -8,9 +8,7 @@ import { Card } from "@/components/ui/card";
 import { DetailField } from "@/components/ui/detail-field";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
-import { currentPatient } from "@/data/patient";
 import { categoryStyles } from "@/lib/category-styles";
-import { SAMPLE_DOCUMENT_URL, documentBadge } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
 function DocumentThumb({ document, onPreview }) {
@@ -29,23 +27,30 @@ function DocumentThumb({ document, onPreview }) {
   );
 }
 
+function displayValue(value) {
+  if (value == null || value === "") return "—";
+  return value;
+}
+
 export function PatientVisitDetailView({
   visit,
+  patient,
   showEmployer = true,
   showInsurance = true,
   showWorkStatus = true,
+  otherVisits = [],
   backHref = "/patient/dashboard",
 }) {
   const router = useRouter();
   const [previewDocument, setPreviewDocument] = useState(null);
 
-  const documents = (visit.documents || []).map((document, index) => ({
-    ...document,
-    id: document.id || `${visit.id}-doc-${index}`,
-    documentId: document.documentId || `${visit.id}-${index + 1}`,
-    url: document.url || SAMPLE_DOCUMENT_URL,
-    previewBadge: documentBadge(document.type),
-  }));
+  const documents = (visit.documents || []).filter((document) => document.url);
+  const addressLines =
+    patient?.addressLines?.length > 0
+      ? patient.addressLines
+      : patient?.address
+        ? [patient.address]
+        : [];
 
   return (
     <div className="space-y-5">
@@ -100,19 +105,27 @@ export function PatientVisitDetailView({
               <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
                 <div className="space-y-2.5">
                   <p className="font-semibold text-foreground-900">
-                    {currentPatient.fullName}
+                    {displayValue(patient?.fullName)}
                   </p>
                   <p className="font-semibold tabular-nums text-foreground-900">
-                    {currentPatient.dateOfBirth}
+                    {displayValue(patient?.dateOfBirth)}
                   </p>
-                  <p className="text-foreground-700">{currentPatient.address}</p>
+                  {addressLines.length > 0 ? (
+                    addressLines.map((line) => (
+                      <p key={line} className="text-foreground-700">
+                        {line}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-foreground-700">—</p>
+                  )}
                 </div>
                 <div className="space-y-2.5">
                   <p className="font-semibold tabular-nums text-foreground-900">
-                    {currentPatient.phone}
+                    {displayValue(patient?.phone)}
                   </p>
                   <p className="break-all text-foreground-700">
-                    {currentPatient.email}
+                    {displayValue(patient?.email)}
                   </p>
                 </div>
               </div>
@@ -130,11 +143,13 @@ export function PatientVisitDetailView({
                       Insurance
                     </p>
                     <p className="mt-1 font-semibold text-foreground-900">
-                      {currentPatient.insurance.carrier}
+                      {displayValue(patient?.insurance?.carrier)}
                     </p>
-                    <p className="mt-0.5 text-foreground-700">
-                      {currentPatient.insurance.planType}
-                    </p>
+                    {patient?.insurance?.planType ? (
+                      <p className="mt-0.5 text-foreground-700">
+                        {patient.insurance.planType}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
                 {showEmployer ? (
@@ -143,11 +158,13 @@ export function PatientVisitDetailView({
                       Employer
                     </p>
                     <p className="mt-1 font-semibold text-foreground-900">
-                      {currentPatient.employer.name}
+                      {displayValue(patient?.employer?.name)}
                     </p>
-                    <p className="mt-0.5 text-foreground-700">
-                      {currentPatient.employer.department}
-                    </p>
+                    {patient?.employer?.department ? (
+                      <p className="mt-0.5 text-foreground-700">
+                        {patient.employer.department}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -178,7 +195,7 @@ export function PatientVisitDetailView({
                     Special Instructions
                   </p>
                   <div className="mt-2 rounded-xl bg-cream px-4 py-3">
-                    <p className="text-sm leading-relaxed text-foreground-700">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground-700">
                       {visit.specialInstructions}
                     </p>
                   </div>
@@ -187,9 +204,51 @@ export function PatientVisitDetailView({
             </div>
           </Card>
 
+          <Card className="overflow-hidden p-0">
+            <h2 className="border-b border-border/70 px-5 py-4 text-base font-semibold text-foreground-900">
+              Other Visits
+            </h2>
+            {otherVisits.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-muted">
+                No other visits found for this patient.
+              </p>
+            ) : (
+              <div className="divide-y divide-border/60">
+                {otherVisits.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/patient/visits/${encodeURIComponent(item.id)}`
+                      )
+                    }
+                    className="flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-3.5 text-left transition hover:bg-cream/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground-900">
+                        {item.date}
+                      </p>
+                      <p className="mt-0.5 truncate text-sm text-muted">
+                        {item.provider} · {item.location}
+                      </p>
+                    </div>
+                    <Badge
+                      className={cn(
+                        "shrink-0",
+                        categoryStyles[item.category] ||
+                          "bg-stone-100 text-stone-600"
+                      )}
+                    >
+                      {item.category}
+                    </Badge>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
 
-        {/* Documents attached to this visit */}
         <div className="min-h-[18rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[22rem] sm:p-5 xl:min-h-full">
           {documents.length === 0 ? (
             <div className="flex h-full min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">

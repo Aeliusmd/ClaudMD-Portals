@@ -283,6 +283,7 @@ def list_available_slots(
     resource_id: int,
     on_date: date,
     duration_minutes: int,
+    patient_id: int | None = None,
 ) -> AppointmentSlotsResponse:
     clinic, _profile = _clinic_and_employer(current_user)
     _ensure_booking_date_not_past(clinic, on_date)
@@ -298,6 +299,12 @@ def list_available_slots(
         resource = _fetch_resource(cursor, resource_id, location_id)
         shifts = _fetch_shifts(cursor, resource_id, work_day)
         booked = _fetch_booked_intervals(cursor, resource_id, on_date)
+        # Additive: when a patient is selected, also hide times they already hold.
+        patient_booked = (
+            _fetch_patient_booked_intervals(cursor, int(patient_id), on_date)
+            if patient_id is not None
+            else []
+        )
         server_now = _fetch_server_now(cursor)
 
     slot_minutes = max(1, int(round(resource.time_slot_minutes)))
@@ -332,6 +339,14 @@ def list_available_slots(
                 capacity,
                 booked,
             )
+            if ok and patient_booked:
+                ok, reason = _block_is_available(
+                    cursor_start,
+                    block_minutes,
+                    slot_minutes,
+                    capacity,
+                    patient_booked,
+                )
             if ok:
                 options.append(
                     AppointmentSlotOption(
@@ -389,37 +404,6 @@ def book_appointment(
     if start_time is None:
         raise HTTPException(status_code=400, detail="Invalid start time.")
 
-    # Re-validate slot availability with current DB reads.
-    slots = list_available_slots(
-        current_user,
-        location_id=payload.location_id,
-        resource_id=payload.resource_id,
-        on_date=on_date,
-        duration_minutes=duration,
-    )
-    start_key = _format_time(start_time)
-    matching = next((s for s in slots.items if s.start == start_key), None)
-    if matching is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Selected start time is not available for this provider/duration. "
-                "Neighboring slot(s) may already be booked, or the time is in the past."
-            ),
-        )
-
-    created_user_id = int(current_user.user_id or 0)
-    slot_minutes = slots.time_slot_minutes
-    slots_needed = slots.slots_needed
-    booked_duration = slots_needed * slot_minutes
-    end_time = (
-        datetime.combine(on_date, start_time) + timedelta(minutes=booked_duration)
-    ).time()
-    status_id = int(payload.appointment_status_id or 4)
-    schedule_type_id = int(payload.schedule_type_id or 1)
-    note_value = (payload.note or "").strip() or None
-    warnings: list[str] = []
-
     location_id = _require_int(payload.location_id, "location")
     resource_id = _require_int(payload.resource_id, "provider/resource")
     visit_type_id = _require_int(payload.visit_type_id, "visit type")
@@ -436,6 +420,39 @@ def book_appointment(
 
     if new_patient is not None:
         _validate_new_patient_payload(new_patient)
+
+    # Re-validate slot availability with current DB reads (provider + selected patient).
+    slots = list_available_slots(
+        current_user,
+        location_id=location_id,
+        resource_id=resource_id,
+        on_date=on_date,
+        duration_minutes=duration,
+        patient_id=patient_id,
+    )
+    start_key = _format_time(start_time)
+    matching = next((s for s in slots.items if s.start == start_key), None)
+    if matching is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Selected start time is not available for this provider/duration. "
+                "The provider or patient may already be booked, neighboring slot(s) "
+                "may be taken, or the time is in the past."
+            ),
+        )
+
+    created_user_id = int(current_user.user_id or 0)
+    slot_minutes = slots.time_slot_minutes
+    slots_needed = slots.slots_needed
+    booked_duration = slots_needed * slot_minutes
+    end_time = (
+        datetime.combine(on_date, start_time) + timedelta(minutes=booked_duration)
+    ).time()
+    status_id = int(payload.appointment_status_id or 4)
+    schedule_type_id = int(payload.schedule_type_id or 1)
+    note_value = (payload.note or "").strip() or None
+    warnings: list[str] = []
 
     recurring_id = None
     appointment_id = None
@@ -686,6 +703,45 @@ def _fetch_booked_intervals(cursor, resource_id: int, on_date: date) -> list[_Bo
           AND (IsDeleted = 0 OR IsDeleted IS NULL)
         """,
         (resource_id, on_date),
+    )
+    booked: list[_BookedInterval] = []
+    for row in cursor.fetchall():
+        status_id = int(row.AppointmentStatusId) if row.AppointmentStatusId is not None else None
+        if status_id in CANCELLED_STATUS_IDS:
+            continue
+        start = row.StartTime if isinstance(row.StartTime, time) else _parse_time(str(row.StartTime))
+        end = row.EndTime if isinstance(row.EndTime, time) else _parse_time(str(row.EndTime))
+        if not start or not end or end <= start:
+            continue
+        booked.append(
+            _BookedInterval(
+                start_minutes=_time_to_minutes(start),
+                end_minutes=_time_to_minutes(end),
+            )
+        )
+    return booked
+
+
+def _fetch_patient_booked_intervals(
+    cursor,
+    patient_id: int,
+    on_date: date,
+) -> list[_BookedInterval]:
+    """
+    Existing non-cancelled schedules for a patient on a date (any provider/location).
+    Used only as an additive filter after provider availability is computed.
+    """
+    cursor.execute(
+        """
+        SELECT s.StartTime, s.EndTime, s.AppointmentStatusId
+        FROM dbo.AppointmentSchedules s
+        LEFT JOIN dbo.Appointments a ON a.Id = s.AppointmentId
+        LEFT JOIN dbo.CheckInsHeader ch ON ch.Id = s.CheckInId
+        WHERE s.Date = ?
+          AND (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
+          AND COALESCE(a.PatientId, ch.PatientId) = ?
+        """,
+        (on_date, int(patient_id)),
     )
     booked: list[_BookedInterval] = []
     for row in cursor.fetchall():

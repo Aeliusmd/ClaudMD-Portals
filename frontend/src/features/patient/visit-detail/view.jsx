@@ -38,7 +38,6 @@ export function PatientVisitDetailView({
   showEmployer = true,
   showInsurance = true,
   showWorkStatus = true,
-  otherVisits = [],
   backHref = "/patient/dashboard",
 }) {
   const router = useRouter();
@@ -185,7 +184,9 @@ export function PatientVisitDetailView({
                 {showWorkStatus ? (
                   <DetailField label="Work Status" value={visit.workStatus} />
                 ) : null}
-                <DetailField label="Restrictions" value={visit.restrictions} />
+                {visit.category !== "Physical" ? (
+                  <DetailField label="Restrictions" value={visit.restrictions} />
+                ) : null}
                 <DetailField label="Follow-up" value={visit.followUp} />
               </div>
 
@@ -202,50 +203,6 @@ export function PatientVisitDetailView({
                 </div>
               ) : null}
             </div>
-          </Card>
-
-          <Card className="overflow-hidden p-0">
-            <h2 className="border-b border-border/70 px-5 py-4 text-base font-semibold text-foreground-900">
-              Other Visits
-            </h2>
-            {otherVisits.length === 0 ? (
-              <p className="px-5 py-8 text-sm text-muted">
-                No other visits found for this patient.
-              </p>
-            ) : (
-              <div className="divide-y divide-border/60">
-                {otherVisits.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() =>
-                      router.push(
-                        `/patient/visits/${encodeURIComponent(item.id)}`
-                      )
-                    }
-                    className="flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-3.5 text-left transition hover:bg-cream/40"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold text-foreground-900">
-                        {item.date}
-                      </p>
-                      <p className="mt-0.5 truncate text-sm text-muted">
-                        {item.provider} · {item.location}
-                      </p>
-                    </div>
-                    <Badge
-                      className={cn(
-                        "shrink-0",
-                        categoryStyles[item.category] ||
-                          "bg-stone-100 text-stone-600"
-                      )}
-                    >
-                      {item.category}
-                    </Badge>
-                  </button>
-                ))}
-              </div>
-            )}
           </Card>
         </div>
 

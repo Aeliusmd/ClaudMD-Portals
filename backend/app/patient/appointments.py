@@ -1,4 +1,4 @@
-"""Read-only upcoming appointments for the logged-in patient."""
+"""Read-only appointments for the logged-in patient."""
 
 from __future__ import annotations
 
@@ -18,6 +18,11 @@ from app.patient.schemas import (
 DEFAULT_PAGE_SIZE = 10
 MAX_PAGE_SIZE = 50
 
+SCOPE_ALL = "all"
+SCOPE_UPCOMING = "upcoming"
+SCOPE_COMPLETED = "completed"
+ALLOWED_SCOPES = {SCOPE_ALL, SCOPE_UPCOMING, SCOPE_COMPLETED}
+
 _APPOINTMENT_STATUS_LABELS: dict[int, str] = {
     1: "Confirmed",
     2: "Scheduled",
@@ -26,6 +31,27 @@ _APPOINTMENT_STATUS_LABELS: dict[int, str] = {
     5: "Completed",
 }
 
+_UPCOMING_SQL = """
+              AND (
+                    s.Date > CAST(GETDATE() AS date)
+                 OR (
+                        s.Date = CAST(GETDATE() AS date)
+                    AND s.StartTime >= CAST(GETDATE() AS time)
+                    )
+              )
+"""
+
+_COMPLETED_SQL = """
+              AND (
+                    s.AppointmentStatusId = 5
+                 OR s.Date < CAST(GETDATE() AS date)
+                 OR (
+                        s.Date = CAST(GETDATE() AS date)
+                    AND s.StartTime < CAST(GETDATE() AS time)
+                    )
+              )
+"""
+
 
 def list_upcoming_appointments(
     current_user: CurrentUser,
@@ -33,11 +59,29 @@ def list_upcoming_appointments(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
 ) -> PatientUpcomingAppointmentsResponse:
-    """
-    Upcoming AppointmentSchedules for the logged-in patient (SELECT only).
+    """Upcoming schedules only (dashboard panel)."""
+    return list_appointments(
+        current_user,
+        scope=SCOPE_UPCOMING,
+        page=page,
+        page_size=page_size,
+    )
 
-    Tables: AppointmentSchedules, Appointments, CheckInsHeader, VisitTypes,
-    AppointmentResources, Providers, Locations.
+
+def list_appointments(
+    current_user: CurrentUser,
+    *,
+    scope: str = SCOPE_ALL,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> PatientUpcomingAppointmentsResponse:
+    """
+    AppointmentSchedules for the logged-in patient (SELECT only).
+
+    scope:
+      all — every non-deleted schedule
+      upcoming — now-or-future
+      completed — past or status Completed
     """
     clinic = get_clinic_by_activation_key(current_user.activation_key)
     if not clinic:
@@ -54,18 +98,26 @@ def list_upcoming_appointments(
         )
     patient_id = int(profile.patient_id)
 
+    scope_key = (scope or SCOPE_ALL).strip().lower()
+    if scope_key not in ALLOWED_SCOPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid scope. Use all, upcoming, or completed.",
+        )
+
     page_size = min(max(int(page_size or DEFAULT_PAGE_SIZE), 1), MAX_PAGE_SIZE)
     page = max(int(page or 1), 1)
 
-    total = _count_upcoming(clinic, patient_id)
+    total = _count_rows(clinic, patient_id, scope_key)
     total_pages = max(1, ceil(total / page_size)) if total else 1
     if page > total_pages:
         page = total_pages
 
     offset = (page - 1) * page_size
-    rows = _fetch_upcoming_rows(
+    rows = _fetch_rows(
         clinic,
         patient_id,
+        scope=scope_key,
         offset=offset,
         limit=page_size,
     )
@@ -80,11 +132,27 @@ def list_upcoming_appointments(
     )
 
 
-def _count_upcoming(clinic, patient_id: int) -> int:
+def _scope_sql(scope: str) -> str:
+    if scope == SCOPE_UPCOMING:
+        return _UPCOMING_SQL
+    if scope == SCOPE_COMPLETED:
+        return _COMPLETED_SQL
+    return ""
+
+
+def _order_sql(scope: str) -> str:
+    if scope == SCOPE_UPCOMING:
+        return "ORDER BY s.Date ASC, s.StartTime ASC"
+    # Newest first for all / completed lists.
+    return "ORDER BY s.Date DESC, s.StartTime DESC"
+
+
+def _count_rows(clinic, patient_id: int, scope: str) -> int:
+    scope_sql = _scope_sql(scope)
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """
+            f"""
             SELECT COUNT(*)
             FROM dbo.AppointmentSchedules s
             LEFT JOIN dbo.Appointments a ON a.Id = s.AppointmentId
@@ -93,30 +161,27 @@ def _count_upcoming(clinic, patient_id: int) -> int:
               AND COALESCE(a.PatientId, ch.PatientId) = ?
               AND s.Date IS NOT NULL
               AND s.StartTime IS NOT NULL
-              AND (
-                    s.Date > CAST(GETDATE() AS date)
-                 OR (
-                        s.Date = CAST(GETDATE() AS date)
-                    AND s.StartTime >= CAST(GETDATE() AS time)
-                    )
-              )
+              {scope_sql}
             """,
             (int(patient_id),),
         )
         return int(cursor.fetchone()[0] or 0)
 
 
-def _fetch_upcoming_rows(
+def _fetch_rows(
     clinic,
     patient_id: int,
     *,
+    scope: str,
     offset: int,
     limit: int,
 ) -> list[PatientUpcomingAppointmentRow]:
+    scope_sql = _scope_sql(scope)
+    order_sql = _order_sql(scope)
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """
+            f"""
             SELECT
                 s.Id AS ScheduleId,
                 s.Date,
@@ -149,14 +214,8 @@ def _fetch_upcoming_rows(
               AND COALESCE(a.PatientId, ch.PatientId) = ?
               AND s.Date IS NOT NULL
               AND s.StartTime IS NOT NULL
-              AND (
-                    s.Date > CAST(GETDATE() AS date)
-                 OR (
-                        s.Date = CAST(GETDATE() AS date)
-                    AND s.StartTime >= CAST(GETDATE() AS time)
-                    )
-              )
-            ORDER BY s.Date ASC, s.StartTime ASC
+              {scope_sql}
+            {order_sql}
             OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
             """,
             (int(patient_id), offset, limit),

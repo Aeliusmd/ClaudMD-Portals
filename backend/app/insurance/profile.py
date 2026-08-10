@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from fastapi import HTTPException, status
@@ -8,13 +7,11 @@ from fastapi import HTTPException, status
 from app.auth.dependencies import CurrentUser
 from app.auth.user_profile_type import UserType, is_super_admin, user_type_label
 from app.db.clinic import get_clinic_connection
+from app.validation.contact import email_error, phone_error
+from app.validation.text import unsafe_markup_error
 
-_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _NAME_MAX = 50
 _TITLE_MAX = 100
-_EMAIL_MAX = 100
-_PHONE_MAX = 20
-_PHONE_DIGITS_MIN = 10
 
 # Super Admin is employer-only; Insurance User is the dedicated role.
 _INSURANCE_PORTAL_TYPES = {int(UserType.InsuranceUser)}
@@ -399,27 +396,31 @@ def _validate_profile_fields(
         errors["first_name"] = "First name is required."
     elif len(first_name) > _NAME_MAX:
         errors["first_name"] = f"First name must be at most {_NAME_MAX} characters."
+    else:
+        err = unsafe_markup_error(first_name)
+        if err:
+            errors["first_name"] = err
 
     if len(last_name) > _NAME_MAX:
         errors["last_name"] = f"Last name must be at most {_NAME_MAX} characters."
+    elif last_name:
+        err = unsafe_markup_error(last_name)
+        if err:
+            errors["last_name"] = err
 
     if title and len(title) > _TITLE_MAX:
         errors["title"] = f"Title must be at most {_TITLE_MAX} characters."
+    elif title:
+        err = unsafe_markup_error(title)
+        if err:
+            errors["title"] = err
 
-    if not email:
-        errors["email"] = "Email is required."
-    elif len(email) > _EMAIL_MAX:
-        errors["email"] = f"Email must be at most {_EMAIL_MAX} characters."
-    elif not _EMAIL_RE.match(email):
-        errors["email"] = "Enter a valid email address."
+    err = email_error(email, required=True)
+    if err:
+        errors["email"] = err
 
-    if phone:
-        if len(phone) > _PHONE_MAX:
-            errors["phone"] = f"Phone must be at most {_PHONE_MAX} characters."
-        else:
-            digits = re.sub(r"\D", "", phone)
-            if len(digits) < _PHONE_DIGITS_MIN:
-                errors["phone"] = (
-                    f"Enter a valid phone number (at least {_PHONE_DIGITS_MIN} digits)."
-                )
+    err = phone_error(phone, required=False)
+    if err:
+        errors["phone"] = err
+
     return errors

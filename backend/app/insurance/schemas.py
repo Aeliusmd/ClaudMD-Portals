@@ -1,4 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.validation.contact import email_error, phone_error
+from app.validation.text import unsafe_markup_error
 
 
 class InsuranceProfileResponse(BaseModel):
@@ -26,6 +29,36 @@ class InsuranceProfileUpdateRequest(BaseModel):
     title: str | None = Field(default=None, max_length=100)
     email: str = Field(..., min_length=1, max_length=100)
     phone: str | None = Field(default=None, max_length=20)
+
+    @field_validator("first_name", "last_name", "title")
+    @classmethod
+    def _reject_unsafe_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        err = unsafe_markup_error(cleaned)
+        if err:
+            raise ValueError(err)
+        return cleaned
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, value: str) -> str:
+        err = email_error(value, required=True)
+        if err:
+            raise ValueError(err)
+        return value.strip()
+
+    @field_validator("phone")
+    @classmethod
+    def _validate_phone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip() or None
+        err = phone_error(cleaned, required=False)
+        if err:
+            raise ValueError(err)
+        return cleaned
 
 
 class InsuranceOrganizationUserRow(BaseModel):

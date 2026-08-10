@@ -16,6 +16,12 @@ import {
 } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { LOGIN_PATH } from "@/lib/auth-routes";
+import {
+  emailError,
+  phoneError,
+  sanitizePhoneInput,
+} from "@/lib/contact-validation";
+import { unsafeMarkupError } from "@/lib/text-validation";
 import { cn } from "@/lib/utils";
 
 const profileTabs = [
@@ -26,13 +32,9 @@ const profileTabs = [
 
 const VALID_PROFILE_TABS = new Set(profileTabs.map((tab) => tab.id));
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_DIGITS_MIN = 10;
 // Match dbo.UserProfiles / EmployerContacts column lengths.
 const NAME_MAX = 50;
 const TITLE_MAX = 100;
-const EMAIL_MAX = 100;
-const PHONE_MAX = 20;
 
 function ProfileTabBar({ value, onChange }) {
   return (
@@ -192,32 +194,34 @@ function validateProfile(profile) {
   if (!firstName) errors.firstName = "First name is required.";
   else if (firstName.length > NAME_MAX) {
     errors.firstName = `First name must be at most ${NAME_MAX} characters.`;
+  } else {
+    const err = unsafeMarkupError(firstName);
+    if (err) errors.firstName = err;
   }
 
   if (lastName.length > NAME_MAX) {
     errors.lastName = `Last name must be at most ${NAME_MAX} characters.`;
+  } else if (lastName) {
+    const err = unsafeMarkupError(lastName);
+    if (err) errors.lastName = err;
   }
 
   if (title.length > TITLE_MAX) {
     errors.title = `Title must be at most ${TITLE_MAX} characters.`;
+  } else if (title) {
+    const err = unsafeMarkupError(title);
+    if (err) errors.title = err;
   }
 
   if (!email) errors.email = "Email is required.";
-  else if (email.length > EMAIL_MAX) {
-    errors.email = `Email must be at most ${EMAIL_MAX} characters.`;
-  } else if (!EMAIL_PATTERN.test(email)) {
-    errors.email = "Enter a valid email address.";
+  else {
+    const err = emailError(email);
+    if (err) errors.email = err;
   }
 
   if (phone) {
-    if (phone.length > PHONE_MAX) {
-      errors.phone = `Phone must be at most ${PHONE_MAX} characters.`;
-    } else {
-      const digits = phone.replace(/\D/g, "");
-      if (digits.length < PHONE_DIGITS_MIN) {
-        errors.phone = `Enter a valid phone number (at least ${PHONE_DIGITS_MIN} digits).`;
-      }
-    }
+    const err = phoneError(phone);
+    if (err) errors.phone = err;
   }
 
   return errors;
@@ -641,10 +645,12 @@ function EmployerProfileContent() {
                 label="Phone"
                 type="tel"
                 value={profile.phone}
-                onChange={(value) => updateProfileField("phone", value)}
+                onChange={(value) =>
+                  updateProfileField("phone", sanitizePhoneInput(value))
+                }
                 error={profileErrors.phone}
                 autoComplete="tel"
-                placeholder="Up to 20 characters"
+                placeholder="Numbers and + - ( ) . only"
               />
               <div className="md:col-span-2">
                 <Field

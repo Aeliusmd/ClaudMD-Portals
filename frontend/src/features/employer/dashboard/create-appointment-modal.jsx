@@ -38,6 +38,43 @@ function digitsOnly(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function isAllSameDigit(value) {
+  const digits = digitsOnly(value);
+  return digits.length > 0 && /^(\d)\1+$/.test(digits);
+}
+
+/** Names may include letters, spaces, hyphen, apostrophe, period — not digits. */
+function sanitizePersonName(value) {
+  return String(value || "").replace(/\d/g, "");
+}
+
+function personNameError(value, label) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return `Enter ${label}.`;
+  if (/\d/.test(trimmed)) {
+    return `${label.charAt(0).toUpperCase()}${label.slice(1)} cannot contain numbers.`;
+  }
+  return null;
+}
+
+/** US ZIP: 12345 or ZIP+4 12345-6789. */
+const ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
+
+function sanitizeZipCode(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 9);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
+function zipCodeError(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "Enter zip.";
+  if (!ZIP_PATTERN.test(trimmed)) {
+    return "Enter a 5-digit ZIP or ZIP+4 (12345-6789).";
+  }
+  return null;
+}
+
 const GENDER_OPTIONS = [
   { value: "M", label: "Male" },
   { value: "F", label: "Female" },
@@ -92,14 +129,21 @@ function FieldError({ message }) {
   return <p className="mt-1 text-xs font-medium text-rose-700">{message}</p>;
 }
 
-function FieldLabel({ htmlFor, children, required }) {
+function FieldLabel({ htmlFor, children, required, tag }) {
   return (
     <label
       htmlFor={htmlFor}
-      className="mb-1.5 block text-[11px] font-semibold tracking-[0.08em] text-[#8B6D4F] uppercase"
+      className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold tracking-[0.08em] text-[#8B6D4F] uppercase"
     >
-      {children}
-      {required ? <span className="text-rose-600"> *</span> : null}
+      <span>
+        {children}
+        {required ? <span className="text-rose-600"> *</span> : null}
+      </span>
+      {tag ? (
+        <span className="rounded-full bg-secondary-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-secondary-700 normal-case">
+          {tag}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -477,8 +521,10 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
 
   function validateNewPatient() {
     const next = {};
-    if (!newPatient.firstName.trim()) next.firstName = "Enter first name.";
-    if (!newPatient.lastName.trim()) next.lastName = "Enter last name.";
+    const firstNameErr = personNameError(newPatient.firstName, "first name");
+    if (firstNameErr) next.firstName = firstNameErr;
+    const lastNameErr = personNameError(newPatient.lastName, "last name");
+    if (lastNameErr) next.lastName = lastNameErr;
     if (!newPatient.dateOfBirth) {
       next.dateOfBirth = "Enter date of birth.";
     } else if (newPatient.dateOfBirth > todayIsoLocal()) {
@@ -486,14 +532,18 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
     }
     if (!newPatient.gender) next.gender = "Select gender.";
     if (!newPatient.address1.trim()) next.address1 = "Enter address 1.";
-    if (!newPatient.city.trim()) next.city = "Enter city.";
+    const cityErr = personNameError(newPatient.city, "city");
+    if (cityErr) next.city = cityErr;
     if (!newPatient.state) next.state = "Select state.";
-    if (!newPatient.zipCode.trim()) next.zipCode = "Enter zip.";
+    const zipErr = zipCodeError(newPatient.zipCode);
+    if (zipErr) next.zipCode = zipErr;
     const phoneDigits = digitsOnly(newPatient.phone);
     if (!phoneDigits) {
       next.phone = "Enter cell phone.";
     } else if (phoneDigits.length !== CELL_PHONE_DIGITS) {
       next.phone = `Enter a ${CELL_PHONE_DIGITS}-digit cell phone number.`;
+    } else if (isAllSameDigit(phoneDigits)) {
+      next.phone = "Enter a valid cell phone number (not all the same digit).";
     }
     return next;
   }
@@ -510,8 +560,8 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
     setForm((prev) => ({
       ...prev,
       patientId: "",
-      accountNo: newPatient.accountNo.trim(),
-      ssn: newPatient.ssn.trim(),
+      accountNo: "",
+      ssn: "",
       dateOfBirth: newPatient.dateOfBirth,
       age: ageFromDob(newPatient.dateOfBirth),
       gender: newPatient.gender,
@@ -584,8 +634,8 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
               lastName: newPatient.lastName.trim(),
               dateOfBirth: newPatient.dateOfBirth,
               gender: newPatient.gender,
-              ssn: newPatient.ssn.trim() || null,
-              accountNo: newPatient.accountNo.trim() || null,
+              ssn: null,
+              accountNo: null,
               phone: digitsOnly(newPatient.phone),
               address1: newPatient.address1.trim(),
               address2: newPatient.address2.trim() || null,
@@ -685,6 +735,9 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
   const newPatientLabel = useNewPatient
     ? `${newPatient.firstName} ${newPatient.lastName}`.trim()
     : "";
+  const patientLocked = useNewPatient || Boolean(form.patientId);
+  const lockedControlClass =
+    "cursor-not-allowed border-border bg-cream/40 text-muted";
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto p-4 sm:items-center sm:p-6">
@@ -835,8 +888,11 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                     <input
                       id="new-first-name"
                       type="text"
+                      autoComplete="given-name"
                       value={newPatient.firstName}
-                      onChange={(e) => setPatientField("firstName", e.target.value)}
+                      onChange={(e) =>
+                        setPatientField("firstName", sanitizePersonName(e.target.value))
+                      }
                       className={cn(
                         controlClass,
                         patientErrors.firstName ? "border-rose-400" : "border-border"
@@ -851,8 +907,11 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                     <input
                       id="new-last-name"
                       type="text"
+                      autoComplete="family-name"
                       value={newPatient.lastName}
-                      onChange={(e) => setPatientField("lastName", e.target.value)}
+                      onChange={(e) =>
+                        setPatientField("lastName", sanitizePersonName(e.target.value))
+                      }
                       className={cn(
                         controlClass,
                         patientErrors.lastName ? "border-rose-400" : "border-border"
@@ -912,30 +971,39 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <FieldLabel htmlFor="new-ssn">SSN #</FieldLabel>
+                    <FieldLabel htmlFor="new-ssn" tag="Auto">
+                      SSN #
+                    </FieldLabel>
                     <input
                       id="new-ssn"
                       type="text"
-                      value={newPatient.ssn}
-                      onChange={(e) => setPatientField("ssn", e.target.value)}
-                      placeholder="Auto if blank"
-                      maxLength={16}
+                      value=""
+                      readOnly
+                      disabled
+                      placeholder="Generated automatically"
+                      aria-readonly="true"
                       className={cn(
                         controlClass,
-                        patientErrors.ssn ? "border-rose-400" : "border-border"
+                        "cursor-not-allowed border-border bg-cream/40 text-muted"
                       )}
                     />
-                    <FieldError message={patientErrors.ssn} />
                   </div>
                   <div>
-                    <FieldLabel htmlFor="new-account">Account #</FieldLabel>
+                    <FieldLabel htmlFor="new-account" tag="Auto">
+                      Account #
+                    </FieldLabel>
                     <input
                       id="new-account"
                       type="text"
-                      value={newPatient.accountNo}
-                      onChange={(e) => setPatientField("accountNo", e.target.value)}
-                      placeholder="Auto if blank"
-                      className={cn(controlClass, "border-border")}
+                      value=""
+                      readOnly
+                      disabled
+                      placeholder="Generated automatically"
+                      aria-readonly="true"
+                      className={cn(
+                        controlClass,
+                        "cursor-not-allowed border-border bg-cream/40 text-muted"
+                      )}
                     />
                   </div>
                 </div>
@@ -973,8 +1041,14 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                     <input
                       id="new-zip"
                       type="text"
+                      inputMode="numeric"
+                      autoComplete="postal-code"
+                      maxLength={10}
+                      placeholder="12345 or 12345-6789"
                       value={newPatient.zipCode}
-                      onChange={(e) => setPatientField("zipCode", e.target.value)}
+                      onChange={(e) =>
+                        setPatientField("zipCode", sanitizeZipCode(e.target.value))
+                      }
                       className={cn(
                         controlClass,
                         patientErrors.zipCode ? "border-rose-400" : "border-border"
@@ -989,8 +1063,11 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                     <input
                       id="new-city"
                       type="text"
+                      autoComplete="address-level2"
                       value={newPatient.city}
-                      onChange={(e) => setPatientField("city", e.target.value)}
+                      onChange={(e) =>
+                        setPatientField("city", sanitizePersonName(e.target.value))
+                      }
                       className={cn(
                         controlClass,
                         patientErrors.city ? "border-rose-400" : "border-border"
@@ -1058,23 +1135,57 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <FieldLabel htmlFor="appt-account">Account #</FieldLabel>
+                <FieldLabel
+                  htmlFor="appt-account"
+                  tag={useNewPatient ? "Auto" : undefined}
+                >
+                  Account #
+                </FieldLabel>
                 <input
                   id="appt-account"
                   type="text"
-                  value={form.accountNo}
-                  onChange={(e) => setField("accountNo", e.target.value)}
-                  className={cn(controlClass, "border-border")}
+                  value={useNewPatient ? "" : form.accountNo}
+                  readOnly={patientLocked}
+                  disabled={patientLocked}
+                  placeholder={
+                    useNewPatient ? "Generated automatically" : undefined
+                  }
+                  onChange={
+                    patientLocked
+                      ? undefined
+                      : (e) => setField("accountNo", e.target.value)
+                  }
+                  className={cn(
+                    controlClass,
+                    patientLocked ? lockedControlClass : "border-border"
+                  )}
                 />
               </div>
               <div>
-                <FieldLabel htmlFor="appt-ssn">SSN #</FieldLabel>
+                <FieldLabel
+                  htmlFor="appt-ssn"
+                  tag={useNewPatient ? "Auto" : undefined}
+                >
+                  SSN #
+                </FieldLabel>
                 <input
                   id="appt-ssn"
                   type="text"
-                  value={form.ssn}
-                  onChange={(e) => setField("ssn", e.target.value)}
-                  className={cn(controlClass, "border-border")}
+                  value={useNewPatient ? "" : form.ssn}
+                  readOnly={patientLocked}
+                  disabled={patientLocked}
+                  placeholder={
+                    useNewPatient ? "Generated automatically" : undefined
+                  }
+                  onChange={
+                    patientLocked
+                      ? undefined
+                      : (e) => setField("ssn", e.target.value)
+                  }
+                  className={cn(
+                    controlClass,
+                    patientLocked ? lockedControlClass : "border-border"
+                  )}
                 />
               </div>
             </div>
@@ -1086,15 +1197,24 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                   id="appt-dob"
                   type="date"
                   value={form.dateOfBirth}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setForm((prev) => ({
-                      ...prev,
-                      dateOfBirth: value,
-                      age: ageFromDob(value),
-                    }));
-                  }}
-                  className={cn(controlClass, "border-border")}
+                  readOnly={patientLocked}
+                  disabled={patientLocked}
+                  onChange={
+                    patientLocked
+                      ? undefined
+                      : (e) => {
+                          const value = e.target.value;
+                          setForm((prev) => ({
+                            ...prev,
+                            dateOfBirth: value,
+                            age: ageFromDob(value),
+                          }));
+                        }
+                  }
+                  className={cn(
+                    controlClass,
+                    patientLocked ? lockedControlClass : "border-border"
+                  )}
                 />
               </div>
               <div>
@@ -1104,7 +1224,8 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                   type="text"
                   value={form.age}
                   readOnly
-                  className={cn(controlClass, "border-border bg-cream/40")}
+                  disabled
+                  className={cn(controlClass, lockedControlClass)}
                 />
               </div>
             </div>
@@ -1117,6 +1238,7 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                 onChange={(value) => setField("gender", value)}
                 options={GENDER_OPTIONS}
                 placeholder="Select gender..."
+                disabled={patientLocked}
               />
             </div>
 

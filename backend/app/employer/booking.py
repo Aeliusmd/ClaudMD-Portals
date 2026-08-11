@@ -7,6 +7,7 @@ Prepare/submit builds INSERT scripts and never executes them against the clinic 
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from math import ceil
@@ -981,10 +982,22 @@ def _allocate_next_auto_ssn(cursor, created_user_id: int) -> str:
 
 
 def _validate_new_patient_payload(new_patient: NewPatientPayload) -> None:
-    if not new_patient.first_name.strip():
+    first_name = (new_patient.first_name or "").strip()
+    last_name = (new_patient.last_name or "").strip()
+    if not first_name:
         raise HTTPException(status_code=400, detail="First name is required.")
-    if not new_patient.last_name.strip():
+    if any(ch.isdigit() for ch in first_name):
+        raise HTTPException(
+            status_code=400,
+            detail="First name cannot contain numbers.",
+        )
+    if not last_name:
         raise HTTPException(status_code=400, detail="Last name is required.")
+    if any(ch.isdigit() for ch in last_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Last name cannot contain numbers.",
+        )
     if not new_patient.date_of_birth:
         raise HTTPException(status_code=400, detail="Date of birth is required.")
     try:
@@ -1008,17 +1021,34 @@ def _validate_new_patient_payload(new_patient: NewPatientPayload) -> None:
             status_code=400,
             detail="Cell phone must be a 10-digit number.",
         )
+    if len(set(phone_digits)) == 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Cell phone cannot use the same digit repeatedly.",
+        )
     gender_id = new_patient.gender_id or _gender_id_from_code(new_patient.gender)
     if gender_id is None:
         raise HTTPException(status_code=400, detail="Gender is required.")
     if not (new_patient.address1 or "").strip():
         raise HTTPException(status_code=400, detail="Address 1 is required.")
-    if not (new_patient.city or "").strip():
+    city = (new_patient.city or "").strip()
+    if not city:
         raise HTTPException(status_code=400, detail="City is required.")
+    if any(ch.isdigit() for ch in city):
+        raise HTTPException(
+            status_code=400,
+            detail="City cannot contain numbers.",
+        )
     if not (new_patient.state or "").strip():
         raise HTTPException(status_code=400, detail="State is required.")
-    if not (new_patient.zip_code or "").strip():
+    zip_code = (new_patient.zip_code or "").strip()
+    if not zip_code:
         raise HTTPException(status_code=400, detail="Zip is required.")
+    if not re.fullmatch(r"\d{5}(-\d{4})?", zip_code):
+        raise HTTPException(
+            status_code=400,
+            detail="Zip must be 5 digits or ZIP+4 (12345-6789).",
+        )
 
 
 def _gender_id_from_code(code: str | None) -> int | None:

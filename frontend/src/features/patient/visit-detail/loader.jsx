@@ -1,14 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PatientVisitDetailView } from "@/features/patient/visit-detail/view";
 import { fetchPatientVisitDetail } from "@/lib/api/patient";
 import { getAccessToken } from "@/lib/auth-session";
+import { dashboardHrefFromReturn } from "@/lib/dashboard-return-state";
 import { patientPaths } from "@/lib/portal-paths";
 
 export function PatientVisitDetailLoader({ checkInId }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-2xl border border-border/70 bg-white px-5 py-10 text-sm text-muted">
+          Loading visit details…
+        </div>
+      }
+    >
+      <PatientVisitDetailLoaderInner checkInId={checkInId} />
+    </Suspense>
+  );
+}
+
+function PatientVisitDetailLoaderInner({ checkInId }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const backHref = dashboardHrefFromReturn(
+    patientPaths.dashboard,
+    searchParams
+  );
   const [visit, setVisit] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -69,7 +89,7 @@ export function PatientVisitDetailLoader({ checkInId }) {
       <div className="space-y-4">
         <button
           type="button"
-          onClick={() => router.push(patientPaths.dashboard)}
+          onClick={() => router.push(backHref)}
           className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-cream"
         >
           Back to dashboard
@@ -88,7 +108,7 @@ export function PatientVisitDetailLoader({ checkInId }) {
       showEmployer={visit.showEmployer}
       showInsurance={visit.showInsurance}
       showWorkStatus={visit.showWorkStatus}
-      backHref={patientPaths.dashboard}
+      backHref={backHref}
     />
   );
 }

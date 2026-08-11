@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Menu, Search } from "lucide-react";
 import { NotificationsMenu } from "@/components/layout/notifications-menu";
@@ -25,7 +25,8 @@ export function TopBar({
   return (
     <header
       className={cn(
-        "flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#ece7df] px-3 sm:gap-4 sm:px-5 lg:px-6",
+        // Keep menus above scrolling main content (dropdowns would paint underneath otherwise).
+        "relative z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#ece7df] px-3 sm:gap-4 sm:px-5 lg:px-6",
         showSearch ? "bg-cream" : "bg-white",
         className
       )}

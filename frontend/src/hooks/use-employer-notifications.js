@@ -34,10 +34,15 @@ function setSharedState({ items, unreadCount, total, token }) {
   emit();
 }
 
-function applyAndStore(rawItems, openedAt, token, { total } = {}) {
+function applyAndStore(rawItems, openedAt, token, { total, apiUnreadCount } = {}) {
   const next = applyNotificationReadState(rawItems || [], openedAt);
-  // Always derive badge from applied items so refresh keeps lastOpenedAt clears.
-  const computedUnread = countUnreadNotifications(next);
+  // Prefer API unread_count (all pages) until the user has opened the bell;
+  // after that, derive from applied items so lastOpenedAt clears the badge.
+  const computedUnread = openedAt
+    ? countUnreadNotifications(next)
+    : typeof apiUnreadCount === "number"
+      ? apiUnreadCount
+      : countUnreadNotifications(next);
   setSharedState({
     items: next,
     unreadCount: computedUnread,
@@ -119,6 +124,7 @@ export function useEmployerNotifications({ enabled = true } = {}) {
         const openedAt = getNotificationsLastOpenedAt();
         applyAndStore(data.items || [], openedAt, token, {
           total: data.total,
+          apiUnreadCount: data.unreadCount,
         });
         setError(null);
       } catch (err) {
@@ -169,6 +175,7 @@ export function useEmployerNotifications({ enabled = true } = {}) {
       });
       applyAndStore(data.items || [], openedAt, token, {
         total: data.total,
+        apiUnreadCount: data.unreadCount,
       });
     } catch (err) {
       if (err?.status === 401) {

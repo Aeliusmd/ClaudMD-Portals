@@ -76,6 +76,7 @@ function Field({
   placeholder,
   error,
   autoComplete,
+  readOnly = false,
 }) {
   return (
     <label className="block space-y-1.5" htmlFor={id}>
@@ -88,10 +89,18 @@ function Field({
         value={value}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        onChange={(event) => onChange(event.target.value)}
+        readOnly={readOnly}
+        onChange={
+          readOnly || !onChange
+            ? undefined
+            : (event) => onChange(event.target.value)
+        }
         className={cn(
-          "w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm font-medium text-ink outline-none transition placeholder:text-muted/80 focus:border-primary focus:ring-2 focus:ring-primary/15",
-          error ? "border-rose-300" : "border-border/80"
+          "w-full rounded-xl border px-3.5 py-2.5 text-sm font-medium text-ink outline-none transition placeholder:text-muted/80",
+          readOnly
+            ? "cursor-default border-border/80 bg-cream/60 text-foreground-700"
+            : "border-border/80 bg-white focus:border-primary focus:ring-2 focus:ring-primary/15",
+          error ? "border-rose-300" : null
         )}
       />
       {error ? (
@@ -397,54 +406,38 @@ export function PatientProfileView() {
                 <Field
                   id="fullName"
                   label="Full Name"
-                  value={profile.fullName}
-                  onChange={(value) => updateProfileField("fullName", value)}
-                  error={profileErrors.fullName}
-                  autoComplete="name"
+                  value={profile.fullName || "—"}
+                  readOnly
                 />
                 <Field
                   id="dateOfBirth"
                   label="Date of Birth"
                   type="date"
-                  value={profile.dateOfBirth}
-                  onChange={(value) => updateProfileField("dateOfBirth", value)}
-                  error={profileErrors.dateOfBirth}
+                  value={profile.dateOfBirth || ""}
+                  readOnly
                 />
                 <Field
                   id="email"
                   label="Email"
                   type="email"
-                  value={profile.email}
-                  onChange={(value) => updateProfileField("email", value)}
-                  error={profileErrors.email}
-                  autoComplete="email"
+                  value={profile.email || "—"}
+                  readOnly
                 />
                 <Field
                   id="phone"
                   label="Phone"
                   type="tel"
-                  value={profile.phone}
-                  onChange={(value) =>
-                    updateProfileField("phone", sanitizePhoneInput(value))
-                  }
-                  error={profileErrors.phone}
-                  autoComplete="tel"
+                  value={profile.phone || "—"}
+                  readOnly
                 />
                 <div className="sm:col-span-2">
                   <Field
                     id="address"
                     label="Address"
-                    value={profile.address}
-                    onChange={(value) => updateProfileField("address", value)}
-                    error={profileErrors.address}
-                    autoComplete="street-address"
+                    value={profile.address || "—"}
+                    readOnly
                   />
                 </div>
-              </div>
-              <div className="mt-6 flex justify-end">
-                <Button onClick={handleSaveProfile} disabled={profileSaving}>
-                  {profileSaving ? "Saving…" : "Save Changes"}
-                </Button>
               </div>
             </>
           )}
@@ -453,60 +446,18 @@ export function PatientProfileView() {
 
       {tab === "security" ? (
         <Card className="p-5 sm:p-6">
-          <h2 className="mb-5 text-lg font-semibold text-ink">
-            Change Password
-          </h2>
-          <div className="grid max-w-xl gap-4">
+          <h2 className="mb-3 text-lg font-semibold text-ink">Security</h2>
+          <p className="text-sm text-muted">
+            Profile and password details are view-only in this portal. Contact
+            your administrator if changes are required.
+          </p>
+          <div className="mt-5 max-w-xl">
             <Field
-              id="currentPassword"
-              label="Current Password"
-              type="password"
-              placeholder="Enter current password"
-              value={passwordForm.currentPassword}
-              onChange={(value) => {
-                clearFeedback();
-                setPasswordForm((prev) => ({
-                  ...prev,
-                  currentPassword: value,
-                }));
-              }}
-              error={passwordErrors.currentPassword}
-              autoComplete="current-password"
+              id="security-email"
+              label="Email / Login"
+              value={profile.email || "—"}
+              readOnly
             />
-            <Field
-              id="newPassword"
-              label="New Password"
-              type="password"
-              placeholder="Enter new password"
-              value={passwordForm.newPassword}
-              onChange={(value) => {
-                clearFeedback();
-                setPasswordForm((prev) => ({ ...prev, newPassword: value }));
-              }}
-              error={passwordErrors.newPassword}
-              autoComplete="new-password"
-            />
-            <Field
-              id="confirmPassword"
-              label="Confirm New Password"
-              type="password"
-              placeholder="Confirm new password"
-              value={passwordForm.confirmPassword}
-              onChange={(value) => {
-                clearFeedback();
-                setPasswordForm((prev) => ({
-                  ...prev,
-                  confirmPassword: value,
-                }));
-              }}
-              error={passwordErrors.confirmPassword}
-              autoComplete="new-password"
-            />
-          </div>
-          <div className="mt-6 flex justify-end">
-            <Button onClick={handleUpdatePassword} disabled={passwordSaving}>
-              {passwordSaving ? "Updating…" : "Update Password"}
-            </Button>
           </div>
         </Card>
       ) : null}

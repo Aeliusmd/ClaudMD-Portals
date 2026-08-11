@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { DetailField } from "@/components/ui/detail-field";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { coverageStyles } from "@/lib/category-styles";
@@ -141,33 +142,32 @@ export function InsurancePatientDetailView({ patient, backHref }) {
             <div className="px-5 py-4">
               <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
                 <div className="space-y-2.5">
-                  <p className="font-semibold tabular-nums text-foreground-900">
-                    {patient.accountNo || "—"}
-                  </p>
-                  <p className="font-semibold tabular-nums text-foreground-900">
-                    {patient.dateOfBirth || "—"}
-                  </p>
-                  <p className="font-semibold text-foreground-900">
-                    {patient.patient}
-                  </p>
-                  {addressLines.length > 0 ? (
-                    addressLines.map((line) => (
-                      <p key={line} className="text-foreground-700">
-                        {line}
-                      </p>
-                    ))
-                  ) : (
-                    <p className="text-foreground-700">—</p>
-                  )}
-                  <p className="tabular-nums text-foreground-700">
-                    {patient.phone || "—"}
-                  </p>
+                  <DetailField
+                    label="Account #"
+                    value={patient.accountNo || "—"}
+                  />
+                  <DetailField
+                    label="DOB"
+                    value={patient.dateOfBirth || "—"}
+                  />
+                  <DetailField
+                    label="Full Name"
+                    value={patient.patient || "—"}
+                  />
+                  <DetailField
+                    label="Address"
+                    value={
+                      addressLines.length > 0 ? addressLines.join(", ") : "—"
+                    }
+                  />
+                  <DetailField label="Phone" value={patient.phone || "—"} />
                 </div>
+
                 <div className="space-y-2.5">
-                  <p className="font-semibold tabular-nums text-foreground-900">
-                    {patient.phone || "—"}
-                  </p>
-                  <p className="text-foreground-900">{patient.gender || "—"}</p>
+                  <DetailField
+                    label="Gender"
+                    value={patient.gender || "—"}
+                  />
                 </div>
               </div>
 
@@ -184,7 +184,7 @@ export function InsurancePatientDetailView({ patient, backHref }) {
                 ) : null}
                 <div>
                   <p className="text-[11px] font-semibold tracking-[0.1em] text-foreground-500 uppercase">
-                    Insurance
+                    Insurance Plan
                   </p>
                   <p className="mt-1 font-semibold text-foreground-900">
                     {patient.insurance || "—"}

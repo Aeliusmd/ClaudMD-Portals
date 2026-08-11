@@ -52,6 +52,7 @@ from app.employer.schemas import (
     OrganizationUserAccessUpdateRequest,
     OrganizationUserAccessUpdateResponse,
     OrganizationUsersResponse,
+    SharedDocumentDetailResponse,
     UpcomingAppointmentsResponse,
     EmployerProfileUpdateRequest,
 )
@@ -59,6 +60,11 @@ from app.employer.service import (
     get_dashboard_summary,
     get_employer_profile,
     update_employer_profile,
+)
+from app.employer.shared_documents import (
+    get_shared_document_detail,
+    open_shared_document_file,
+    open_shared_document_thumbnail,
 )
 from app.employer.visit_documents import get_employee_visits, open_employee_visit_document_file, open_employee_visit_document_thumbnail
 
@@ -198,6 +204,39 @@ def employer_employee_visits_endpoint(
         to_date=to_date,
         category=category,
     )
+
+
+@router.get(
+    "/shared-documents/by-shared-id/{shared_id}",
+    response_model=SharedDocumentDetailResponse,
+)
+def employer_shared_document_detail_endpoint(
+    shared_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Resolve a secure share link: SharedDocuments.SharedId → DocumentId →
+    DocumentUploads metadata (employee / visit / report).
+    """
+    return get_shared_document_detail(current_user, shared_id)
+
+
+@router.get("/shared-documents/by-shared-id/{shared_id}/file")
+def employer_shared_document_file_endpoint(
+    shared_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> FileResponse:
+    """Stream the PDF from DocumentUploads.FilePath for a SharedId link."""
+    return open_shared_document_file(current_user, shared_id)
+
+
+@router.get("/shared-documents/by-shared-id/{shared_id}/thumbnail")
+def employer_shared_document_thumbnail_endpoint(
+    shared_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """PNG of page 1 for a SharedId document tile."""
+    return open_shared_document_thumbnail(current_user, shared_id)
 
 
 @router.get("/employees/{patient_id}/visit-documents/{document_id}/file")

@@ -78,6 +78,8 @@ function EmployeeSearchContent() {
     searchParams.get("employee") || searchParams.get("employeeId");
   const fromParam = searchParams.get("from");
   const categoryFilter = searchParams.get("category");
+  const urlFromDate = searchParams.get("fromDate");
+  const urlToDate = searchParams.get("toDate");
 
   const [draftQuery, setDraftQuery] = useState("");
   const [draftFromDate, setDraftFromDate] = useState(null);
@@ -280,15 +282,21 @@ function EmployeeSearchContent() {
         loading={loadingDetail || !selectedEmployee}
         backLabel={backLabel}
         onBack={onBack}
+        fromDate={urlFromDate || effectiveAppliedFrom || null}
+        toDate={urlToDate || effectiveAppliedTo || null}
+        category={categoryFilter || null}
       />
     );
   }
 
   function openEmployee(row) {
     const code = row.patientId || row.employeeId || row.accountNo;
-    router.push(
-      `${employerPaths.employeeSearch}?employee=${encodeURIComponent(code)}`
-    );
+    const params = new URLSearchParams();
+    params.set("employee", String(code));
+    if (effectiveAppliedFrom) params.set("fromDate", effectiveAppliedFrom);
+    if (effectiveAppliedTo) params.set("toDate", effectiveAppliedTo);
+    if (categoryFilter) params.set("category", categoryFilter);
+    router.push(`${employerPaths.employeeSearch}?${params.toString()}`);
   }
 
   const start = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;

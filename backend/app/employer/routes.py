@@ -183,16 +183,20 @@ def employer_employee_visits_endpoint(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     from_date: date | None = Query(default=None, alias="fromDate"),
     to_date: date | None = Query(default=None, alias="toDate"),
+    category: str | None = Query(default=None),
 ):
     """
     Visits for a patient under the logged-in employer, with documents from
     dbo.DocterPublishes (one or many per check-in). SELECT only.
+    Defaults to last 30 days (same window as dashboard KPI counts).
+    Optional category (injury / physicals / drugScreens) filters the visit table only.
     """
     return get_employee_visits(
         current_user,
         patient_id,
         from_date=from_date,
         to_date=to_date,
+        category=category,
     )
 
 

@@ -543,11 +543,12 @@ export async function fetchEmployerEmployeeSearch(
 export async function fetchEmployeeVisits(
   accessToken,
   patientId,
-  { fromDate, toDate } = {}
+  { fromDate, toDate, category } = {}
 ) {
   const params = new URLSearchParams();
   if (fromDate) params.set("fromDate", fromDate);
   if (toDate) params.set("toDate", toDate);
+  if (category) params.set("category", category);
   const qs = params.toString();
   const path = `/api/employer/employees/${encodeURIComponent(patientId)}/visits${
     qs ? `?${qs}` : ""

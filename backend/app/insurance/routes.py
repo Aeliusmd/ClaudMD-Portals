@@ -32,10 +32,16 @@ from app.insurance.schemas import (
     InsuranceProfileResponse,
     InsuranceProfileUpdateRequest,
 )
+from app.employer.schemas import SharedDocumentDetailResponse
 from app.insurance.service import (
     get_dashboard_summary,
     get_insurance_profile,
     update_insurance_profile,
+)
+from app.insurance.shared_documents import (
+    get_shared_document_detail,
+    open_shared_document_file,
+    open_shared_document_thumbnail,
 )
 
 router = APIRouter(prefix="/api/insurance", tags=["insurance"])
@@ -201,3 +207,36 @@ def insurance_patient_visit_document_thumbnail_endpoint(
         patient_id,
         document_id,
     )
+
+
+@router.get(
+    "/shared-documents/by-shared-id/{shared_id}",
+    response_model=SharedDocumentDetailResponse,
+)
+def insurance_shared_document_detail_endpoint(
+    shared_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Resolve a secure share link for insurance: SharedId → DocumentUploads,
+    scoped to patients under this insurance company.
+    """
+    return get_shared_document_detail(current_user, shared_id)
+
+
+@router.get("/shared-documents/by-shared-id/{shared_id}/file")
+def insurance_shared_document_file_endpoint(
+    shared_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> FileResponse:
+    """Stream the PDF from DocumentUploads.FilePath for a SharedId link."""
+    return open_shared_document_file(current_user, shared_id)
+
+
+@router.get("/shared-documents/by-shared-id/{shared_id}/thumbnail")
+def insurance_shared_document_thumbnail_endpoint(
+    shared_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """PNG of page 1 for a SharedId document tile."""
+    return open_shared_document_thumbnail(current_user, shared_id)

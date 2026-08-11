@@ -1,31 +1,54 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
-import { insuranceNavItems } from "@/data/navigation";
+import {
+  insuranceNavItems,
+  insuranceScopedShareNavItems,
+} from "@/data/navigation";
 import { useInsuranceNotifications } from "@/hooks/use-insurance-notifications";
 import { useInsuranceProfile } from "@/hooks/use-insurance-profile";
 import { clearAuthSession } from "@/lib/auth-session";
 import { portalAccessRedirect } from "@/lib/portal-access";
 import { insurancePaths } from "@/lib/portal-paths";
+import {
+  clearSecureShareSession,
+  getSecureShareSession,
+  hasLiveSharedIdSession,
+} from "@/lib/secure-share-session";
 import { userTypeLabel } from "@/lib/user-type";
+
+const emptySubscribe = () => () => {};
+
+function readScopedSessionActive() {
+  return hasLiveSharedIdSession(getSecureShareSession());
+}
 
 function handleLogout() {
   clearAuthSession();
+  clearSecureShareSession();
 }
 
 export function InsuranceShell({ children }) {
+  const pathname = usePathname();
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
+  const scopedSession = useSyncExternalStore(
+    emptySubscribe,
+    readScopedSessionActive,
+    () => false
+  );
   const { profile, loading: profileLoading } = useInsuranceProfile();
   const {
     items: notificationItems,
     markAsRead,
     total: notificationTotal,
     unreadCount: notificationUnread,
-  } = useInsuranceNotifications();
+  } = useInsuranceNotifications({
+    enabled: !scopedSession,
+  });
 
   useEffect(() => {
     const redirectTo = portalAccessRedirect("insurance");
@@ -33,6 +56,14 @@ export function InsuranceShell({ children }) {
       router.replace(redirectTo);
     }
   }, [router]);
+
+  useEffect(() => {
+    const session = getSecureShareSession();
+    if (!hasLiveSharedIdSession(session)) return;
+    if (pathname && !pathname.startsWith(insurancePaths.sharedDocumentsScoped)) {
+      router.replace(insurancePaths.sharedDocumentsScoped);
+    }
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!navOpen) return undefined;
@@ -70,6 +101,11 @@ export function InsuranceShell({ children }) {
     };
   }, [profile, profileLoading]);
 
+  const navItems = useMemo(
+    () => (scopedSession ? insuranceScopedShareNavItems : insuranceNavItems),
+    [scopedSession]
+  );
+
   return (
     <div
       className="flex h-full w-full overflow-hidden bg-cream"
@@ -78,7 +114,7 @@ export function InsuranceShell({ children }) {
       <Sidebar
         open={navOpen}
         onClose={() => setNavOpen(false)}
-        items={insuranceNavItems}
+        items={navItems}
         onLogout={handleLogout}
         loginHref={insurancePaths.login}
       />
@@ -89,14 +125,24 @@ export function InsuranceShell({ children }) {
           portalLabel="Insurance Portal"
           organizationLabel={profile?.organization}
           profileUser={profileUser}
-          profileHref={insurancePaths.profile}
-          settingsHref={insurancePaths.profilePermissions}
+          profileHref={
+            scopedSession
+              ? insurancePaths.sharedDocumentsScoped
+              : insurancePaths.profile
+          }
+          settingsHref={
+            scopedSession
+              ? insurancePaths.sharedDocumentsScoped
+              : insurancePaths.profilePermissions
+          }
           loginHref={insurancePaths.login}
-          notifications={notificationItems}
-          notificationsViewAllHref={insurancePaths.notifications}
-          onNotificationsOpen={markAsRead}
-          notificationsTotalCount={notificationTotal}
-          notificationsUnreadCount={notificationUnread}
+          notifications={scopedSession ? [] : notificationItems}
+          notificationsViewAllHref={
+            scopedSession ? undefined : insurancePaths.notifications
+          }
+          onNotificationsOpen={scopedSession ? undefined : markAsRead}
+          notificationsTotalCount={scopedSession ? 0 : notificationTotal}
+          notificationsUnreadCount={scopedSession ? 0 : notificationUnread}
           showSearch={false}
         />
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6">

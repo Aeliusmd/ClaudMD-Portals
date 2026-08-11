@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
-import { patientNavItems } from "@/data/navigation";
+import {
+  patientNavItems,
+  patientScopedShareNavItems,
+} from "@/data/navigation";
 import { usePatientNotifications } from "@/hooks/use-patient-notifications";
 import { usePatientProfile } from "@/hooks/use-patient-profile";
 import {
@@ -14,10 +17,22 @@ import {
 } from "@/lib/auth-session";
 import { portalAccessRedirect } from "@/lib/portal-access";
 import { patientPaths } from "@/lib/portal-paths";
+import {
+  clearSecureShareSession,
+  getSecureShareSession,
+  hasLiveSharedIdSession,
+} from "@/lib/secure-share-session";
 import { userTypeLabel } from "@/lib/user-type";
+
+const emptySubscribe = () => () => {};
+
+function readScopedSessionActive() {
+  return hasLiveSharedIdSession(getSecureShareSession());
+}
 
 function handleLogout() {
   clearAuthSession();
+  clearSecureShareSession();
 }
 
 function sessionProfileUser() {
@@ -49,17 +64,25 @@ function sessionProfileUser() {
 }
 
 export function PatientShell({ children }) {
+  const pathname = usePathname();
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [sessionUser, setSessionUser] = useState(() => sessionProfileUser());
+  const scopedSession = useSyncExternalStore(
+    emptySubscribe,
+    readScopedSessionActive,
+    () => false
+  );
   const { profile } = usePatientProfile();
   const {
     items: notificationItems,
     markAsRead,
     total: notificationTotal,
     unreadCount: notificationUnread,
-  } = usePatientNotifications();
+  } = usePatientNotifications({
+    enabled: !scopedSession,
+  });
 
   useEffect(() => {
     const redirectTo = portalAccessRedirect("patient");
@@ -75,6 +98,14 @@ export function PatientShell({ children }) {
     setSessionUser(sessionProfileUser());
     setReady(true);
   }, [router]);
+
+  useEffect(() => {
+    const session = getSecureShareSession();
+    if (!hasLiveSharedIdSession(session)) return;
+    if (pathname && !pathname.startsWith(patientPaths.sharedDocumentsScoped)) {
+      router.replace(patientPaths.sharedDocumentsScoped);
+    }
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!navOpen) return undefined;
@@ -94,7 +125,18 @@ export function PatientShell({ children }) {
     };
   }, [navOpen]);
 
-  const profileHref = useMemo(() => patientPaths.profile, []);
+  const profileHref = useMemo(
+    () =>
+      scopedSession
+        ? patientPaths.sharedDocumentsScoped
+        : patientPaths.profile,
+    [scopedSession]
+  );
+
+  const navItems = useMemo(
+    () => (scopedSession ? patientScopedShareNavItems : patientNavItems),
+    [scopedSession]
+  );
 
   const profileUser = useMemo(() => {
     if (!profile) return sessionUser;
@@ -121,7 +163,7 @@ export function PatientShell({ children }) {
       <Sidebar
         open={navOpen}
         onClose={() => setNavOpen(false)}
-        items={patientNavItems}
+        items={navItems}
         onLogout={handleLogout}
         loginHref={patientPaths.login}
       />
@@ -133,11 +175,13 @@ export function PatientShell({ children }) {
           profileUser={profileUser}
           profileHref={profileHref}
           loginHref={patientPaths.login}
-          notifications={notificationItems}
-          notificationsViewAllHref={patientPaths.notifications}
-          onNotificationsOpen={markAsRead}
-          notificationsTotalCount={notificationTotal}
-          notificationsUnreadCount={notificationUnread}
+          notifications={scopedSession ? [] : notificationItems}
+          notificationsViewAllHref={
+            scopedSession ? undefined : patientPaths.notifications
+          }
+          onNotificationsOpen={scopedSession ? undefined : markAsRead}
+          notificationsTotalCount={scopedSession ? 0 : notificationTotal}
+          notificationsUnreadCount={scopedSession ? 0 : notificationUnread}
           showSearch={false}
         />
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6">

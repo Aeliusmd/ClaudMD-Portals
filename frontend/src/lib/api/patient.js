@@ -1,5 +1,8 @@
 import { fetchJson } from "@/lib/api/http";
-import { patientVisitDocumentFileUrl } from "@/lib/documents";
+import {
+  patientSharedDocumentFileUrl,
+  patientVisitDocumentFileUrl,
+} from "@/lib/documents";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -510,5 +513,58 @@ export async function bookPatientAppointment(accessToken, payload) {
     startTime: data.start_time ?? data.startTime ?? null,
     endTime: data.end_time ?? data.endTime ?? null,
     durationMinutes: data.duration_minutes ?? data.durationMinutes ?? null,
+  };
+}
+
+export async function fetchPatientSharedDocumentBySharedId(
+  accessToken,
+  sharedId
+) {
+  const data = await patientFetch(
+    `/api/patient/shared-documents/by-shared-id/${encodeURIComponent(sharedId)}`,
+    accessToken,
+    "Unable to load shared document."
+  );
+
+  const fileUrl = patientSharedDocumentFileUrl(data.shared_id);
+  const employee = data.employee || {};
+
+  return {
+    sharedId: data.shared_id,
+    documentId: data.document_id,
+    documentType: data.document_type || data.report_title || "Shared document",
+    reportTitle: data.report_title || data.document_type || "Shared document",
+    fileName: data.file_name || null,
+    visitDate: data.visit_date || null,
+    visitLabel: data.visit_label || "Visit",
+    employee: {
+      patientId: employee.patient_id ?? null,
+      name: employee.name || "Patient",
+      accountNo: employee.account_no || null,
+      dateOfBirth: employee.date_of_birth || null,
+      gender: employee.gender || null,
+      phone: employee.phone || null,
+      address: employee.address || null,
+    },
+    document: {
+      id: String(data.document_id),
+      documentId: String(data.document_id),
+      title: data.report_title || data.document_type || data.file_name,
+      documentType: data.document_type || data.report_title,
+      previewLabel: "Report",
+      previewBadge:
+        String(data.document_type || data.report_title || "")
+          .toLowerCase()
+          .includes("doctor") &&
+        String(data.document_type || data.report_title || "")
+          .toLowerCase()
+          .includes("first")
+          ? "DFR"
+          : "DOC",
+      visitDate: data.visit_date || null,
+      reportDate: data.visit_date || null,
+      provider: null,
+      url: fileUrl,
+    },
   };
 }

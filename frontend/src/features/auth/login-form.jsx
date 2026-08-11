@@ -63,7 +63,7 @@ function LoginFormInner({ portal = "employer" }) {
     if (sharedId) {
       saveSecureShareSession({
         sharedId,
-        recipientRole: "employer",
+        recipientRole: portalFromUrl,
       });
       setShareBanner({
         tone: "info",
@@ -106,7 +106,7 @@ function LoginFormInner({ portal = "employer" }) {
       tone: "info",
       message: `Secure report ready for ${share.patientName} — ${share.reportType}. Sign in to continue.`,
     });
-  }, [shareToken, sharedId]);
+  }, [shareToken, sharedId, portalFromUrl]);
 
   function clearError() {
     if (!error) return;
@@ -182,7 +182,7 @@ function LoginFormInner({ portal = "employer" }) {
         defaultDestination,
         shareSession: shareValid
           ? liveSharedId
-            ? { sharedId: liveSharedId, recipientRole: "employer" }
+            ? { sharedId: liveSharedId, recipientRole: portalFromUrl }
             : shareSession
           : null,
         isShareExpired: !shareValid,
@@ -194,7 +194,7 @@ function LoginFormInner({ portal = "employer" }) {
       } else if (liveSharedId) {
         saveSecureShareSession({
           sharedId: liveSharedId,
-          recipientRole: "employer",
+          recipientRole: portalFromUrl,
         });
       } else if (mockShare) {
         saveSecureShareSession(mockShare);

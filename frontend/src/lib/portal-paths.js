@@ -37,6 +37,7 @@ export const patientPaths = {
   documentShare: `${PATIENT_PORTAL_BASE}/document-share`,
   profile: `${PATIENT_PORTAL_BASE}/profile`,
   notifications: `${PATIENT_PORTAL_BASE}/notifications`,
+  sharedDocumentsScoped: `${PATIENT_PORTAL_BASE}/shared-documents/scoped`,
 };
 
 export const insurancePaths = {
@@ -47,6 +48,7 @@ export const insurancePaths = {
   profilePermissions: `${INSURANCE_PORTAL_BASE}/profile?tab=permissions`,
   notifications: `${INSURANCE_PORTAL_BASE}/notifications`,
   patients: `${INSURANCE_PORTAL_BASE}/patients`,
+  sharedDocumentsScoped: `${INSURANCE_PORTAL_BASE}/shared-documents/scoped`,
 };
 
 export function getLoginHref({

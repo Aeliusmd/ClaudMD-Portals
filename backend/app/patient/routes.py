@@ -14,6 +14,7 @@ from app.employer.schemas import (
     AppointmentProviderOption,
     AppointmentSlotsResponse,
     AppointmentVisitTypeOption,
+    SharedDocumentDetailResponse,
 )
 from app.patient.appointments import (
     DEFAULT_PAGE_SIZE,
@@ -53,6 +54,11 @@ from app.patient.service import (
     get_patient_profile,
     list_dashboard_visits,
     update_patient_profile,
+)
+from app.patient.shared_documents import (
+    get_shared_document_detail,
+    open_shared_document_file,
+    open_shared_document_thumbnail,
 )
 from app.patient.visit_detail import (
     get_visit_detail,
@@ -316,3 +322,36 @@ def patient_visit_document_thumbnail_endpoint(
 ):
     """PNG of the first PDF page for patient visit document tiles."""
     return open_visit_document_thumbnail(current_user, check_in_id, document_id)
+
+
+@router.get(
+    "/shared-documents/by-shared-id/{shared_id}",
+    response_model=SharedDocumentDetailResponse,
+)
+def patient_shared_document_detail_endpoint(
+    shared_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Resolve a secure share link for the logged-in patient: SharedId →
+    DocumentUploads, only when the visit belongs to their own chart.
+    """
+    return get_shared_document_detail(current_user, shared_id)
+
+
+@router.get("/shared-documents/by-shared-id/{shared_id}/file")
+def patient_shared_document_file_endpoint(
+    shared_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> FileResponse:
+    """Stream the PDF from DocumentUploads.FilePath for a SharedId link."""
+    return open_shared_document_file(current_user, shared_id)
+
+
+@router.get("/shared-documents/by-shared-id/{shared_id}/thumbnail")
+def patient_shared_document_thumbnail_endpoint(
+    shared_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """PNG of page 1 for a SharedId document tile."""
+    return open_shared_document_thumbnail(current_user, shared_id)

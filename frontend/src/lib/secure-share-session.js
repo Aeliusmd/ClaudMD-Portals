@@ -7,12 +7,24 @@
  */
 
 import { getLoginHref } from "@/lib/auth-routes";
-import { employerPaths } from "@/lib/portal-paths";
+import {
+  employerPaths,
+  insurancePaths,
+  patientPaths,
+} from "@/lib/portal-paths";
 
 const STORAGE_KEY = "claudmd.secureShareSession";
 
 function canUseStorage() {
   return typeof window !== "undefined" && typeof sessionStorage !== "undefined";
+}
+
+function normalizeRecipientRole(role) {
+  const value = String(role || "")
+    .trim()
+    .toLowerCase();
+  if (value === "insurance" || value === "patient") return value;
+  return "employer";
 }
 
 export function saveSecureShareSession(share) {
@@ -28,7 +40,7 @@ export function saveSecureShareSession(share) {
     sharedDocumentId: share.sharedDocumentId,
     employeeId: share.employeeId,
     recipientEmail: share.recipientEmail,
-    recipientRole: share.recipientRole || "employer",
+    recipientRole: normalizeRecipientRole(share.recipientRole),
     patientName: share.patientName,
     reportType: share.reportType,
     visitLabel: share.visitLabel,
@@ -52,6 +64,7 @@ export function getSecureShareSession() {
       mode: sharedId ? "live" : "mock",
       sharedId: sharedId || undefined,
       token: token || undefined,
+      recipientRole: normalizeRecipientRole(parsed?.recipientRole),
     };
   } catch {
     return null;
@@ -78,17 +91,24 @@ export function getSecureShareLoginHref(tokenOrOptions, maybeOptions) {
     share: tokenOrOptions?.token,
     sharedId: tokenOrOptions?.sharedId,
     activationKey: tokenOrOptions?.activationKey,
+    portal: tokenOrOptions?.portal || tokenOrOptions?.recipientRole,
   });
 }
 
-export function getSecureShareScopedHref() {
+export function getSecureShareScopedHref(roleOrSession) {
+  const role =
+    typeof roleOrSession === "string"
+      ? normalizeRecipientRole(roleOrSession)
+      : normalizeRecipientRole(roleOrSession?.recipientRole);
+  if (role === "insurance") return insurancePaths.sharedDocumentsScoped;
+  if (role === "patient") return patientPaths.sharedDocumentsScoped;
   return employerPaths.sharedDocumentsScoped;
 }
 
 /**
  * Resolve post-login destination.
- * Live sharedid links always enter the scoped view after employer login.
- * Mock share tokens still require the demo recipient email.
+ * Live sharedid links enter the portal-scoped view after login.
+ * Mock share tokens still require the demo recipient email (employer).
  */
 export function resolvePostLoginDestination({
   email,
@@ -101,7 +121,7 @@ export function resolvePostLoginDestination({
   }
 
   if (shareSession.sharedId) {
-    return getSecureShareScopedHref();
+    return getSecureShareScopedHref(shareSession);
   }
 
   const normalized = (email || "").trim().toLowerCase();
@@ -110,7 +130,7 @@ export function resolvePostLoginDestination({
     shareSession.recipientEmail === normalized &&
     normalized === "employer@demo.com"
   ) {
-    return getSecureShareScopedHref();
+    return getSecureShareScopedHref("employer");
   }
 
   return defaultDestination;

@@ -52,3 +52,19 @@ export const employerScopedShareNavItems = [
     icon: "FileText",
   },
 ];
+
+export const insuranceScopedShareNavItems = [
+  {
+    href: insurancePaths.sharedDocumentsScoped,
+    label: "Shared Documents",
+    icon: "FileText",
+  },
+];
+
+export const patientScopedShareNavItems = [
+  {
+    href: patientPaths.sharedDocumentsScoped,
+    label: "Shared Documents",
+    icon: "FileText",
+  },
+];

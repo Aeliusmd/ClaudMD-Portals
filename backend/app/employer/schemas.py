@@ -313,6 +313,7 @@ class AppointmentPrepareResponse(BaseModel):
     time_slot_minutes: int | None = None
     warnings: list[str] = []
     patient_id: int | None = None
+    patient_ssn: str | None = None
     recurring_id: int | None = None
     appointment_id: int | None = None
     schedule_id: int | None = None

@@ -25,6 +25,7 @@ import {
   isInvalidDateRange,
 } from "@/lib/date-range";
 import { employerPaths } from "@/lib/portal-paths";
+import { dashboardHrefFromReturn } from "@/lib/dashboard-return-state";
 import { reportBadgeStyles } from "@/lib/report-badge-styles";
 import { workStatusStyles } from "@/lib/category-styles";
 
@@ -272,7 +273,7 @@ function EmployeeSearchContent() {
     const onBack = () =>
       router.push(
         backToDashboard
-          ? employerPaths.dashboard
+          ? dashboardHrefFromReturn(employerPaths.dashboard, searchParams)
           : employerPaths.employeeSearch
       );
 

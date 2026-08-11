@@ -26,6 +26,22 @@ export function employerVisitDocumentThumbnailUrl(patientId, documentId) {
   )}/visit-documents/${encodeURIComponent(documentId)}/thumbnail`;
 }
 
+/** Authenticated PDF for a secure SharedDocuments.SharedId link. */
+export function employerSharedDocumentFileUrl(sharedId) {
+  if (!sharedId) return null;
+  return `${API_BASE_URL}/api/employer/shared-documents/by-shared-id/${encodeURIComponent(
+    sharedId
+  )}/file`;
+}
+
+/** First-page PNG for a secure SharedDocuments.SharedId link. */
+export function employerSharedDocumentThumbnailUrl(sharedId) {
+  if (!sharedId) return null;
+  return `${API_BASE_URL}/api/employer/shared-documents/by-shared-id/${encodeURIComponent(
+    sharedId
+  )}/thumbnail`;
+}
+
 /**
  * Build an absolute URL for an authenticated insurance visit PDF.
  * Same auth-blob flow as employer via PdfThumbnail / DocumentPreviewModal.
@@ -67,6 +83,9 @@ export function patientVisitDocumentThumbnailUrl(checkInId, documentId) {
 export function isApiDocumentUrl(url) {
   if (!url) return false;
   const value = String(url);
+  const isSharedDocument =
+    value.includes("/api/employer/shared-documents/by-shared-id/") &&
+    (value.endsWith("/file") || value.endsWith("/thumbnail"));
   const isEmployerOrInsurance =
     value.includes("/visit-documents/") &&
     (value.endsWith("/file") || value.endsWith("/thumbnail")) &&
@@ -76,7 +95,7 @@ export function isApiDocumentUrl(url) {
     value.includes("/api/patient/visits/") &&
     value.includes("/documents/") &&
     (value.endsWith("/file") || value.endsWith("/thumbnail"));
-  return isEmployerOrInsurance || isPatient;
+  return isSharedDocument || isEmployerOrInsurance || isPatient;
 }
 
 /** Derive thumbnail URL from a visit document file URL. */

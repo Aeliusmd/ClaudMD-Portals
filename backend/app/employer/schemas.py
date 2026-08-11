@@ -344,6 +344,29 @@ class OrganizationUsersResponse(BaseModel):
     can_manage_access: bool = False
 
 
+class SharedDocumentEmployee(BaseModel):
+    patient_id: int | None = None
+    name: str
+    account_no: str | None = None
+    date_of_birth: str | None = None
+    gender: str | None = None
+    phone: str | None = None
+    address: str | None = None
+
+
+class SharedDocumentDetailResponse(BaseModel):
+    """Secure-link shared document resolved via SharedDocuments.SharedId."""
+
+    shared_id: str
+    document_id: int
+    document_type: str
+    report_title: str | None = None
+    file_name: str | None = None
+    visit_date: str | None = None
+    visit_label: str | None = None
+    employee: SharedDocumentEmployee
+
+
 class OrganizationUserAccessUpdateRequest(BaseModel):
     """Grant / modify / revoke portal access for an employer contact."""
 

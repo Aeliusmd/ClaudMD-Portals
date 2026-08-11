@@ -18,6 +18,7 @@ import { clearAuthSession, getAuthSession } from "@/lib/auth-session";
 import {
   clearSecureShareSession,
   getSecureShareSession,
+  hasLiveSharedIdSession,
 } from "@/lib/secure-share-session";
 import { portalAccessRedirect } from "@/lib/portal-access";
 import { employerPaths } from "@/lib/portal-paths";
@@ -27,7 +28,9 @@ const emptySubscribe = () => () => {};
 
 function readScopedSessionActive() {
   const session = getSecureShareSession();
-  if (!session?.token) return false;
+  if (!session) return false;
+  if (hasLiveSharedIdSession(session)) return true;
+  if (!session.token) return false;
   const share = findSecureShare(session.token);
   if (!share || isSecureShareExpired(share)) return false;
   return true;
@@ -100,7 +103,16 @@ export function EmployerShell({ children }) {
 
   useEffect(() => {
     const session = getSecureShareSession();
-    if (!session?.token) return;
+    if (!session) return;
+
+    if (hasLiveSharedIdSession(session)) {
+      if (pathname && !pathname.startsWith(employerPaths.sharedDocumentsScoped)) {
+        router.replace(employerPaths.sharedDocumentsScoped);
+      }
+      return;
+    }
+
+    if (!session.token) return;
     const share = findSecureShare(session.token);
     if (!share || isSecureShareExpired(share)) {
       clearSecureShareSession();

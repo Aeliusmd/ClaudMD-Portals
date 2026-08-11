@@ -595,20 +595,14 @@ function EmployerProfileContent() {
               <Field
                 id="employer-first-name"
                 label="First Name"
-                value={profile.firstName}
-                onChange={(value) => updateProfileField("firstName", value)}
-                error={profileErrors.firstName}
-                autoComplete="given-name"
-                placeholder="Up to 50 characters"
+                value={profile.firstName || "—"}
+                readOnly
               />
               <Field
                 id="employer-last-name"
                 label="Last Name"
-                value={profile.lastName}
-                onChange={(value) => updateProfileField("lastName", value)}
-                error={profileErrors.lastName}
-                autoComplete="family-name"
-                placeholder="Up to 50 characters"
+                value={profile.lastName || "—"}
+                readOnly
               />
               <Field
                 id="employer-user-type"
@@ -619,10 +613,8 @@ function EmployerProfileContent() {
               <Field
                 id="employer-title"
                 label="Title"
-                value={profile.title}
-                onChange={(value) => updateProfileField("title", value)}
-                error={profileErrors.title}
-                placeholder="Job title (optional, up to 100)"
+                value={profile.title || "—"}
+                readOnly
               />
               <Field
                 id="employer-login-id"
@@ -634,23 +626,15 @@ function EmployerProfileContent() {
                 id="employer-email"
                 label="Email"
                 type="email"
-                value={profile.email}
-                onChange={(value) => updateProfileField("email", value)}
-                error={profileErrors.email}
-                autoComplete="email"
-                placeholder="Up to 100 characters"
+                value={profile.email || "—"}
+                readOnly
               />
               <Field
                 id="employer-phone"
                 label="Phone"
                 type="tel"
-                value={profile.phone}
-                onChange={(value) =>
-                  updateProfileField("phone", sanitizePhoneInput(value))
-                }
-                error={profileErrors.phone}
-                autoComplete="tel"
-                placeholder="Numbers and + - ( ) . only"
+                value={profile.phone || "—"}
+                readOnly
               />
               <div className="md:col-span-2">
                 <Field
@@ -669,96 +653,26 @@ function EmployerProfileContent() {
                 />
               </div>
             </div>
-            <Button
-              className={cn(
-                "mt-6 min-w-[9.5rem]",
-                profileSaving &&
-                  "bg-primary/55 text-white/90 hover:bg-primary/55 shadow-none"
-              )}
-              onClick={handleSaveProfile}
-              disabled={profileSaving || !profileDirty}
-              aria-busy={profileSaving}
-            >
-              {profileSaving ? "Saving..." : "Save Changes"}
-            </Button>
           </Card>
         )
       ) : null}
 
       {tab === "security" ? (
-        <div className="space-y-5">
-          <Card className="p-5 sm:p-6">
-            <h2 className="mb-5 text-lg font-semibold text-ink">
-              Change Password
-            </h2>
-            <div className="max-w-xl space-y-4">
-              <Field
-                id="current-password"
-                label="Current Password"
-                type="password"
-                value={passwordForm.currentPassword}
-                onChange={(value) => {
-                  clearFeedback();
-                  setPasswordForm((prev) => ({
-                    ...prev,
-                    currentPassword: value,
-                  }));
-                }}
-                error={passwordErrors.currentPassword}
-                placeholder="Enter current password"
-                autoComplete="current-password"
-              />
-              <Field
-                id="new-password"
-                label="New Password"
-                type="password"
-                value={passwordForm.newPassword}
-                onChange={(value) => {
-                  clearFeedback();
-                  setPasswordForm((prev) => ({ ...prev, newPassword: value }));
-                }}
-                error={passwordErrors.newPassword}
-                placeholder="Enter new password"
-                autoComplete="new-password"
-              />
-              <Field
-                id="confirm-password"
-                label="Confirm New Password"
-                type="password"
-                value={passwordForm.confirmPassword}
-                onChange={(value) => {
-                  clearFeedback();
-                  setPasswordForm((prev) => ({
-                    ...prev,
-                    confirmPassword: value,
-                  }));
-                }}
-                error={passwordErrors.confirmPassword}
-                placeholder="Confirm new password"
-                autoComplete="new-password"
-              />
-            </div>
-            <Button
-              className="mt-6"
-              onClick={handleUpdatePassword}
-              disabled={passwordSaving || !passwordDirty}
-            >
-              {passwordSaving ? "Updating…" : "Update Password"}
-            </Button>
-          </Card>
-
-          {/* Two-Factor Authentication — hidden for now (no 2FA in clinic DB)
-          <Card className="p-5 sm:p-6">
-            <h2 className="mb-4 text-lg font-semibold text-ink">
-              Two-Factor Authentication
-            </h2>
-            <p className="text-sm text-muted">
-              Two-factor authentication is not available in the current clinic
-              database (no 2FA tables or columns). No action is available here.
-            </p>
-          </Card>
-          */}
-        </div>
+        <Card className="p-5 sm:p-6">
+          <h2 className="mb-3 text-lg font-semibold text-ink">Security</h2>
+          <p className="text-sm text-muted">
+            Profile and password details are view-only in this portal. Contact
+            your administrator if changes are required.
+          </p>
+          <div className="mt-5 max-w-xl">
+            <Field
+              id="employer-security-login-id"
+              label="Login ID"
+              value={profile.loginId || "—"}
+              readOnly
+            />
+          </div>
+        </Card>
       ) : null}
 
       {tab === "permissions" ? (

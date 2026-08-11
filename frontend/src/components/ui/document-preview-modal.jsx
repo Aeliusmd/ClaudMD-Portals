@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { getAccessToken } from "@/lib/auth-session";
 import {
+  downloadDocumentUrl,
   openDocumentInNewTab,
   resolveDocumentObjectUrl,
 } from "@/lib/documents";
@@ -95,7 +96,10 @@ export function DocumentPreviewModal({ file, onClose }) {
 
   function handleDownload() {
     if (!previewSrc) return;
-    openDocumentInNewTab(previewSrc);
+    const base = String(displayTitle || "document")
+      .replace(/[<>:"/\\|?*]+/g, "_")
+      .trim();
+    downloadDocumentUrl(previewSrc, `${base || "document"}.pdf`);
   }
 
   function handlePrint() {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useSyncExternalStore, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FileText, Filter, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,12 @@ import {
   specialtyStyle,
   workStatusStyle,
 } from "@/lib/category-styles";
+import {
+  buildDashboardStateParams,
+  hrefWithParams,
+  parseDashboardStateParams,
+  withReturnParams,
+} from "@/lib/dashboard-return-state";
 import { patientPaths } from "@/lib/portal-paths";
 import {
   coerceToDate,
@@ -101,7 +107,26 @@ const emptySummary = {
 };
 
 export function PatientDashboardView() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-4 sm:space-y-5">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+            Dashboard
+          </h1>
+          <KpiSkeletonStrip count={4} />
+        </div>
+      }
+    >
+      <PatientDashboardContent />
+    </Suspense>
+  );
+}
+
+function PatientDashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initial = parseDashboardStateParams(searchParams);
 
   const defaultTo = useSyncExternalStore(emptySubscribe, todayIso, () => "");
   const defaultFrom = useSyncExternalStore(
@@ -110,13 +135,23 @@ export function PatientDashboardView() {
     () => ""
   );
 
-  const [activeTab, setActiveTab] = useState("urgentCare");
-  const [draftQuery, setDraftQuery] = useState("");
-  const [draftFromDate, setDraftFromDate] = useState(null);
-  const [draftToDate, setDraftToDate] = useState(null);
-  const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedFromDate, setAppliedFromDate] = useState(null);
-  const [appliedToDate, setAppliedToDate] = useState(null);
+  const validTabs = new Set([
+    "urgentCare",
+    "personalInjury",
+    "physicals",
+    "injury",
+    "appointments",
+  ]);
+  const initialTab =
+    initial.tab && validTabs.has(initial.tab) ? initial.tab : "urgentCare";
+
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [draftQuery, setDraftQuery] = useState(initial.search || "");
+  const [draftFromDate, setDraftFromDate] = useState(initial.fromDate);
+  const [draftToDate, setDraftToDate] = useState(initial.toDate);
+  const [appliedQuery, setAppliedQuery] = useState(initial.search || "");
+  const [appliedFromDate, setAppliedFromDate] = useState(initial.fromDate);
+  const [appliedToDate, setAppliedToDate] = useState(initial.toDate);
 
   const effectiveDraftFrom = draftFromDate ?? defaultFrom;
   const effectiveDraftTo = draftToDate ?? defaultTo;
@@ -332,6 +367,48 @@ export function PatientDashboardView() {
     setVisitPage(1);
   }
 
+  useEffect(() => {
+    const next = buildDashboardStateParams({
+      tab: activeTab,
+      search: appliedQuery,
+      fromDate: effectiveAppliedFrom,
+      toDate: effectiveAppliedTo,
+    });
+    const nextQs = next.toString();
+    const currentQs = buildDashboardStateParams(
+      parseDashboardStateParams(searchParams)
+    ).toString();
+    if (nextQs !== currentQs) {
+      router.replace(hrefWithParams(patientPaths.dashboard, next), {
+        scroll: false,
+      });
+    }
+  }, [
+    activeTab,
+    appliedQuery,
+    effectiveAppliedFrom,
+    effectiveAppliedTo,
+    router,
+    searchParams,
+  ]);
+
+  function openVisitDetail(visitId) {
+    const params = new URLSearchParams();
+    const returnParams = buildDashboardStateParams({
+      tab: activeTab,
+      search: appliedQuery,
+      fromDate: effectiveAppliedFrom,
+      toDate: effectiveAppliedTo,
+    });
+    withReturnParams(params, returnParams);
+    const qs = params.toString();
+    router.push(
+      `${patientPaths.visits}/${encodeURIComponent(visitId)}${
+        qs ? `?${qs}` : ""
+      }`
+    );
+  }
+
   function applyFilters() {
     const from = effectiveDraftFrom;
     const to = effectiveDraftTo;
@@ -348,6 +425,15 @@ export function PatientDashboardView() {
     setAppliedQuery(draftQuery.trim());
     setAppliedFromDate(from);
     setAppliedToDate(to);
+    setVisitPage(1);
+  }
+
+  function clearDateRange() {
+    setDraftFromDate(null);
+    setDraftToDate(null);
+    setAppliedFromDate(null);
+    setAppliedToDate(null);
+    setFilterError(null);
     setVisitPage(1);
   }
 
@@ -526,6 +612,15 @@ export function PatientDashboardView() {
             <Filter className="h-3.5 w-3.5" strokeWidth={2.25} />
             Filter
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={clearDateRange}
+            className="h-[2.625rem] shrink-0 rounded-xl px-3.5 py-0 text-sm"
+            aria-label="Clear date range"
+          >
+            Clear
+          </Button>
         </div>
       </div>
 
@@ -667,11 +762,7 @@ export function PatientDashboardView() {
                       <tr
                         key={visit.id}
                         className="cursor-pointer bg-white transition hover:bg-cream/40"
-                        onClick={() =>
-                          router.push(
-                            `/patient/visits/${encodeURIComponent(visit.id)}`
-                          )
-                        }
+                        onClick={() => openVisitDetail(visit.id)}
                       >
                         <td className="px-4 py-3.5 sm:px-5 sm:py-4">
                           <p className="font-semibold text-ink">

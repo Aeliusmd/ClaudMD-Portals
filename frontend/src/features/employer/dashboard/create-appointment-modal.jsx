@@ -142,7 +142,7 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
   const employerName = profile?.organization || "";
 
   const [form, setForm] = useState(emptyForm);
-  const [newPatient, setNewPatient] = useState(emptyNewPatient);
+  const [newPatient, setNewPatient] = useState(() => ({ ...emptyNewPatient }));
   const [showAddPatient, setShowAddPatient] = useState(false);
   const [useNewPatient, setUseNewPatient] = useState(false);
   const [errors, setErrors] = useState({});
@@ -220,7 +220,7 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
       statusId: "4",
       scheduleTypeId: "1",
     });
-    setNewPatient(emptyNewPatient);
+    setNewPatient({ ...emptyNewPatient });
     setShowAddPatient(false);
     setUseNewPatient(false);
     setErrors({});
@@ -392,7 +392,7 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
 
   function resetAndClose() {
     setForm({ ...emptyForm, employerName });
-    setNewPatient(emptyNewPatient);
+    setNewPatient({ ...emptyNewPatient });
     setShowAddPatient(false);
     setUseNewPatient(false);
     setErrors({});
@@ -400,6 +400,42 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
     setSubmitError(null);
     setBookResult(null);
     onClose();
+  }
+
+  function clearNewPatientDemographics(prev) {
+    // Only wipe demographics copied from a confirmed new patient.
+    // Keep an existing patient selection intact.
+    if (prev.patientId) return prev;
+    return {
+      ...prev,
+      accountNo: "",
+      ssn: "",
+      dateOfBirth: "",
+      age: "",
+      gender: "",
+    };
+  }
+
+  function openAddPatientForm() {
+    setNewPatient({ ...emptyNewPatient });
+    setUseNewPatient(false);
+    setPatientErrors({});
+    setShowAddPatient(true);
+    setForm((prev) => clearNewPatientDemographics(prev));
+  }
+
+  function cancelAddPatientForm() {
+    setShowAddPatient(false);
+    setNewPatient({ ...emptyNewPatient });
+    setUseNewPatient(false);
+    setPatientErrors({});
+    setForm((prev) => clearNewPatientDemographics(prev));
+  }
+
+  function editNewPatient() {
+    setUseNewPatient(false);
+    setShowAddPatient(true);
+    setPatientErrors({});
   }
 
   function setField(field, value) {
@@ -417,6 +453,8 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
     const patient = patients.find((item) => String(item.id) === String(patientId));
     setUseNewPatient(false);
     setShowAddPatient(false);
+    setNewPatient({ ...emptyNewPatient });
+    setPatientErrors({});
     if (!patient) {
       setField("patientId", patientId);
       return;
@@ -739,8 +777,8 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setShowAddPatient((prev) => !prev);
-                    setPatientErrors({});
+                    if (showAddPatient) cancelAddPatientForm();
+                    else openAddPatientForm();
                   }}
                   className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-primary transition hover:bg-primary/10"
                 >
@@ -754,10 +792,7 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                   <button
                     type="button"
                     className="ml-2 text-xs font-semibold text-primary underline"
-                    onClick={() => {
-                      setUseNewPatient(false);
-                      setShowAddPatient(true);
-                    }}
+                    onClick={editNewPatient}
                   >
                     Edit
                   </button>

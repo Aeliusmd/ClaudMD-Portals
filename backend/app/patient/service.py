@@ -422,16 +422,13 @@ def _count_upcoming_appointments(clinic, patient_id: int) -> int:
 
 def _count_unread_shared_reports(clinic, profile: PatientProfile) -> int:
     """
-    Unread SharedDocuments for this patient (last 30 days).
-    Prefer docs linked to the patient's check-ins; also match recipient
-    email / ShareWithUserId like insurance portal.
+    Unread SharedDocuments for the logged-in patient's own chart only
+    (last 30 days). Does not include appointments or other notification types.
     """
     if not shared_documents_has_is_viewed(clinic):
         return 0
-
-    email = (profile.email or profile.login_id or "").strip().lower()
-    user_id = profile.user_id
-    patient_id = profile.patient_id
+    if profile.patient_id is None:
+        return 0
 
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
@@ -439,30 +436,22 @@ def _count_unread_shared_reports(clinic, profile: PatientProfile) -> int:
             """
             SELECT COUNT(DISTINCT sd.Id)
             FROM dbo.SharedDocuments sd
-            LEFT JOIN dbo.DocumentUploads du
+            INNER JOIN dbo.DocumentUploads du
                 ON du.Id = sd.DocumentId
                AND sd.DocumentTypeId = 2
-            LEFT JOIN dbo.CheckInsHeader ch
+               AND (du.IsDeleted = 0 OR du.IsDeleted IS NULL)
+            INNER JOIN dbo.CheckInsHeader ch
                 ON ch.Id = du.HeaderObjectId
+               AND du.ObjectTypeId = 53
                AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
             WHERE (sd.IsDeleted = 0 OR sd.IsDeleted IS NULL)
               AND ISNULL(sd.IsViewed, 0) = 0
               AND sd.CreatedDateTime >= DATEADD(day, -?, SYSDATETIMEOFFSET())
-              AND (
-                    (ch.PatientId IS NOT NULL AND ch.PatientId = ?)
-                 OR (
-                        (? <> '' AND LOWER(LTRIM(RTRIM(sd.Email))) = ?)
-                     OR (? IS NOT NULL AND sd.ShareWithUserId = ?)
-                    )
-              )
+              AND ch.PatientId = ?
             """,
             (
                 LOOKBACK_DAYS,
-                int(patient_id),
-                email,
-                email,
-                user_id,
-                user_id,
+                int(profile.patient_id),
             ),
         )
         row = cursor.fetchone()

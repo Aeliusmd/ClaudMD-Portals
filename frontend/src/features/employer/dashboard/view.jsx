@@ -14,7 +14,6 @@ import { CreateAppointmentModal } from "@/features/employer/dashboard/create-app
 import {
   fetchEmployerDashboardSummary,
   fetchEmployerEmployeeSearch,
-  fetchEmployerNotifications,
   fetchEmployerUpcomingAppointments,
 } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
@@ -26,11 +25,6 @@ import {
   withReturnParams,
 } from "@/lib/dashboard-return-state";
 import { employerPaths } from "@/lib/portal-paths";
-import {
-  applyNotificationReadState,
-  countUnreadNotifications,
-  getNotificationsLastOpenedAt,
-} from "@/lib/notification-read-state";
 import {
   appointmentStatusStyles,
   categoryStyles,
@@ -54,22 +48,6 @@ function formatLocalIso(date) {
 
 function todayIso() {
   return formatLocalIso(new Date());
-}
-
-async function resolveUnreadReports(accessToken, fallback = 0) {
-  const openedAt = getNotificationsLastOpenedAt();
-  if (!openedAt) return fallback;
-  try {
-    const notif = await fetchEmployerNotifications(accessToken, {
-      page: 1,
-      pageSize: 50,
-    });
-    return countUnreadNotifications(
-      applyNotificationReadState(notif.items || [], openedAt)
-    );
-  } catch {
-    return fallback;
-  }
 }
 
 function daysAgoIso(today, days) {
@@ -233,17 +211,13 @@ function EmployerDashboardContent() {
       setLoadingSummary(true);
       try {
         const data = await fetchEmployerDashboardSummary(token);
-        const unreadReports = await resolveUnreadReports(
-          token,
-          data.unreadReports ?? 0
-        );
         if (!cancelled) {
           setSummaryCounts({
             injury: data.injury,
             physicals: data.physicals,
             drugScreens: data.drugScreens,
             appointments: data.appointments,
-            unreadReports,
+            unreadReports: data.unreadReports ?? 0,
           });
           setApptCount(data.appointments ?? 0);
         }
@@ -512,10 +486,7 @@ function EmployerDashboardContent() {
         physicals: summary.physicals,
         drugScreens: summary.drugScreens,
         appointments: summary.appointments,
-        unreadReports: await resolveUnreadReports(
-          token,
-          summary.unreadReports ?? 0
-        ),
+        unreadReports: summary.unreadReports ?? 0,
       });
       setApptCount(summary.appointments ?? 0);
     } catch {

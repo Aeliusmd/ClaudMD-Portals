@@ -5,8 +5,13 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
-from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
+from app.db.clinic import (
+    get_clinic_by_activation_key,
+    get_clinic_connection,
+    shared_documents_has_is_viewed,
+)
 from app.insurance.profile import InsuranceProfile, fetch_profile_from_clinic, update_profile_in_clinic
+from app.insurance.notifications import _recipient_clause
 from app.insurance.schemas import (
     InsuranceDashboardSummaryResponse,
     InsuranceProfileResponse,
@@ -14,6 +19,8 @@ from app.insurance.schemas import (
 )
 
 LOOKBACK_DAYS = 30
+_CHECKIN_OBJECT_TYPE_ID = 53
+_SHARED_DOC_UPLOAD_TYPE_ID = 2
 
 
 def get_insurance_profile(current_user: CurrentUser) -> InsuranceProfileResponse:
@@ -130,25 +137,52 @@ def _fetch_patient_counts(clinic, insurance_id: int) -> tuple[int, int]:
 
 
 def _count_unread_shared_reports(clinic, profile: InsuranceProfile) -> int:
-    """Unread SharedDocuments for this insurance contact (last 30 days)."""
-    email = (profile.email or profile.login_id or "").strip().lower()
-    user_id = profile.user_id
+    """
+    Unread SharedDocuments for this insurance user (last 30 days).
+
+    Recipient: ShareWithUserId or Email for the logged-in insurance user.
+    Scope: visit InsuranceId matches this insurance company (or NULL).
+    """
+    if profile.insurance_id is None:
+        return 0
+    if not shared_documents_has_is_viewed(clinic):
+        return 0
+
+    email_norm = (profile.email or profile.login_id or "").strip().lower() or None
+    recipient_sql, recipient_params = _recipient_clause(profile.user_id, email_norm)
+    if recipient_sql == "1 = 0":
+        return 0
+
+    sql = f"""
+        SELECT COUNT(DISTINCT sd.Id)
+        FROM dbo.SharedDocuments sd
+        INNER JOIN dbo.DocumentUploads du
+            ON du.Id = sd.DocumentId
+           AND sd.DocumentTypeId = ?
+           AND (du.IsDeleted = 0 OR du.IsDeleted IS NULL)
+        LEFT JOIN dbo.CheckInsHeader ch
+            ON ch.Id = du.HeaderObjectId
+           AND du.ObjectTypeId = ?
+           AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+        WHERE (sd.IsDeleted = 0 OR sd.IsDeleted IS NULL)
+          AND ISNULL(sd.IsViewed, 0) = 0
+          AND sd.CreatedDateTime >= DATEADD(day, ?, SYSUTCDATETIME())
+          AND ({recipient_sql})
+          AND (
+                ch.InsuranceId = ?
+             OR ch.InsuranceId IS NULL
+          )
+    """
+    params = [
+        _SHARED_DOC_UPLOAD_TYPE_ID,
+        _CHECKIN_OBJECT_TYPE_ID,
+        -int(LOOKBACK_DAYS),
+        *recipient_params,
+        int(profile.insurance_id),
+    ]
 
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT COUNT(*)
-            FROM dbo.SharedDocuments sd
-            WHERE (sd.IsDeleted = 0 OR sd.IsDeleted IS NULL)
-              AND ISNULL(sd.IsViewed, 0) = 0
-              AND sd.CreatedDateTime >= DATEADD(day, -?, SYSDATETIMEOFFSET())
-              AND (
-                    (? <> '' AND LOWER(LTRIM(RTRIM(sd.Email))) = ?)
-                 OR (? IS NOT NULL AND sd.ShareWithUserId = ?)
-              )
-            """,
-            (LOOKBACK_DAYS, email, email, user_id, user_id),
-        )
+        cursor.execute(sql, tuple(params))
         row = cursor.fetchone()
         return int(row[0] or 0) if row else 0

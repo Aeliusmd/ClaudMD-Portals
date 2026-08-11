@@ -105,6 +105,58 @@ def count_unread_notifications(clinic, profile: EmployerProfile) -> int:
     return sum(1 for item in items if item.unread)
 
 
+def count_unread_shared_reports(clinic, profile: EmployerProfile) -> int:
+    """
+    Unread SharedDocuments only (not appointments / work status).
+
+    Recipient: ShareWithUserId or Email for the logged-in employer user.
+    Scope: visit EmployerId matches this employer company (or NULL).
+    """
+    if profile.employer_id is None:
+        return 0
+    if not shared_documents_has_is_viewed(clinic):
+        return 0
+
+    email_norm = (profile.email or "").strip().lower() or None
+    recipient_sql, recipient_params = _recipient_clause(profile.user_id, email_norm)
+    if recipient_sql == "1 = 0":
+        return 0
+
+    sql = f"""
+        SELECT COUNT(DISTINCT sd.Id)
+        FROM dbo.SharedDocuments sd
+        INNER JOIN dbo.DocumentUploads du
+            ON du.Id = sd.DocumentId
+           AND sd.DocumentTypeId = ?
+           AND (du.IsDeleted = 0 OR du.IsDeleted IS NULL)
+        LEFT JOIN dbo.CheckInsHeader ch
+            ON ch.Id = du.HeaderObjectId
+           AND du.ObjectTypeId = ?
+           AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+        WHERE (sd.IsDeleted = 0 OR sd.IsDeleted IS NULL)
+          AND (sd.IsViewed = 0 OR sd.IsViewed IS NULL)
+          AND sd.CreatedDateTime >= DATEADD(day, ?, SYSUTCDATETIME())
+          AND ({recipient_sql})
+          AND (
+                ch.EmployerId = ?
+             OR ch.EmployerId IS NULL
+          )
+    """
+    params: list[Any] = [
+        _SHARED_DOC_UPLOAD_TYPE_ID,
+        _CHECKIN_OBJECT_TYPE_ID,
+        -int(LOOKBACK_DAYS),
+        *recipient_params,
+        int(profile.employer_id),
+    ]
+
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(sql, tuple(params))
+        row = cursor.fetchone()
+        return int(row[0] or 0) if row else 0
+
+
 def mark_notifications_read(current_user: CurrentUser) -> MarkNotificationsReadResponse:
     """
     Mark SharedDocuments as viewed for the current portal recipient.

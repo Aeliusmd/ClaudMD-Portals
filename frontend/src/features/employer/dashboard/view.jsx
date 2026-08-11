@@ -473,10 +473,6 @@ function EmployerDashboardContent() {
     setEmployeePage(1);
   }
 
-  useEffect(() => {
-    setAppointmentPage(1);
-  }, [appointments.length]);
-
   const employeeStart =
     employeeTotal === 0 ? 0 : (employeePage - 1) * PAGE_SIZE + 1;
   const employeeEnd = Math.min(employeePage * PAGE_SIZE, employeeTotal);

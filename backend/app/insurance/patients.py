@@ -123,7 +123,7 @@ def _fetch_patient_rows(
     page_size: int,
     search: str | None,
 ) -> tuple[int, list[InsurancePatientSearchRow]]:
-    """Unique patients with latest matching check-in in range for this insurer."""
+    """Matching check-ins in range for this insurer (one row per visit)."""
     q = (search or "").strip()
     search_like = f"%{q.lower()}%"
     offset = (page - 1) * page_size
@@ -164,26 +164,17 @@ def _fetch_patient_rows(
                   AND ch.CheckInDate IS NOT NULL
                   AND ch.CheckInDate >= ?
                   AND ch.CheckInDate <= ?
-            ),
-            Ranked AS (
-                SELECT *,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY PatientId
-                        ORDER BY CheckInDate DESC, CheckInId DESC
-                    ) AS rn
-                FROM FilteredCheckIns
             )
     """
 
     count_sql = f"""
             {base_cte}
             SELECT COUNT(*) AS TotalCount
-            FROM Ranked r
+            FROM FilteredCheckIns r
             INNER JOIN dbo.Patients p ON p.Id = r.PatientId
             LEFT JOIN dbo.Incidents inc ON inc.Id = r.IncidentId
             LEFT JOIN dbo.Employers emp ON emp.Id = r.EmployerId
-            WHERE r.rn = 1
-              AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
+            WHERE (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
               {search_sql}
     """
 
@@ -219,7 +210,7 @@ def _fetch_patient_rows(
                 inc.IncidentNumber,
                 ins.Name AS InsuranceName,
                 emp.Name AS EmployerName
-            FROM Ranked r
+            FROM FilteredCheckIns r
             INNER JOIN dbo.Patients p ON p.Id = r.PatientId
             LEFT JOIN dbo.VisitTypes vt ON vt.Id = r.VisitTypeId
             LEFT JOIN dbo.Incidents inc ON inc.Id = r.IncidentId
@@ -240,8 +231,7 @@ def _fetch_patient_rows(
                     ch.CheckInDate DESC,
                     ws.Id DESC
             ) ews
-            WHERE r.rn = 1
-              AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
+            WHERE (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
               {search_sql}
             ORDER BY r.CheckInDate DESC, p.LastName, p.FirstName
             OFFSET ? ROWS FETCH NEXT ? ROWS ONLY

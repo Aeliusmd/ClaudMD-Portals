@@ -353,7 +353,7 @@ def book_appointment(
     end_time = (
         datetime.combine(on_date, start_time) + timedelta(minutes=booked_duration)
     ).time()
-    status_id = int(payload.appointment_status_id or 4)
+    status_id = int(payload.appointment_status_id or 1)
     schedule_type_id = int(payload.schedule_type_id or 1)
     note_value = (payload.note or "").strip() or None
 

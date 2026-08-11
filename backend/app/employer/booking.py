@@ -29,9 +29,8 @@ from app.employer.schemas import (
     NewPatientPayload,
 )
 
-# Status ids observed / aligned with portal labels.
-# 3 = Cancelled — does not block availability.
-CANCELLED_STATUS_IDS = {3}
+# dbo.Enums AppointmentStatus: 6 = Cancel, 7 = NoShow — do not block availability.
+CANCELLED_STATUS_IDS = {6, 7}
 
 # Employer portal booking durations (minutes).
 ALLOWED_DURATION_MINUTES = {15, 30, 45, 60}
@@ -450,7 +449,7 @@ def book_appointment(
     end_time = (
         datetime.combine(on_date, start_time) + timedelta(minutes=booked_duration)
     ).time()
-    status_id = int(payload.appointment_status_id or 4)
+    status_id = int(payload.appointment_status_id or 1)
     schedule_type_id = int(payload.schedule_type_id or 1)
     note_value = (payload.note or "").strip() or None
     warnings: list[str] = []

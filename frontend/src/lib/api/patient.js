@@ -491,7 +491,7 @@ export async function bookPatientAppointment(accessToken, payload) {
         date: payload.date,
         start_time: payload.startTime,
         duration_minutes: payload.durationMinutes,
-        appointment_status_id: payload.appointmentStatusId ?? 4,
+        appointment_status_id: payload.appointmentStatusId ?? 1,
         schedule_type_id: payload.scheduleTypeId ?? 1,
         note: payload.note || null,
       },

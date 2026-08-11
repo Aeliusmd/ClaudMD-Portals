@@ -237,6 +237,6 @@ class PatientAppointmentBookRequest(BaseModel):
     date: str
     start_time: str
     duration_minutes: int
-    appointment_status_id: int | None = 4
+    appointment_status_id: int | None = 1
     schedule_type_id: int | None = 1
     note: str | None = None

@@ -23,12 +23,17 @@ SCOPE_UPCOMING = "upcoming"
 SCOPE_COMPLETED = "completed"
 ALLOWED_SCOPES = {SCOPE_ALL, SCOPE_UPCOMING, SCOPE_COMPLETED}
 
+# dbo.Enums AppointmentStatus (EnumTypeId -> Value)
 _APPOINTMENT_STATUS_LABELS: dict[int, str] = {
-    1: "Confirmed",
-    2: "Scheduled",
-    3: "Cancelled",
-    4: "Pending",
-    5: "Completed",
+    1: "Pending",
+    2: "Confirmed",
+    3: "Arrived",
+    4: "Check-In",
+    5: "Seen",
+    6: "Cancelled",
+    7: "No Show",
+    8: "Reschedule",
+    9: "Check-Out",
 }
 
 _UPCOMING_SQL = """
@@ -41,9 +46,10 @@ _UPCOMING_SQL = """
               )
 """
 
+# ClaudMD: 5 = Seen, 9 = Check-Out
 _COMPLETED_SQL = """
               AND (
-                    s.AppointmentStatusId = 5
+                    s.AppointmentStatusId IN (5, 9)
                  OR s.Date < CAST(GETDATE() AS date)
                  OR (
                         s.Date = CAST(GETDATE() AS date)
@@ -255,12 +261,12 @@ def _map_row(row: dict) -> PatientUpcomingAppointmentRow:
 
 def _appointment_status_label(status_id) -> str:
     if status_id is None:
-        return "Scheduled"
+        return "Pending"
     try:
         key = int(status_id)
     except (TypeError, ValueError):
-        return "Scheduled"
-    return _APPOINTMENT_STATUS_LABELS.get(key, "Scheduled")
+        return "Pending"
+    return _APPOINTMENT_STATUS_LABELS.get(key, "Pending")
 
 
 def _visit_category(category_id, code) -> str | None:

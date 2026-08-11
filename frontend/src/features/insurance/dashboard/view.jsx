@@ -542,15 +542,16 @@ function InsuranceDashboardContent() {
                 <tbody className="divide-y divide-border/60">
                   {tableRows.map((row) => (
                     <tr
-                      key={row.id}
+                      key={row.checkInId ?? row.id}
                       onClick={
                         tab.rowsAreLinked
                           ? () => {
                               const coverageQs = tab.coverage
                                 ? `?coverage=${encodeURIComponent(tab.coverage)}`
                                 : "";
+                              const patientId = row.patientId ?? row.id;
                               router.push(
-                                `${insurancePaths.patients}/${encodeURIComponent(row.id)}${coverageQs}`
+                                `${insurancePaths.patients}/${encodeURIComponent(patientId)}${coverageQs}`
                               );
                             }
                           : undefined

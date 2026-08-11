@@ -228,13 +228,36 @@ export async function fetchAppointmentVisitTypes(accessToken) {
     accessToken,
     "Unable to load visit types."
   );
-  return (data || []).map((row) => ({
-    id: row.id,
-    code: row.code,
-    name: row.name,
-    categoryId: row.category_id,
-    label: row.code ? `${row.name} (${row.code})` : row.name,
-  }));
+  return (data || []).map((row) => {
+    const categoryId = row.category_id ?? row.categoryId ?? null;
+    const code = (row.code || "").trim();
+    const name = row.name || "Visit type";
+    // Same employer portal buckets used elsewhere (Injury / Physical / Drug Screen).
+    let categoryLabel = null;
+    if (code.toUpperCase() === "PDS") {
+      categoryLabel = "Drug Screen";
+    } else if (categoryId === 1) {
+      categoryLabel = "Injury";
+    } else if (categoryId === 2) {
+      categoryLabel = "Physical";
+    } else if (categoryId === 3) {
+      categoryLabel = "Urgent Care";
+    } else if (categoryId === 4) {
+      categoryLabel = "Personal Injury";
+    }
+    return {
+      id: row.id,
+      code: row.code,
+      name,
+      categoryId,
+      category: categoryLabel,
+      label: categoryLabel
+        ? `${name} (${categoryLabel})`
+        : code
+          ? `${name} (${code})`
+          : name,
+    };
+  });
 }
 
 export async function fetchAppointmentPatients(accessToken, { search } = {}) {
@@ -352,7 +375,7 @@ export async function bookAppointment(accessToken, payload) {
         date: payload.date,
         start_time: payload.startTime,
         duration_minutes: payload.durationMinutes,
-        appointment_status_id: payload.appointmentStatusId ?? 4,
+        appointment_status_id: payload.appointmentStatusId ?? 1,
         schedule_type_id: payload.scheduleTypeId ?? 1,
         note: payload.note || null,
       },

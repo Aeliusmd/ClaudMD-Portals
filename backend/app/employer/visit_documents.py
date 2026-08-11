@@ -492,23 +492,28 @@ def _merge_visit_records(
     return check_ins + upcoming
 
 
+# dbo.Enums AppointmentStatus (EnumTypeId -> Value)
 _APPOINTMENT_STATUS_LABELS: dict[int, str] = {
-    1: "Confirmed",
-    2: "Scheduled",
-    3: "Cancelled",
-    4: "Pending",
-    5: "Completed",
+    1: "Pending",
+    2: "Confirmed",
+    3: "Arrived",
+    4: "Check-In",
+    5: "Seen",
+    6: "Cancelled",
+    7: "No Show",
+    8: "Reschedule",
+    9: "Check-Out",
 }
 
 
 def _appointment_status_label(status_id) -> str:
     if status_id is None:
-        return "Scheduled"
+        return "Pending"
     try:
         key = int(status_id)
     except (TypeError, ValueError):
-        return "Scheduled"
-    return _APPOINTMENT_STATUS_LABELS.get(key, "Scheduled")
+        return "Pending"
+    return _APPOINTMENT_STATUS_LABELS.get(key, "Pending")
 
 
 def _format_time_display(value) -> str | None:

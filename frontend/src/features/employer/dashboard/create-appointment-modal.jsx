@@ -17,9 +17,8 @@ import {
 import { cn } from "@/lib/utils";
 
 const APPOINTMENT_STATUSES = [
-  { value: "4", label: "Pending" },
-  { value: "2", label: "Scheduled" },
-  { value: "1", label: "Confirmed" },
+  { value: "1", label: "Pending" },
+  { value: "2", label: "Confirmed" },
 ];
 
 const SCHEDULE_TYPES = [{ value: "1", label: "Once" }];
@@ -103,7 +102,7 @@ const emptyForm = {
   visitTypeId: "",
   startTime: "",
   duration: "15",
-  statusId: "4",
+  statusId: "1",
   scheduleTypeId: "1",
   notes: "",
   employerName: "",
@@ -223,14 +222,26 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
     [locations]
   );
 
-  const visitTypeOptions = useMemo(
-    () =>
-      visitTypes.map((vt) => ({
+  const visitTypeOptions = useMemo(() => {
+    const categoryOrder = {
+      Injury: 1,
+      Physical: 2,
+      "Drug Screen": 3,
+      "Urgent Care": 4,
+      "Personal Injury": 5,
+    };
+    return [...visitTypes]
+      .sort((a, b) => {
+        const ca = categoryOrder[a.category] ?? 99;
+        const cb = categoryOrder[b.category] ?? 99;
+        if (ca !== cb) return ca - cb;
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      })
+      .map((vt) => ({
         value: String(vt.id),
         label: vt.label || vt.name,
-      })),
-    [visitTypes]
-  );
+      }));
+  }, [visitTypes]);
 
   const providerOptions = useMemo(
     () =>
@@ -261,7 +272,7 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
       ...emptyForm,
       employerName,
       duration: "15",
-      statusId: "4",
+      statusId: "1",
       scheduleTypeId: "1",
     });
     setNewPatient({ ...emptyNewPatient });

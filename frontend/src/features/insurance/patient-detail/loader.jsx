@@ -13,21 +13,9 @@ const backHrefByCoverage = {
   "Private Insurance": `${insurancePaths.dashboard}?tab=privateInsurance`,
 };
 
-function normalizeCoverageParam(value) {
-  const key = String(value || "").trim().toLowerCase();
-  if (["private", "private_insurance", "privateinsurance"].includes(key)) {
-    return "private";
-  }
-  if (["workers_comp", "workerscomp", "wc"].includes(key)) {
-    return "workers_comp";
-  }
-  return null;
-}
-
 export function InsurancePatientDetailLoader({ patientId }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const coverage = normalizeCoverageParam(searchParams.get("coverage"));
   const [patient, setPatient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -50,9 +38,10 @@ export function InsurancePatientDetailLoader({ patientId }) {
 
       setLoading(true);
       try {
-        const data = await fetchInsurancePatientDetail(token, patientId, {
-          coverage: coverage || undefined,
-        });
+        // Do not pass coverage into the detail fetch.
+        // Dashboard tiles (Workers Comp / Private) only filter the patient list;
+        // the patient record should show all visits for that patient.
+        const data = await fetchInsurancePatientDetail(token, patientId);
         if (!cancelled) {
           setPatient(data);
           setError(null);
@@ -74,7 +63,7 @@ export function InsurancePatientDetailLoader({ patientId }) {
     return () => {
       cancelled = true;
     };
-  }, [coverage, patientId, router]);
+  }, [patientId, router]);
 
   if (loading) {
     return (

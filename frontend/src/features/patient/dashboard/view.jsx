@@ -433,6 +433,8 @@ function PatientDashboardContent() {
     setDraftToDate(null);
     setAppliedFromDate(null);
     setAppliedToDate(null);
+    setDraftQuery("");
+    setAppliedQuery("");
     setFilterError(null);
     setVisitPage(1);
   }

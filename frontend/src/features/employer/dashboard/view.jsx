@@ -415,6 +415,8 @@ function EmployerDashboardContent() {
     setDraftToDate(null);
     setAppliedFromDate(null);
     setAppliedToDate(null);
+    setDraftQuery("");
+    setAppliedQuery("");
     setFilterError(null);
     setEmployeePage(1);
   }

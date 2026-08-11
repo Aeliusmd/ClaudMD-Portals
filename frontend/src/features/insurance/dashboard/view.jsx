@@ -365,6 +365,8 @@ function InsuranceDashboardContent() {
     setDraftToDate("");
     setAppliedFromDate(null);
     setAppliedToDate(null);
+    setDraftQuery("");
+    setAppliedQuery("");
     setFilterError(null);
     setPage(1);
   }

@@ -228,7 +228,8 @@ export function EmployeeRecordView({
   loading = false,
   fromDate = null,
   toDate = null,
-  category = null,
+  // Kept for callers/URL context, but visit history is never filtered by KPI type.
+  category: _category = null,
 }) {
   const profile = employee || null;
 
@@ -260,10 +261,12 @@ export function EmployeeRecordView({
       setLoadingVisits(true);
       setVisitsError("");
       try {
+        // Always load every visit type for this employee.
+        // Dashboard KPI tiles (Injury / Physicals / etc.) only filter the list,
+        // not the employee record visit history.
         const data = await fetchEmployeeVisits(token, patientId, {
           fromDate: fromDate || undefined,
           toDate: toDate || undefined,
-          category: category || undefined,
         });
         if (cancelled) return;
         setApiVisits(data.visits || []);
@@ -281,7 +284,7 @@ export function EmployeeRecordView({
     return () => {
       cancelled = true;
     };
-  }, [profile, fromDate, toDate, category]);
+  }, [profile, fromDate, toDate]);
 
   useEffect(() => {
     if (!visits.length) {

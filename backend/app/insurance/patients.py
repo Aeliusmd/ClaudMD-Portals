@@ -277,6 +277,10 @@ def _map_patient_row(row: dict, coverage_label: str) -> InsurancePatientSearchRo
     full_name = " ".join(part for part in [first, last] if part).strip() or "Unknown"
 
     category = _visit_category(row.get("VisitCategoryId"), row.get("VisitTypeCode"))
+    # Workers Comp injuries are VisitTypes.CategoryId = 1 → "Injury".
+    # Never show the private-patient "Personal Injury" label on WC rows.
+    if coverage_label == "Workers Comp" and category == "Personal Injury":
+        category = "Injury"
 
     incident_number = row.get("IncidentNumber")
     incident_display = (
@@ -329,13 +333,22 @@ def _map_patient_row(row: dict, coverage_label: str) -> InsurancePatientSearchRo
 
 
 def _visit_category(category_id: int | None, code: str | None) -> str | None:
+    """Map VisitTypes to portal display labels (aligned with patient portal buckets)."""
     normalized = (code or "").strip().upper()
     if normalized == "PDS":
         return "Drug Screen"
-    if category_id == 1:
+    try:
+        cid = int(category_id) if category_id is not None else None
+    except (TypeError, ValueError):
+        cid = None
+    if cid == 1:
         return "Injury"
-    if category_id == 2:
+    if cid == 2:
         return "Physical"
+    if cid == 3:
+        return "Urgent Care"
+    if cid == 4:
+        return "Personal Injury"
     return None
 
 

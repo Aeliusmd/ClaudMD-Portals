@@ -180,11 +180,17 @@ export async function fetchInsuranceDashboardSummary(accessToken) {
 
 function mapInsurancePatientRow(row) {
   const incidentNumber = row.incident_number || "N/A";
+  const coverage = row.coverage || "Workers Comp";
+  let category = row.category || "—";
+  // Workers Comp must display Injury (not Personal Injury).
+  if (coverage === "Workers Comp" && category === "Personal Injury") {
+    category = "Injury";
+  }
   return {
     id: String(row.id ?? row.patient_id),
     patientId: row.patient_id,
     checkInId: row.check_in_id,
-    coverage: row.coverage || "Workers Comp",
+    coverage,
     patient: row.patient_name,
     employer: row.employer_name || "—",
     insurance: row.insurance_company || null,
@@ -193,7 +199,7 @@ function mapInsurancePatientRow(row) {
     incidentNumber,
     // Private Insurance table labels this column "Claim #".
     claimNumber: incidentNumber,
-    category: row.category || "—",
+    category,
     lastVisit: row.last_visit || "—",
     lastVisitValue: row.last_visit_value,
     workStatus: row.work_status || "—",

@@ -373,6 +373,7 @@ export async function bookAppointment(accessToken, payload) {
     timeSlotMinutes: data.time_slot_minutes,
     warnings: data.warnings || [],
     patientId: data.patient_id,
+    patientSsn: data.patient_ssn ?? data.patientSsn ?? null,
     recurringId: data.recurring_id,
     appointmentId: data.appointment_id,
     scheduleId: data.schedule_id,

@@ -484,7 +484,6 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
     } else if (newPatient.dateOfBirth > todayIsoLocal()) {
       next.dateOfBirth = "Date of birth cannot be in the future.";
     }
-    if (!newPatient.ssn.trim()) next.ssn = "Enter SSN.";
     if (!newPatient.gender) next.gender = "Select gender.";
     if (!newPatient.address1.trim()) next.address1 = "Enter address 1.";
     if (!newPatient.city.trim()) next.city = "Enter city.";
@@ -585,7 +584,7 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
               lastName: newPatient.lastName.trim(),
               dateOfBirth: newPatient.dateOfBirth,
               gender: newPatient.gender,
-              ssn: newPatient.ssn.trim(),
+              ssn: newPatient.ssn.trim() || null,
               accountNo: newPatient.accountNo.trim() || null,
               phone: digitsOnly(newPatient.phone),
               address1: newPatient.address1.trim(),
@@ -632,7 +631,13 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
         providerName: selectedProvider?.name || "—",
         displayDate,
         displayTime: toDisplayTime(form.startTime),
+        patientSsn: result.patientSsn || newPatient.ssn.trim() || null,
       });
+
+      if (useNewPatient && result.patientSsn) {
+        setNewPatient((prev) => ({ ...prev, ssn: result.patientSsn }));
+        setForm((prev) => ({ ...prev, ssn: result.patientSsn }));
+      }
 
       onCreate?.({
         id: result.scheduleId
@@ -738,7 +743,13 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                     : ""}
                 </p>
                 {bookResult.patientWasCreated ? (
-                  <p className="font-medium">Patient created successfully.</p>
+                  <p className="font-medium">
+                    Patient created successfully
+                    {bookResult.patientSsn
+                      ? ` · SSN ${bookResult.patientSsn}`
+                      : ""}
+                    .
+                  </p>
                 ) : null}
               </div>
             </div>
@@ -901,14 +912,14 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <FieldLabel htmlFor="new-ssn" required>
-                      SSN #
-                    </FieldLabel>
+                    <FieldLabel htmlFor="new-ssn">SSN #</FieldLabel>
                     <input
                       id="new-ssn"
                       type="text"
                       value={newPatient.ssn}
                       onChange={(e) => setPatientField("ssn", e.target.value)}
+                      placeholder="Auto if blank"
+                      maxLength={16}
                       className={cn(
                         controlClass,
                         patientErrors.ssn ? "border-rose-400" : "border-border"

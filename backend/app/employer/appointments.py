@@ -13,12 +13,17 @@ from app.employer.profile import fetch_profile_from_clinic
 DEFAULT_PAGE_SIZE = 10
 MAX_PAGE_SIZE = 50
 
+# dbo.Enums AppointmentStatus (EnumTypeId -> Value)
 _APPOINTMENT_STATUS_LABELS: dict[int, str] = {
-    1: "Confirmed",
-    2: "Scheduled",
-    3: "Cancelled",
-    4: "Pending",
-    5: "Completed",
+    1: "Pending",
+    2: "Confirmed",
+    3: "Arrived",
+    4: "Check-In",
+    5: "Seen",
+    6: "Cancelled",
+    7: "No Show",
+    8: "Reschedule",
+    9: "Check-Out",
 }
 
 
@@ -222,12 +227,12 @@ def _map_upcoming_row(row: dict) -> UpcomingAppointmentRow:
 
 def _appointment_status_label(status_id: int | None) -> str:
     if status_id is None:
-        return "Scheduled"
+        return "Pending"
     try:
         key = int(status_id)
     except (TypeError, ValueError):
-        return "Scheduled"
-    return _APPOINTMENT_STATUS_LABELS.get(key, "Scheduled")
+        return "Pending"
+    return _APPOINTMENT_STATUS_LABELS.get(key, "Pending")
 
 
 def _visit_category(category_id: int | None, code: str | None) -> str | None:

@@ -13,8 +13,15 @@ export const coverageStyles = {
 };
 
 export const appointmentStatusStyles = {
-  Confirmed: "bg-secondary-100 text-secondary-700",
   Pending: "bg-accent-50 text-accent-700",
+  Confirmed: "bg-secondary-100 text-secondary-700",
+  Arrived: "bg-amber-50 text-amber-800",
+  "Check-In": "bg-amber-50 text-amber-800",
+  Seen: "bg-background-100 text-foreground-700",
+  Cancelled: "bg-stone-100 text-stone-600",
+  "No Show": "bg-rose-50 text-rose-700",
+  Reschedule: "bg-amber-50 text-amber-700",
+  "Check-Out": "bg-background-100 text-foreground-700",
   Completed: "bg-background-100 text-foreground-700",
 };
 

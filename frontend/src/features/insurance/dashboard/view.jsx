@@ -593,7 +593,7 @@ function InsuranceDashboardContent() {
                 <tbody className="divide-y divide-border/60">
                   {tableRows.map((row) => (
                     <tr
-                      key={row.id}
+                      key={row.checkInId ?? row.id}
                       onClick={
                         tab.rowsAreLinked
                           ? () => {

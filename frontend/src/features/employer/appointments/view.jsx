@@ -15,8 +15,15 @@ import { coerceToDate, daysAgoIso, todayIso } from "@/lib/date-range";
 import { cn } from "@/lib/utils";
 
 const employerAppointmentStatusStyles = {
-  Confirmed: "bg-emerald-50 text-emerald-700",
   Pending: "bg-amber-50 text-amber-700",
+  Confirmed: "bg-emerald-50 text-emerald-700",
+  Arrived: "bg-amber-50 text-amber-800",
+  "Check-In": "bg-sky-50 text-sky-700",
+  Seen: "bg-stone-100 text-stone-700",
+  Cancelled: "bg-stone-100 text-stone-600",
+  "No Show": "bg-rose-50 text-rose-700",
+  Reschedule: "bg-amber-50 text-amber-700",
+  "Check-Out": "bg-stone-100 text-stone-700",
   Completed: "bg-stone-100 text-stone-600",
 };
 

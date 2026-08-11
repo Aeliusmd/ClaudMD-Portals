@@ -96,7 +96,8 @@ def _to_response(profile) -> InsuranceProfileResponse:
 
 def _fetch_patient_counts(clinic, insurance_id: int) -> tuple[int, int]:
     """
-    Unique patients with check-ins in the last 30 days for this insurer.
+    Total matching check-ins in the last 30 days for this insurer
+    (one count per visit/appointment, not distinct patients).
 
     Workers Comp  → CheckInsHeader.EmployerId IS NOT NULL
     Private       → CheckInsHeader.EmployerId IS NULL
@@ -106,11 +107,11 @@ def _fetch_patient_counts(clinic, insurance_id: int) -> tuple[int, int]:
         cursor.execute(
             """
             SELECT
-                COUNT(DISTINCT CASE
-                    WHEN ch.EmployerId IS NOT NULL THEN ch.PatientId
+                COUNT(CASE
+                    WHEN ch.EmployerId IS NOT NULL THEN 1
                 END) AS WorkersCompPatients,
-                COUNT(DISTINCT CASE
-                    WHEN ch.EmployerId IS NULL THEN ch.PatientId
+                COUNT(CASE
+                    WHEN ch.EmployerId IS NULL THEN 1
                 END) AS PrivateInsurancePatients
             FROM dbo.CheckInsHeader ch
             WHERE ch.InsuranceId = ?

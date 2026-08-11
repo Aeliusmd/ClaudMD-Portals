@@ -7,6 +7,27 @@ export function openDocumentInNewTab(url = SAMPLE_DOCUMENT_URL) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+/** Trigger a file download without opening a new tab (works with blob: URLs). */
+export function downloadDocumentUrl(url, filename = "document.pdf") {
+  if (!url || typeof document === "undefined") return;
+
+  const safeName =
+    String(filename)
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+      .trim() || "document.pdf";
+  const name = safeName.toLowerCase().endsWith(".pdf")
+    ? safeName
+    : `${safeName}.pdf`;
+
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
 /**
  * Build an absolute URL for an authenticated employer visit PDF.
  * PdfThumbnail / preview fetch this with the bearer token and use a blob URL.

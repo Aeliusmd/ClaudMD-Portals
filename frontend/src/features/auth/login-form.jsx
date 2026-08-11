@@ -74,6 +74,8 @@ function LoginFormInner({ portal = "employer" }) {
     }
 
     if (!shareToken) {
+      // Normal activation-key login must not keep a prior shared-doc scoped session.
+      clearSecureShareSession();
       setShareBanner(null);
       return;
     }
@@ -164,8 +166,9 @@ function LoginFormInner({ portal = "employer" }) {
       });
 
       const defaultDestination = resolvePortalDestination(resolvedPortal);
+      // Only honor sharedid from the current login URL (not a leftover session).
+      const liveSharedId = (sharedId || "").trim();
       const shareSession = getSecureShareSession();
-      const liveSharedId = (shareSession?.sharedId || sharedId || "").trim();
       const mockShare =
         !liveSharedId && shareSession?.token
           ? findSecureShare(shareSession.token)
@@ -179,7 +182,7 @@ function LoginFormInner({ portal = "employer" }) {
         defaultDestination,
         shareSession: shareValid
           ? liveSharedId
-            ? { ...shareSession, sharedId: liveSharedId }
+            ? { sharedId: liveSharedId, recipientRole: "employer" }
             : shareSession
           : null,
         isShareExpired: !shareValid,

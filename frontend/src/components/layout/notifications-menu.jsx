@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Bell } from "lucide-react";
 import { NotificationsCard } from "@/components/layout/notifications-card";
 import { notifications as defaultNotifications } from "@/data/notifications";
 import { cn } from "@/lib/utils";
 
 const PREVIEW_LIMIT = 3;
+const PANEL_WIDTH_PX = 352; // ~22rem
 
 export function NotificationsMenu({
   items,
@@ -18,7 +20,10 @@ export function NotificationsMenu({
   unreadCount: unreadCountProp,
 }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [panelStyle, setPanelStyle] = useState(null);
   const rootRef = useRef(null);
+  const panelRef = useRef(null);
   const markedOnOpenRef = useRef(false);
   const list = items ?? defaultNotifications;
   const unreadCount =
@@ -27,10 +32,47 @@ export function NotificationsMenu({
       : list.filter((item) => item.unread).length;
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPanelStyle(null);
+      return undefined;
+    }
+
+    function updatePosition() {
+      const button = rootRef.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const gap = 10;
+      const width = Math.min(PANEL_WIDTH_PX, window.innerWidth - 16);
+      let left = rect.right - width;
+      left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+      setPanelStyle({
+        position: "fixed",
+        top: rect.bottom + gap,
+        left,
+        width,
+        zIndex: 80,
+      });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
     function handlePointerDown(event) {
-      if (!rootRef.current?.contains(event.target)) {
-        setOpen(false);
-      }
+      const target = event.target;
+      if (rootRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
 
     function handleEscape(event) {
@@ -83,15 +125,21 @@ export function NotificationsMenu({
         ) : null}
       </button>
 
-      {open ? (
-        <NotificationsCard
-          notifications={list}
-          previewLimit={previewLimit}
-          viewAllHref={viewAllHref}
-          totalCount={totalCount}
-          onNavigate={() => setOpen(false)}
-        />
-      ) : null}
+      {mounted && open && panelStyle
+        ? createPortal(
+            <div ref={panelRef} style={panelStyle}>
+              <NotificationsCard
+                notifications={list}
+                previewLimit={previewLimit}
+                viewAllHref={viewAllHref}
+                totalCount={totalCount}
+                onNavigate={() => setOpen(false)}
+                className="w-full"
+              />
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

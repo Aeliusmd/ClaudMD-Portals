@@ -484,9 +484,14 @@ export function EmployerDashboardView() {
   function openEmployeeDetail(row) {
     const code = row.patientId ?? row.employeeId;
     if (code == null || code === "") return;
-    router.push(
-      `${employerPaths.employeeSearch}?employee=${encodeURIComponent(String(code))}&from=dashboard`
-    );
+    const params = new URLSearchParams();
+    params.set("employee", String(code));
+    params.set("from", "dashboard");
+    if (effectiveAppliedFrom) params.set("fromDate", effectiveAppliedFrom);
+    if (effectiveAppliedTo) params.set("toDate", effectiveAppliedTo);
+    const category = serverCategory(activeFilter);
+    if (category) params.set("category", category);
+    router.push(`${employerPaths.employeeSearch}?${params.toString()}`);
   }
 
   return (

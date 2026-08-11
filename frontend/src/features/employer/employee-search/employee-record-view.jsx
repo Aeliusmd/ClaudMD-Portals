@@ -225,6 +225,9 @@ export function EmployeeRecordView({
   onBack,
   backLabel = "← Back to search",
   loading = false,
+  fromDate = null,
+  toDate = null,
+  category = null,
 }) {
   const profile = employee || null;
 
@@ -256,7 +259,11 @@ export function EmployeeRecordView({
       setLoadingVisits(true);
       setVisitsError("");
       try {
-        const data = await fetchEmployeeVisits(token, patientId);
+        const data = await fetchEmployeeVisits(token, patientId, {
+          fromDate: fromDate || undefined,
+          toDate: toDate || undefined,
+          category: category || undefined,
+        });
         if (cancelled) return;
         setApiVisits(data.visits || []);
       } catch (error) {
@@ -273,7 +280,7 @@ export function EmployeeRecordView({
     return () => {
       cancelled = true;
     };
-  }, [profile]);
+  }, [profile, fromDate, toDate, category]);
 
   useEffect(() => {
     if (!visits.length) {

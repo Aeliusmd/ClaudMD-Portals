@@ -334,6 +334,9 @@ def _fetch_visits_with_documents(
     for row in visit_rows:
         check_in_id = int(row["CheckInId"])
         category = _visit_category(row.get("VisitCategoryId"), row.get("VisitTypeCode"))
+        # Workers Comp must display Injury (not private Personal Injury).
+        if coverage == COVERAGE_WORKERS_COMP and category == "Personal Injury":
+            category = "Injury"
         label = (
             row.get("VisitTypeDescription")
             or row.get("VisitTypeCode")

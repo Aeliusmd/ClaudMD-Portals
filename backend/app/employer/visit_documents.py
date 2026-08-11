@@ -17,6 +17,7 @@ from app.employer.schemas import (
     EmployeeVisitsResponse,
 )
 from app.employer.profile import fetch_profile_from_clinic
+from app.employer.employee_search import _category_sql_clause
 
 # pdfium is not safe for concurrent renders in-process (Windows heap crashes).
 _PDF_RENDER_LOCK = Lock()
@@ -28,6 +29,7 @@ def get_employee_visits(
     *,
     from_date: date | None = None,
     to_date: date | None = None,
+    category: str | None = None,
 ) -> EmployeeVisitsResponse:
     clinic = get_clinic_by_activation_key(current_user.activation_key)
     if not clinic:
@@ -44,7 +46,7 @@ def get_employee_visits(
         )
 
     today = date.today()
-    start = from_date or (today - timedelta(days=365))
+    start = from_date or (today - timedelta(days=30))
     end = to_date or today
     if start > end:
         raise HTTPException(
@@ -58,11 +60,13 @@ def get_employee_visits(
         patient_id=int(patient_id),
         from_date=start,
         to_date=end,
+        category=category,
     )
     upcoming = _fetch_upcoming_appointments_for_patient(
         clinic=clinic,
         employer_id=profile.employer_id,
         patient_id=int(patient_id),
+        category=category,
     )
     visits = _merge_visit_records(visits, upcoming)
 
@@ -271,8 +275,10 @@ def _fetch_visits_with_documents(
     patient_id: int,
     from_date: date,
     to_date: date,
+    category: str | None = None,
 ) -> list[EmployeeVisitRecord]:
-    visit_sql = """
+    category_sql, _ = _category_sql_clause(category)
+    visit_sql = f"""
         SELECT
             ch.Id AS CheckInId,
             ch.CheckInDate,
@@ -287,6 +293,7 @@ def _fetch_visits_with_documents(
           AND ch.CheckInDate IS NOT NULL
           AND ch.CheckInDate >= ?
           AND ch.CheckInDate <= ?
+          {category_sql}
         ORDER BY ch.CheckInDate DESC, ch.Id DESC
     """
 
@@ -381,8 +388,10 @@ def _fetch_upcoming_appointments_for_patient(
     clinic,
     employer_id: int,
     patient_id: int,
+    category: str | None = None,
 ) -> list[EmployeeVisitRecord]:
-    sql = """
+    category_sql, _ = _category_sql_clause(category)
+    sql = f"""
         SELECT
             s.Id AS ScheduleId,
             s.Date,
@@ -415,6 +424,7 @@ def _fetch_upcoming_appointments_for_patient(
                 AND s.StartTime >= CAST(GETDATE() AS time)
                 )
           )
+          {category_sql}
         ORDER BY s.Date ASC, s.StartTime ASC
     """
     with get_clinic_connection(clinic) as conn:

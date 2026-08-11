@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { FileText, UserRound, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { DetailField } from "@/components/ui/detail-field";
 import { sharedDocuments } from "@/data/employer";
 import { categoryStyles } from "@/lib/category-styles";
 import { openDocumentInNewTab } from "@/lib/documents";
@@ -73,23 +74,30 @@ export function EmployeeDetailPanel({
             Employee Demographics
           </h3>
           <div className="rounded-xl border border-border/70 bg-cream/30 p-4 text-sm">
-            <p className="font-semibold text-ink">{employee.name}</p>
-            <p className="mt-1 tabular-nums text-muted">{employee.accountNo}</p>
-            {employee.phone ? (
-              <p className="mt-1 tabular-nums text-ink">{employee.phone}</p>
-            ) : null}
-            {employee.dateOfBirth ? (
-              <p className="mt-1 text-muted">
-                DOB {employee.dateOfBirth}
-                {employee.gender ? ` · ${employee.gender}` : ""}
-              </p>
-            ) : null}
-            {employee.address ? (
-              <p className="mt-2 text-ink">{employee.address}</p>
-            ) : null}
-            {employee.phone ? (
-              <p className="mt-1 tabular-nums text-ink">{employee.phone}</p>
-            ) : null}
+            <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <DetailField label="Full Name" value={employee.name || "—"} />
+                <DetailField
+                  label="Account #"
+                  value={employee.accountNo || "—"}
+                />
+                <DetailField label="Phone" value={employee.phone || "—"} />
+              </div>
+              <div className="space-y-2">
+                <DetailField
+                  label="DOB"
+                  value={employee.dateOfBirth || "—"}
+                />
+                <DetailField
+                  label="Gender"
+                  value={employee.gender || "—"}
+                />
+                <DetailField
+                  label="Address"
+                  value={employee.address || "—"}
+                />
+              </div>
+            </div>
           </div>
         </section>
 

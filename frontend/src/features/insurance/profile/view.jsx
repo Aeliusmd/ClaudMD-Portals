@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { PasswordField } from "@/components/ui/password-field";
 import { SkeletonBlock, TableSkeleton } from "@/components/ui/skeleton";
 import { useInsuranceProfile } from "@/hooks/use-insurance-profile";
 import { changePassword } from "@/lib/api/auth";
@@ -17,6 +18,8 @@ import {
 import { getAccessToken } from "@/lib/auth-session";
 import { insurancePaths } from "@/lib/portal-paths";
 import {
+  EMAIL_MAX,
+  PHONE_MAX,
   emailError,
   phoneError,
   sanitizePhoneInput,
@@ -33,7 +36,6 @@ const profileTabs = [
 const VALID_PROFILE_TABS = new Set(profileTabs.map((tab) => tab.id));
 
 const NAME_MAX = 50;
-const TITLE_MAX = 100;
 
 function ProfileTabBar({ value, onChange }) {
   return (
@@ -72,6 +74,7 @@ function Field({
   placeholder,
   autoComplete,
   readOnly = false,
+  maxLength,
 }) {
   return (
     <label className="block space-y-1.5" htmlFor={id}>
@@ -85,6 +88,7 @@ function Field({
         placeholder={placeholder}
         autoComplete={autoComplete}
         readOnly={readOnly}
+        maxLength={maxLength}
         onChange={(event) => onChange?.(event.target.value)}
         className={cn(
           "w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm font-medium text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15",
@@ -186,7 +190,6 @@ function validateProfile(profile) {
   const errors = {};
   const firstName = (profile.firstName || "").trim();
   const lastName = (profile.lastName || "").trim();
-  const title = (profile.title || "").trim();
   const email = (profile.email || "").trim();
   const phone = (profile.phone || "").trim();
 
@@ -203,13 +206,6 @@ function validateProfile(profile) {
   } else if (lastName) {
     const err = unsafeMarkupError(lastName);
     if (err) errors.lastName = err;
-  }
-
-  if (title.length > TITLE_MAX) {
-    errors.title = `Title must be at most ${TITLE_MAX} characters.`;
-  } else if (title) {
-    const err = unsafeMarkupError(title);
-    if (err) errors.title = err;
   }
 
   if (!email) errors.email = "Email is required.";
@@ -255,7 +251,6 @@ function normalizeProfileSnapshot(profile) {
   return {
     firstName: (profile.firstName || "").trim(),
     lastName: (profile.lastName || "").trim(),
-    title: (profile.title || "").trim(),
     email: (profile.email || "").trim(),
     phone: (profile.phone || "").trim(),
   };
@@ -267,10 +262,14 @@ function profilesEqual(a, b) {
   return (
     left.firstName === right.firstName &&
     left.lastName === right.lastName &&
-    left.title === right.title &&
     left.email === right.email &&
     left.phone === right.phone
   );
+}
+
+function displayFieldValue(value, editing) {
+  if (editing) return value ?? "";
+  return value || "—";
 }
 
 export function InsuranceProfileView() {
@@ -323,6 +322,7 @@ function InsuranceProfileContent() {
   });
   const [profileErrors, setProfileErrors] = useState({});
   const [hydrated, setHydrated] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [savedProfile, setSavedProfile] = useState(null);
 
@@ -353,6 +353,7 @@ function InsuranceProfileContent() {
 
   useEffect(() => {
     if (!liveProfile) return;
+    if (isEditing) return;
     let firstName = liveProfile.firstName || "";
     let lastName = liveProfile.lastName || "";
     if (!firstName && !lastName && liveProfile.fullName) {
@@ -374,7 +375,7 @@ function InsuranceProfileContent() {
     setProfile(next);
     setSavedProfile(normalizeProfileSnapshot(next));
     setHydrated(true);
-  }, [liveProfile]);
+  }, [liveProfile, isEditing]);
 
   useEffect(() => {
     if (profileLoadError) {
@@ -428,13 +429,36 @@ function InsuranceProfileContent() {
 
   function updateProfileField(field, value) {
     clearFeedback();
-    setProfile((prev) => ({ ...prev, [field]: value }));
+    const nextValue =
+      field === "phone" ? sanitizePhoneInput(value) : value;
+    setProfile((prev) => ({ ...prev, [field]: nextValue }));
     setProfileErrors((prev) => {
       if (!prev[field]) return prev;
       const next = { ...prev };
       delete next[field];
       return next;
     });
+  }
+
+  function startEditProfile() {
+    clearFeedback();
+    setProfileErrors({});
+    setIsEditing(true);
+  }
+
+  function cancelEditProfile() {
+    clearFeedback();
+    setProfileErrors({});
+    if (savedProfile) {
+      setProfile((prev) => ({
+        ...prev,
+        firstName: savedProfile.firstName,
+        lastName: savedProfile.lastName,
+        email: savedProfile.email,
+        phone: savedProfile.phone,
+      }));
+    }
+    setIsEditing(false);
   }
 
   async function handleSaveProfile() {
@@ -458,7 +482,7 @@ function InsuranceProfileContent() {
       const updated = await updateInsuranceProfile(token, {
         firstName: profile.firstName.trim(),
         lastName: profile.lastName.trim(),
-        title: profile.title.trim(),
+        title: (profile.title || "").trim(),
         email: profile.email.trim(),
         phone: profile.phone.trim(),
       });
@@ -477,6 +501,7 @@ function InsuranceProfileContent() {
       setProfile(next);
       setSavedProfile(normalizeProfileSnapshot(next));
       setProfileErrors({});
+      setIsEditing(false);
       setMessage("");
       setSuccessToast({
         title: "Profile saved",
@@ -555,6 +580,9 @@ function InsuranceProfileContent() {
 
   function switchTab(nextTab) {
     clearFeedback();
+    if (isEditing) {
+      cancelEditProfile();
+    }
     setTab(nextTab);
     const params = new URLSearchParams(searchParams.toString());
     if (nextTab === "profile") {
@@ -592,19 +620,52 @@ function InsuranceProfileContent() {
           <ProfileInfoSkeleton />
         ) : (
           <Card className="p-5 sm:p-6">
-            <h2 className="mb-5 text-lg font-semibold text-ink">Profile Info</h2>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-ink">Profile Info</h2>
+              {isEditing ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={cancelEditProfile}
+                    disabled={profileSaving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    disabled={profileSaving || !profileDirty}
+                  >
+                    {profileSaving ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+              ) : (
+                <Button type="button" onClick={startEditProfile}>
+                  Edit
+                </Button>
+              )}
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               <Field
                 id="insurance-first-name"
                 label="First Name"
-                value={profile.firstName || "—"}
-                readOnly
+                value={displayFieldValue(profile.firstName, isEditing)}
+                readOnly={!isEditing}
+                maxLength={NAME_MAX}
+                error={profileErrors.firstName}
+                autoComplete="given-name"
+                onChange={(value) => updateProfileField("firstName", value)}
               />
               <Field
                 id="insurance-last-name"
                 label="Last Name"
-                value={profile.lastName || "—"}
-                readOnly
+                value={displayFieldValue(profile.lastName, isEditing)}
+                readOnly={!isEditing}
+                maxLength={NAME_MAX}
+                error={profileErrors.lastName}
+                autoComplete="family-name"
+                onChange={(value) => updateProfileField("lastName", value)}
               />
               <Field
                 id="insurance-user-type"
@@ -628,15 +689,23 @@ function InsuranceProfileContent() {
                 id="insurance-email"
                 label="Email"
                 type="email"
-                value={profile.email || "—"}
-                readOnly
+                value={displayFieldValue(profile.email, isEditing)}
+                readOnly={!isEditing}
+                maxLength={EMAIL_MAX}
+                error={profileErrors.email}
+                autoComplete="email"
+                onChange={(value) => updateProfileField("email", value)}
               />
               <Field
                 id="insurance-phone"
                 label="Phone"
                 type="tel"
-                value={profile.phone || "—"}
-                readOnly
+                value={displayFieldValue(profile.phone, isEditing)}
+                readOnly={!isEditing}
+                maxLength={PHONE_MAX}
+                error={profileErrors.phone}
+                autoComplete="tel"
+                onChange={(value) => updateProfileField("phone", value)}
               />
               <div className="md:col-span-2">
                 <Field
@@ -663,16 +732,91 @@ function InsuranceProfileContent() {
         <Card className="p-5 sm:p-6">
           <h2 className="mb-3 text-lg font-semibold text-ink">Security</h2>
           <p className="text-sm text-muted">
-            Profile and password details are view-only in this portal. Contact
-            your administrator if changes are required.
+            Update your password below. Your login ID cannot be changed here.
           </p>
-          <div className="mt-5 max-w-xl">
+          <div className="mt-5 max-w-xl space-y-4">
             <Field
               id="insurance-security-login-id"
               label="Login ID"
               value={profile.loginId || "—"}
               readOnly
             />
+            <div className="border-t border-border/60 pt-5">
+              <h3 className="mb-4 text-base font-semibold text-ink">
+                Change Password
+              </h3>
+              <div className="space-y-4">
+                <PasswordField
+                  id="insurance-current-password"
+                  label="Current Password"
+                  value={passwordForm.currentPassword}
+                  autoComplete="off"
+                  error={passwordErrors.currentPassword}
+                  onChange={(value) => {
+                    clearFeedback();
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      currentPassword: value,
+                    }));
+                    setPasswordErrors((prev) => {
+                      if (!prev.currentPassword) return prev;
+                      const next = { ...prev };
+                      delete next.currentPassword;
+                      return next;
+                    });
+                  }}
+                />
+                <PasswordField
+                  id="insurance-new-password"
+                  label="New Password"
+                  value={passwordForm.newPassword}
+                  autoComplete="new-password"
+                  error={passwordErrors.newPassword}
+                  onChange={(value) => {
+                    clearFeedback();
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      newPassword: value,
+                    }));
+                    setPasswordErrors((prev) => {
+                      if (!prev.newPassword) return prev;
+                      const next = { ...prev };
+                      delete next.newPassword;
+                      return next;
+                    });
+                  }}
+                />
+                <PasswordField
+                  id="insurance-confirm-password"
+                  label="Confirm New Password"
+                  value={passwordForm.confirmPassword}
+                  autoComplete="new-password"
+                  error={passwordErrors.confirmPassword}
+                  onChange={(value) => {
+                    clearFeedback();
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      confirmPassword: value,
+                    }));
+                    setPasswordErrors((prev) => {
+                      if (!prev.confirmPassword) return prev;
+                      const next = { ...prev };
+                      delete next.confirmPassword;
+                      return next;
+                    });
+                  }}
+                />
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="button"
+                    onClick={handleUpdatePassword}
+                    disabled={passwordSaving || !passwordDirty}
+                  >
+                    {passwordSaving ? "Updating…" : "Update Password"}
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </Card>
       ) : null}

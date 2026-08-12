@@ -36,9 +36,12 @@ USER_TYPE_PORTAL: dict[UserType, str] = {
     UserType.EmployerUser: "employer",
     UserType.PatientUser: "patient",
     UserType.InsuranceUser: "insurance",
+    UserType.ExternalUser: "outsider",
 }
 
-ALL_PORTALS: frozenset[str] = frozenset({"employer", "patient", "insurance"})
+ALL_PORTALS: frozenset[str] = frozenset(
+    {"employer", "patient", "insurance", "outsider"}
+)
 
 # Portals each TypeId may sign into (Super Admin → employer only).
 USER_TYPE_ALLOWED_PORTALS: dict[UserType, frozenset[str]] = {
@@ -46,6 +49,7 @@ USER_TYPE_ALLOWED_PORTALS: dict[UserType, frozenset[str]] = {
     UserType.EmployerUser: frozenset({"employer"}),
     UserType.PatientUser: frozenset({"patient"}),
     UserType.InsuranceUser: frozenset({"insurance"}),
+    UserType.ExternalUser: frozenset({"outsider"}),
 }
 
 
@@ -112,6 +116,7 @@ def resolve_login_portal(type_id: int | None, requested_portal: str | None) -> s
     Employer User → employer only
     Patient User → patient only
     Insurance User → insurance only
+    External User → outsider only
     """
     allowed = portals_allowed_for_type_id(type_id)
     if not allowed:

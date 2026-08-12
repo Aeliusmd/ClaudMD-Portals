@@ -3,6 +3,8 @@ import {
   employerSharedDocumentFileUrl,
   employerVisitDocumentFileUrl,
 } from "@/lib/documents";
+import { formatDateMMDDYY, formatDateMMDDYYYY } from "@/lib/dates";
+import { mapPreviousVisitVersions } from "@/lib/visit-document-map";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -279,7 +281,7 @@ export async function fetchAppointmentPatients(accessToken, { search } = {}) {
     lastName: row.last_name,
     accountNo: row.account_no,
     ssn: row.ssn,
-    dateOfBirth: row.date_of_birth,
+    dateOfBirth: formatDateMMDDYYYY(row.date_of_birth) || row.date_of_birth,
     genderId: row.gender_id,
     gender: row.gender,
     phone: row.phone,
@@ -449,9 +451,9 @@ function mapEmployeeSearchRow(row) {
     incidentId: row.incident_id,
     incidentNumber: row.incident_number || "N/A",
     category,
-    date: row.check_in_date,
+      date: formatDateMMDDYY(row.check_in_date) || row.check_in_date,
     dateValue: row.check_in_date_value,
-    lastVisit: row.check_in_date,
+    lastVisit: formatDateMMDDYY(row.check_in_date) || row.check_in_date,
     lastVisitValue: row.check_in_date_value,
     dateOfInjury: row.date_of_injury,
     timeOfInjury: row.time_of_injury,
@@ -462,7 +464,7 @@ function mapEmployeeSearchRow(row) {
     unreadReportCount: row.unread_report_count ?? 0,
     appointmentCount: row.appointment_count ?? 0,
     isDrugScreen: category === "Drug Screen",
-    dateOfBirth: row.date_of_birth,
+    dateOfBirth: formatDateMMDDYYYY(row.date_of_birth) || row.date_of_birth,
     genderId: row.gender_id,
     gender: genderLabel(row.gender_id, row.gender),
     phone: row.phone,
@@ -599,7 +601,7 @@ export async function fetchEmployeeVisits(
       isUpcoming: visit.is_upcoming === true,
       scheduleId: visit.schedule_id,
       appointmentId: visit.appointment_id,
-      date: visit.check_in_date,
+      date: formatDateMMDDYY(visit.check_in_date) || visit.check_in_date,
       dateValue: visit.check_in_date_value,
       label: visit.visit_label || "Visit",
       category: visit.category,
@@ -634,9 +636,15 @@ export async function fetchEmployeeVisits(
             badgeLabel: doc.report_name,
             path: path || null,
             url,
-            visitDate: visit.check_in_date,
-            reportDate: visit.check_in_date,
+            visitDate: formatDateMMDDYY(visit.check_in_date) || visit.check_in_date,
+            reportDate: formatDateMMDDYY(visit.check_in_date) || visit.check_in_date,
             isCompleted: doc.is_completed,
+            publishedAt: doc.published_at ?? null,
+            versionTag: doc.version_tag ?? null,
+            previousVersions: mapPreviousVisitVersions(
+              doc.previous_versions,
+              (previousId) => employerVisitDocumentFileUrl(data.patient_id, previousId)
+            ),
           };
         })
         .filter(Boolean),
@@ -722,13 +730,13 @@ export async function fetchSharedDocumentBySharedId(accessToken, sharedId) {
     documentType: data.document_type || data.report_title || "Shared document",
     reportTitle: data.report_title || data.document_type || "Shared document",
     fileName: data.file_name || null,
-    visitDate: data.visit_date || null,
+    visitDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
     visitLabel: data.visit_label || "Visit",
     employee: {
       patientId: employee.patient_id ?? null,
       name: employee.name || "Employee",
       accountNo: employee.account_no || null,
-      dateOfBirth: employee.date_of_birth || null,
+      dateOfBirth: formatDateMMDDYYYY(employee.date_of_birth) || employee.date_of_birth || null,
       gender: employee.gender || null,
       phone: employee.phone || null,
       address: employee.address || null,
@@ -748,8 +756,8 @@ export async function fetchSharedDocumentBySharedId(accessToken, sharedId) {
           .includes("first")
           ? "DFR"
           : "DOC",
-      visitDate: data.visit_date || null,
-      reportDate: data.visit_date || null,
+      visitDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
+      reportDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
       provider: null,
       url: fileUrl,
     },

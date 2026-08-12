@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date, datetime, timedelta, time
 from pathlib import Path
 from threading import Lock
+import re
 
 from fastapi import HTTPException, status
 from fastapi.responses import FileResponse, Response
@@ -16,8 +18,13 @@ from app.employer.schemas import (
     EmployeeVisitRecord,
     EmployeeVisitsResponse,
 )
-from app.employer.profile import fetch_profile_from_clinic
+from app.employer.visit_document_grouping import (
+    build_grouped_visit_documents,
+    normalize_publish_datetime,
+    version_tag_from_path,
+)
 from app.employer.employee_search import _category_sql_clause
+from app.employer.profile import fetch_profile_from_clinic
 
 # pdfium is not safe for concurrent renders in-process (Windows heap crashes).
 _PDF_RENDER_LOCK = Lock()
@@ -114,6 +121,117 @@ def open_employee_visit_document_thumbnail(
     return Response(content=png_bytes, media_type="image/png")
 
 
+def _normalize_publish_folder(folder: str) -> str:
+    """Normalize DB Path values like DoctorPublishRecord//1583\\V1."""
+    normalized = (folder or "").replace("/", "\\").strip()
+    if not normalized:
+        return ""
+    # Collapse doubled separators after the UNC/server prefix (\\server\...).
+    while "\\\\" in normalized[2:]:
+        head, tail = normalized[:2], normalized[2:]
+        normalized = head + tail.replace("\\\\", "\\")
+    return normalized
+
+
+def _pdf_name_candidates(report_name: str) -> list[str]:
+    candidates: list[str] = []
+    name = (report_name or "").strip()
+    if not name:
+        return candidates
+    candidates.append(name if name.lower().endswith(".pdf") else f"{name}.pdf")
+    cleaned = "".join(ch for ch in name if ch.isalnum() or ch in {" ", "-", "_"})
+    cleaned = " ".join(cleaned.split())
+    if cleaned and cleaned.lower() != name.lower():
+        candidates.append(f"{cleaned}.pdf")
+    return candidates
+
+
+def _find_pdf_in_folder(root: Path, report_name: str) -> Path | None:
+    candidates = _pdf_name_candidates(report_name)
+    if not candidates:
+        return None
+    try:
+        if not root.exists() or not root.is_dir():
+            return None
+        for candidate in candidates:
+            direct = root / candidate
+            if direct.is_file():
+                return direct
+        wanted = {c.lower() for c in candidates}
+        for entry in root.iterdir():
+            if entry.is_file() and entry.suffix.lower() == ".pdf":
+                if entry.name.lower() in wanted:
+                    return entry
+    except OSError:
+        return None
+    return None
+
+
+def _version_folder_sort_key(path: Path) -> tuple[int, str]:
+    match = re.search(r"^V(\d+)$", path.name, re.IGNORECASE)
+    if match:
+        return (int(match.group(1)), path.name.lower())
+    return (0, path.name.lower())
+
+
+def _resolve_publish_pdf_path(*, folder: str, report_name: str) -> Path | None:
+    """
+    Resolve a DocterPublishes folder/file to a PDF on disk.
+
+    If the exact V-folder from Path is missing (common when DB has V2 but only
+    V1 was copied to the share), fall back to sibling V* folders under the same
+    check-in directory, preferring the highest available version.
+
+    Never raises for missing/unreachable shares — returns None.
+    """
+    if not folder:
+        return None
+
+    normalized = _normalize_publish_folder(folder)
+    if not normalized:
+        return None
+    root = Path(normalized)
+
+    try:
+        if root.is_file():
+            return root if root.suffix.lower() == ".pdf" else None
+
+        found = _find_pdf_in_folder(root, report_name)
+        if found is not None:
+            return found
+
+        # Exact V-folder missing or empty — try sibling version folders.
+        parent = root.parent if root.name.upper().startswith("V") else root
+        if not parent.exists() or not parent.is_dir():
+            return None
+
+        version_dirs = [
+            entry
+            for entry in parent.iterdir()
+            if entry.is_dir() and re.match(r"^V\d+$", entry.name, re.IGNORECASE)
+        ]
+        version_dirs.sort(key=_version_folder_sort_key, reverse=True)
+
+        ordered: list[Path] = []
+        if root not in version_dirs and root.name.upper().startswith("V"):
+            ordered.append(root)
+        ordered.extend(version_dirs)
+
+        seen: set[str] = set()
+        for candidate_dir in ordered:
+            key = str(candidate_dir).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            found = _find_pdf_in_folder(candidate_dir, report_name)
+            if found is not None:
+                return found
+    except OSError:
+        return None
+
+    return None
+
+
 def _require_employee_publish_pdf(
     current_user: CurrentUser,
     patient_id: int,
@@ -156,6 +274,25 @@ def _require_employee_publish_pdf(
         )
         row = cursor.fetchone()
 
+        sibling_rows: list[dict] = []
+        if row is not None:
+            report_id = row.ReportId
+            check_in_id = row.CheckInId
+            if report_id is not None and check_in_id is not None:
+                cursor.execute(
+                    """
+                    SELECT dp.Id, dp.ReportName, dp.Name, dp.Path
+                    FROM dbo.DocterPublishes dp
+                    WHERE dp.CheckInId = ?
+                      AND dp.ReportId = ?
+                      AND (dp.IsDeleted = 0 OR dp.IsDeleted IS NULL)
+                    ORDER BY dp.Id DESC
+                    """,
+                    (int(check_in_id), int(report_id)),
+                )
+                cols = [col[0] for col in cursor.description]
+                sibling_rows = [dict(zip(cols, item)) for item in cursor.fetchall()]
+
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -172,10 +309,27 @@ def _require_employee_publish_pdf(
             detail="Document is not available for this employer.",
         )
 
+    report_name = (row.ReportName or row.Name or "").strip()
     pdf_path = _resolve_publish_pdf_path(
         folder=(row.Path or "").strip(),
-        report_name=(row.ReportName or row.Name or "").strip(),
+        report_name=report_name,
     )
+
+    # If this publish's Path folder is empty/missing, try sibling publish Paths.
+    if pdf_path is None:
+        for sibling in sibling_rows:
+            if int(sibling["Id"]) == int(document_id):
+                continue
+            sibling_name = (
+                (sibling.get("ReportName") or sibling.get("Name") or report_name or "")
+            ).strip()
+            pdf_path = _resolve_publish_pdf_path(
+                folder=(sibling.get("Path") or "").strip(),
+                report_name=sibling_name,
+            )
+            if pdf_path is not None:
+                break
+
     if pdf_path is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -216,56 +370,30 @@ def render_pdf_first_page_png(pdf_path: Path, *, scale: float = 1.25) -> bytes:
             pdf.close()
 
 
-def _resolve_publish_pdf_path(*, folder: str, report_name: str) -> Path | None:
-    """
-    Resolve a DocterPublishes folder/file to a PDF on disk.
-
-    Never raises for missing/unreachable shares (common on hosted servers
-    without \\claudmdfs01 access) — returns None so visit listing can continue.
-    """
-    if not folder:
-        return None
-
-    normalized = folder.replace("/", "\\").strip()
-    root = Path(normalized)
-
-    try:
-        if not root.exists():
-            return None
-
-        if root.is_file():
-            return root if root.suffix.lower() == ".pdf" else None
-
-        if not root.is_dir():
-            return None
-
-        # Prefer exact report-name PDF inside the publish folder (EMR layout).
-        candidates: list[str] = []
-        name = (report_name or "").strip()
-        if name:
-            candidates.append(name if name.lower().endswith(".pdf") else f"{name}.pdf")
-            # Some publishes use Name without punctuation variants.
-            cleaned = "".join(ch for ch in name if ch.isalnum() or ch in {" ", "-", "_"})
-            cleaned = " ".join(cleaned.split())
-            if cleaned and cleaned.lower() != name.lower():
-                candidates.append(f"{cleaned}.pdf")
-
-        for candidate in candidates:
-            direct = root / candidate
-            if direct.is_file():
-                return direct
-
-        # Case-insensitive match within the folder (non-recursive).
-        wanted = {c.lower() for c in candidates}
-        for entry in root.iterdir():
-            if entry.is_file() and entry.suffix.lower() == ".pdf":
-                if entry.name.lower() in wanted:
-                    return entry
-    except OSError:
-        # UNC share offline / access denied / path too long, etc.
-        return None
-
-    return None
+def _row_to_employee_visit_document(row: dict) -> EmployeeVisitDocument | None:
+    check_in_id = int(row["CheckInId"])
+    report_name = (
+        (row.get("ReportName") or "").strip()
+        or (row.get("ReportTableName") or "").strip()
+        or (row.get("ReportTitle") or "").strip()
+        or (row.get("Name") or "").strip()
+        or "Document"
+    )
+    folder = (row.get("Path") or "").strip()
+    badge = _preview_badge(row.get("ReportId"), report_name)
+    return EmployeeVisitDocument(
+        id=int(row["Id"]),
+        check_in_id=check_in_id,
+        report_id=int(row["ReportId"]) if row.get("ReportId") is not None else None,
+        report_name=report_name,
+        name=(row.get("Name") or "").strip() or report_name,
+        path=folder or None,
+        preview_badge=badge,
+        preview_label=badge,
+        is_completed=bool(row.get("IsComplated")),
+        published_at=normalize_publish_datetime(row.get("CreatedDateTime")),
+        version_tag=version_tag_from_path(folder),
+    )
 
 
 def _fetch_visits_with_documents(
@@ -317,6 +445,7 @@ def _fetch_visits_with_documents(
                 dp.Name,
                 dp.Path,
                 dp.IsComplated,
+                CONVERT(varchar(30), dp.CreatedDateTime, 126) AS CreatedDateTime,
                 r.Name AS ReportTableName,
                 r.ReportTitle,
                 r.Code AS ReportCode
@@ -331,32 +460,14 @@ def _fetch_visits_with_documents(
         doc_rows = [dict(zip(doc_columns, row)) for row in cursor.fetchall()]
 
     docs_by_checkin: dict[int, list[EmployeeVisitDocument]] = {}
+    rows_by_checkin: dict[int, list[dict]] = defaultdict(list)
     for row in doc_rows:
-        check_in_id = int(row["CheckInId"])
-        report_name = (
-            (row.get("ReportName") or "").strip()
-            or (row.get("ReportTableName") or "").strip()
-            or (row.get("ReportTitle") or "").strip()
-            or (row.get("Name") or "").strip()
-            or "Document"
-        )
-        folder = (row.get("Path") or "").strip()
-        # Skip DB publish rows with no PDF on the share (e.g. Visit Note / missing V2).
-        if _resolve_publish_pdf_path(folder=folder, report_name=report_name) is None:
-            continue
-        badge = _preview_badge(row.get("ReportId"), report_name)
-        docs_by_checkin.setdefault(check_in_id, []).append(
-            EmployeeVisitDocument(
-                id=int(row["Id"]),
-                check_in_id=check_in_id,
-                report_id=int(row["ReportId"]) if row.get("ReportId") is not None else None,
-                report_name=report_name,
-                name=(row.get("Name") or "").strip() or report_name,
-                path=folder or None,
-                preview_badge=badge,
-                preview_label=badge,
-                is_completed=bool(row.get("IsComplated")),
-            )
+        rows_by_checkin[int(row["CheckInId"])].append(row)
+
+    for check_in_id, rows in rows_by_checkin.items():
+        docs_by_checkin[check_in_id] = build_grouped_visit_documents(
+            rows,
+            row_to_document=_row_to_employee_visit_document,
         )
 
     visits: list[EmployeeVisitRecord] = []

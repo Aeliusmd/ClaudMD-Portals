@@ -1,7 +1,7 @@
-"""Resolve secure shared-document links for patient recipients.
+"""Resolve secure shared-document links for external (family/other) recipients.
 
-Access: SharedDocuments recipient (Email / ShareWithUserId) AND the document
-visit must belong to the logged-in patient's own chart (CheckInsHeader.PatientId).
+Access: SharedDocuments recipient (Email / ShareWithUserId) only — no patient
+chart or organization membership required.
 """
 
 from __future__ import annotations
@@ -19,15 +19,14 @@ from app.db.clinic import (
     get_clinic_connection,
     shared_documents_has_is_viewed,
 )
+from app.employer.notifications import _recipient_clause
 from app.employer.schemas import (
     SharedDocumentDetailResponse,
     SharedDocumentEmployee,
 )
 from app.employer.visit_documents import render_pdf_first_page_png
-from app.patient.notifications import _recipient_clause
-from app.patient.profile import PatientProfile, fetch_profile_from_clinic
-from app.patient.service import _format_display_date
-
+from app.insurance.patients import _format_display_date, _gender_label
+from app.outsider.profile import OutsiderProfile, fetch_profile_from_clinic
 
 _CHECKIN_OBJECT_TYPE_ID = 53
 _SHARED_DOC_UPLOAD_TYPE_ID = 2
@@ -107,24 +106,10 @@ def _require_shared_document_row(
     return row
 
 
-def _gender_label(gender_id) -> str | None:
-    if gender_id is None:
-        return None
-    try:
-        gid = int(gender_id)
-    except (TypeError, ValueError):
-        return None
-    if gid == 1:
-        return "Male"
-    if gid == 2:
-        return "Female"
-    return None
-
-
 def _load_shared_document_access(
     current_user: CurrentUser,
     shared_id: str,
-) -> tuple[Any, PatientProfile, dict[str, Any]]:
+) -> tuple[Any, OutsiderProfile, dict[str, Any]]:
     shared_uuid = _parse_shared_id(shared_id)
     clinic = get_clinic_by_activation_key(current_user.activation_key)
     if not clinic:
@@ -134,12 +119,6 @@ def _load_shared_document_access(
         )
 
     profile = fetch_profile_from_clinic(clinic, current_user)
-    if profile.patient_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Patient chart not found for this user.",
-        )
-
     email_norm = (profile.email or "").strip().lower() or None
     recipient_sql, recipient_params = _recipient_clause(profile.user_id, email_norm)
 
@@ -189,14 +168,12 @@ def _load_shared_document_access(
         WHERE sd.SharedId = ?
           AND (sd.IsDeleted = 0 OR sd.IsDeleted IS NULL)
           AND ({recipient_sql})
-          AND ch.PatientId = ?
     """
     params: list[Any] = [
         _SHARED_DOC_UPLOAD_TYPE_ID,
         _CHECKIN_OBJECT_TYPE_ID,
         shared_uuid,
         *recipient_params,
-        int(profile.patient_id),
     ]
 
     with get_clinic_connection(clinic) as conn:
@@ -214,7 +191,7 @@ def _load_shared_document_access(
 
 def _mark_shared_id_viewed(
     clinic,
-    profile: PatientProfile,
+    profile: OutsiderProfile,
     shared_id: str,
 ) -> int:
     if not shared_documents_has_is_viewed(clinic):

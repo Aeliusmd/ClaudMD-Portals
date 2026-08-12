@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserRound } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { DocumentNameText } from "@/components/ui/document-name-text";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { employees, sharedDocuments } from "@/data/employer";
@@ -18,29 +18,11 @@ import {
   clearSecureShareSession,
   getSecureShareSession,
 } from "@/lib/secure-share-session";
-
-function formatDob(value) {
-  if (!value) return "—";
-  const asDate = new Date(value);
-  if (!Number.isNaN(asDate.getTime())) {
-    return asDate.toLocaleDateString("en-US");
-  }
-  return value;
-}
-
-function shortDocLabel(doc) {
-  if (doc.previewBadge) return doc.previewBadge;
-  if (doc.previewLabel === "PT report") return "PR";
-  if (doc.previewLabel) return doc.previewLabel;
-  if (
-    doc.documentType?.includes("Doctor First") ||
-    doc.documentType?.includes("Doctor's First")
-  ) {
-    return "DFR";
-  }
-  if (doc.documentType?.includes("Physical")) return "PR";
-  return "DOC";
-}
+import {
+  documentDisplayName,
+  shortDocumentBadge,
+} from "@/lib/document-labels";
+import { formatDateMMDDYY, formatDateOfBirth } from "@/lib/dates";
 
 function DemoField({ label, value }) {
   return (
@@ -184,8 +166,9 @@ export function EmployerScopedSharedDocumentsView() {
     );
   }
 
-  const badge = shortDocLabel(document);
-  const caption = `${visitRow.date || ""} ${badge}`.trim();
+  const badge = shortDocumentBadge(document);
+  const docName = documentDisplayName(document);
+  const dateLabel = formatDateMMDDYY(visitRow.date);
 
   return (
     <div className="space-y-5">
@@ -207,23 +190,21 @@ export function EmployerScopedSharedDocumentsView() {
         </div>
       </Card>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
         <div className="min-w-0 space-y-5">
           <Card className="p-5">
             <h2 className="mb-4 text-[11px] font-semibold tracking-[0.1em] text-muted uppercase">
               Employee Demographics
             </h2>
-            <div className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2">
+            <div className="space-y-4 text-sm">
               <DemoField label="ID" value={employee.accountNo} />
               <DemoField label="Phone" value={employee.phone} />
               <DemoField
                 label="DOB"
-                value={formatDob(employee.dateOfBirth)}
+                value={formatDateOfBirth(employee.dateOfBirth)}
               />
               <DemoField label="Gender" value={employee.gender} />
-              <div className="sm:col-span-2">
-                <DemoField label="Address" value={employee.address} />
-              </div>
+              <DemoField label="Address" value={employee.address} />
             </div>
           </Card>
 
@@ -239,7 +220,7 @@ export function EmployerScopedSharedDocumentsView() {
                 <tbody>
                   <tr className="border-l-4 border-l-primary-500 bg-primary-50">
                     <td className="px-5 py-3.5 font-semibold tabular-nums text-ink">
-                      {visitRow.date}
+                      {formatDateMMDDYY(visitRow.date) || "—"}
                     </td>
                     <td className="px-5 py-3.5 text-ink">{visitRow.label}</td>
                   </tr>
@@ -251,7 +232,7 @@ export function EmployerScopedSharedDocumentsView() {
 
         <div className="min-h-[20rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[24rem] sm:p-5 xl:min-h-full">
           {document.url ? (
-            <div className="w-full max-w-md">
+            <div className="w-full">
               <PdfThumbnail
                 url={document.url}
                 badge={badge}
@@ -263,9 +244,15 @@ export function EmployerScopedSharedDocumentsView() {
                   })
                 }
               />
-              <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
-                {caption}
-              </p>
+              <div className="mt-3 space-y-1 text-center">
+                {dateLabel ? (
+                  <p className="text-sm font-semibold text-white/90">{dateLabel}</p>
+                ) : null}
+                <DocumentNameText
+                  name={docName}
+                  className="text-sm font-semibold text-white sm:text-base"
+                />
+              </div>
               <p className="mt-2 text-center text-[11px] leading-relaxed text-white/55">
                 {document.documentType}
                 {document.provider ? ` · ${document.provider}` : ""}

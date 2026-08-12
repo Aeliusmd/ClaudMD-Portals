@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  ArrowLeft,
   Download,
   ExternalLink,
   FileText,
@@ -16,6 +17,8 @@ import {
   openDocumentInNewTab,
   resolveDocumentObjectUrl,
 } from "@/lib/documents";
+import { formatDateMMDDYY } from "@/lib/dates";
+import { DocumentNameText } from "@/components/ui/document-name-text";
 
 function actionButtonClassName() {
   return "cursor-pointer rounded-lg p-2 text-[#6b7280] transition hover:bg-cream-deep hover:text-ink sm:p-2.5";
@@ -28,10 +31,14 @@ async function resolvePreviewUrl(url) {
   return { src: resolved.src, revoke: null };
 }
 
-export function DocumentPreviewModal({ file, onClose }) {
+export function DocumentPreviewModal({ file, onClose, backLabel = "Back" }) {
   const [mounted, setMounted] = useState(false);
   const [previewSrc, setPreviewSrc] = useState(null);
   const [loadError, setLoadError] = useState("");
+
+  function handleBack() {
+    onClose();
+  }
 
   useEffect(() => {
     setMounted(true);
@@ -74,7 +81,7 @@ export function DocumentPreviewModal({ file, onClose }) {
     if (!file) return undefined;
 
     function handleEscape(event) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") handleBack();
     }
 
     const previousOverflow = document.body.style.overflow;
@@ -90,8 +97,9 @@ export function DocumentPreviewModal({ file, onClose }) {
   if (!mounted || !file) return null;
 
   const documentId = file.documentId || "N/A";
-  const documentDate =
-    file.reportDate || file.shareDate || file.visitDate || file.date || "N/A";
+  const documentDate = formatDateMMDDYY(
+    file.reportDate || file.shareDate || file.visitDate || file.date
+  ) || "N/A";
   const displayTitle = file.title || "Clinical Document";
 
   function handleDownload() {
@@ -133,18 +141,32 @@ export function DocumentPreviewModal({ file, onClose }) {
       aria-label={`Preview ${displayTitle}`}
     >
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#ece7df] px-3 py-3 sm:gap-4 sm:px-5 sm:py-4">
-        <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e8f1fb] text-primary sm:h-10 sm:w-10">
-            <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-primary transition hover:bg-[#e8f1fb] sm:gap-2 sm:px-3"
+          >
+            <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+            <span>{backLabel}</span>
+          </button>
+
+          <span className="hidden h-8 w-px shrink-0 bg-[#ece7df] sm:block" aria-hidden="true" />
+
+          <span className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e8f1fb] text-primary sm:h-10 sm:w-10">
+              <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
+            </span>
+            <div className="min-w-0">
+              <DocumentNameText
+                name={displayTitle}
+                className="font-sans text-sm font-semibold text-ink sm:text-base"
+              />
+              <p className="mt-0.5 truncate font-sans text-xs tabular-nums text-muted sm:text-sm">
+                {documentId}
+              </p>
+            </div>
           </span>
-          <div className="min-w-0">
-            <p className="truncate font-sans text-sm font-semibold text-ink sm:text-base">
-              {displayTitle}
-            </p>
-            <p className="mt-0.5 truncate font-sans text-xs tabular-nums text-muted sm:text-sm">
-              {documentId}
-            </p>
-          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-0 sm:gap-0.5">
@@ -188,7 +210,7 @@ export function DocumentPreviewModal({ file, onClose }) {
             type="button"
             aria-label="Close preview"
             title="Close"
-            onClick={onClose}
+            onClick={handleBack}
             className={actionButtonClassName()}
           >
             <X className="h-4 w-4 sm:h-5 sm:w-5" />

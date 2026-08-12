@@ -6,7 +6,12 @@ import {
   Printer,
   ZoomIn,
 } from "lucide-react";
+import { DocumentNameText } from "@/components/ui/document-name-text";
 import { SAMPLE_DOCUMENT_URL, openDocumentInNewTab } from "@/lib/documents";
+import {
+  buildVisitVersionLayers,
+  visitDocumentTileLabel,
+} from "@/lib/visit-document-map";
 import { cn } from "@/lib/utils";
 
 function FaxIcon({ className }) {
@@ -76,9 +81,25 @@ export function VisitDocumentCard({ doc, onPreview }) {
     type: doc.type,
   };
 
+  const tileLabel = visitDocumentTileLabel(doc);
+  const versionLayers = buildVisitVersionLayers(doc);
+  const previousLayers = versionLayers.filter((layer) => !layer.isCurrent);
+
   function handlePreview(event) {
     event?.stopPropagation?.();
     onPreview?.(file);
+  }
+
+  function handlePreviousPreview(event, version) {
+    event?.stopPropagation?.();
+    if (!version?.url) return;
+    onPreview?.({
+      ...file,
+      ...version,
+      title: doc.title,
+      url: version.url,
+      isPreviousVersion: true,
+    });
   }
 
   function handleDownload(event) {
@@ -139,15 +160,34 @@ export function VisitDocumentCard({ doc, onPreview }) {
         </span>
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-ink transition group-hover:text-primary">
-            {doc.title}
-          </span>
+          <DocumentNameText
+            name={tileLabel}
+            title={doc.title}
+            className="text-sm font-semibold text-ink transition group-hover:text-primary"
+          />
           <span className="mt-1.5 flex flex-wrap items-center gap-2">
             <span className="inline-flex rounded-full bg-[#e8f1fb] px-2.5 py-0.5 text-[11px] font-semibold text-primary">
               {doc.type}
             </span>
             <span className="text-xs tabular-nums text-muted">{doc.date}</span>
           </span>
+          {previousLayers.length > 0 ? (
+            <span className="mt-2 block space-y-0.5">
+              {previousLayers
+                .slice()
+                .reverse()
+                .map((layer) => (
+                <button
+                  key={`${layer.id || layer.path}-${layer.versionTag || "prev"}`}
+                  type="button"
+                  onClick={(event) => handlePreviousPreview(event, layer)}
+                  className="block max-w-full cursor-pointer text-left text-xs text-primary hover:underline"
+                >
+                  {layer.label}
+                </button>
+              ))}
+            </span>
+          ) : null}
         </span>
       </span>
 

@@ -7,25 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { DetailField } from "@/components/ui/detail-field";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
-import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
+import {
+  DocumentThumbGrid,
+  DocumentThumbTile,
+} from "@/components/ui/document-thumb-tile";
 import { categoryStyles } from "@/lib/category-styles";
+import { formatDateMMDDYY } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-
-function DocumentThumb({ document, onPreview }) {
-  return (
-    <div className="w-[8.5rem] shrink-0 sm:w-40">
-      <PdfThumbnail
-        url={document.url}
-        badge={document.previewBadge}
-        title={document.title}
-        onOpen={() => onPreview(document)}
-      />
-      <p className="mt-2.5 line-clamp-2 text-center text-xs font-semibold text-white sm:text-sm">
-        {document.title}
-      </p>
-    </div>
-  );
-}
 
 function displayValue(value) {
   if (value == null || value === "") return "—";
@@ -75,7 +63,7 @@ export function PatientVisitDetailView({
             </div>
             <div className="min-w-0">
               <p className="text-lg font-semibold text-foreground-900">
-                {visit.date}
+                {formatDateMMDDYY(visit.date) || visit.date}
               </p>
               <p className="mt-0.5 text-sm text-foreground-500">
                 {visit.id} · {visit.category}
@@ -93,7 +81,7 @@ export function PatientVisitDetailView({
         </div>
       </Card>
 
-      <div className="grid items-start gap-5 xl:grid-cols-2">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
         <div className="min-w-0 space-y-5">
           <Card className="overflow-hidden p-0">
             <h2 className="border-b border-border/70 px-5 py-4 text-base font-semibold text-foreground-900">
@@ -177,7 +165,10 @@ export function PatientVisitDetailView({
 
             <div className="px-5 py-4">
               <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-                <DetailField label="Date" value={visit.date} />
+                <DetailField
+                  label="Date"
+                  value={formatDateMMDDYY(visit.date) || "—"}
+                />
                 <DetailField label="Provider" value={visit.provider} />
                 <DetailField label="Location" value={visit.location} />
                 <DetailField label="Status" value={visit.status} />
@@ -212,15 +203,16 @@ export function PatientVisitDetailView({
               No documents for this visit.
             </div>
           ) : (
-            <div className="flex flex-wrap gap-4">
+            <DocumentThumbGrid>
               {documents.map((document) => (
-                <DocumentThumb
+                <DocumentThumbTile
                   key={document.id}
-                  document={document}
+                  doc={document}
+                  selectedVisit={visit}
                   onPreview={setPreviewDocument}
                 />
               ))}
-            </div>
+            </DocumentThumbGrid>
           )}
         </div>
       </div>

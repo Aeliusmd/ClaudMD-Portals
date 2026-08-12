@@ -1,81 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { UserRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
-import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
+import {
+  DocumentThumbGrid,
+  DocumentThumbGridSkeleton,
+  DocumentThumbTile,
+} from "@/components/ui/document-thumb-tile";
 import { DetailField } from "@/components/ui/detail-field";
 import { SkeletonBlock } from "@/components/ui/skeleton";
 import { fetchEmployeeVisits } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
+import { formatDateMMDDYY, formatDateOfBirth } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-
-function shortDocLabel(doc) {
-  if (doc.previewBadge) return doc.previewBadge;
-  if (doc.previewLabel === "PT report") return "PR";
-  if (doc.previewLabel) return doc.previewLabel;
-  if (
-    doc.badgeLabel === "Work Status" ||
-    doc.documentType?.includes("Work Status")
-  ) {
-    return "WSR";
-  }
-  if (
-    doc.documentType?.includes("Doctor First") ||
-    doc.documentType?.includes("Doctor's First")
-  ) {
-    return "DFR";
-  }
-  if (doc.documentType?.includes("Physical")) return "PR";
-  return "DOC";
-}
-
-function docCaption(doc, selectedVisit) {
-  const date = doc.visitDate || selectedVisit?.date || "";
-  const label = shortDocLabel(doc);
-  return `${date} ${label}`.trim();
-}
-
-function formatDob(value) {
-  if (!value) return "—";
-  if (String(value).includes("/")) return value;
-  const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime()) && /\d{4}-\d{2}-\d{2}/.test(String(value))) {
-    return parsed.toLocaleDateString("en-US");
-  }
-  const asDate = new Date(value);
-  if (!Number.isNaN(asDate.getTime())) {
-    return asDate.toLocaleDateString("en-US");
-  }
-  return value;
-}
-
-function VisitDocumentThumb({ doc, selectedVisit, onPreview }) {
-  const badge = shortDocLabel(doc);
-  const url = doc.url;
-  if (!url) return null;
-
-  return (
-    <div className="w-[8.5rem] shrink-0 sm:w-40">
-      <PdfThumbnail
-        url={url}
-        badge={badge}
-        title={doc.title || doc.name || "Document"}
-        onOpen={() =>
-          onPreview({
-            ...doc,
-            url,
-            previewBadge: badge,
-          })
-        }
-      />
-      <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
-        {docCaption(doc, selectedVisit)}
-      </p>
-    </div>
-  );
-}
 
 function VisitInfoRow({ label, value }) {
   if (!value || value === "—") return null;
@@ -105,7 +44,7 @@ function UpcomingAppointmentDetails({ visit }) {
         {visit.label || "Appointment"}
       </h3>
       <dl className="mt-4 space-y-3">
-        <VisitInfoRow label="Date" value={visit.date} />
+        <VisitInfoRow label="Date" value={formatDateMMDDYY(visit.date) || "—"} />
         <VisitInfoRow label="Time" value={timeRange} />
         <VisitInfoRow label="Category" value={visit.category} />
         <VisitInfoRow label="Provider" value={visit.provider} />
@@ -155,23 +94,19 @@ export function EmployeeRecordSkeleton({
         </div>
       </Card>
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
         <Card className="p-5 xl:col-start-1 xl:row-start-1">
           <h2 className="mb-4 text-[11px] font-bold tracking-[0.1em] text-foreground-500 uppercase">
             Employee Demographics
           </h2>
-          <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
-            <div className="space-y-2.5">
-              <SkeletonBlock className="h-4 w-28" />
-              <SkeletonBlock className="h-4 w-24" />
-              <SkeletonBlock className="h-4 w-36" />
-              <SkeletonBlock className="h-4 w-full" />
-              <SkeletonBlock className="h-4 w-32" />
-            </div>
-            <div className="space-y-2.5">
-              <SkeletonBlock className="h-4 w-32" />
-              <SkeletonBlock className="h-4 w-10" />
-            </div>
+          <div className="space-y-2.5">
+            <SkeletonBlock className="h-4 w-28" />
+            <SkeletonBlock className="h-4 w-24" />
+            <SkeletonBlock className="h-4 w-36" />
+            <SkeletonBlock className="h-4 w-full" />
+            <SkeletonBlock className="h-4 w-32" />
+            <SkeletonBlock className="h-4 w-32" />
+            <SkeletonBlock className="h-4 w-10" />
           </div>
         </Card>
 
@@ -186,16 +121,7 @@ export function EmployeeRecordSkeleton({
         </Card>
 
         <div className="min-h-[18rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[22rem] sm:p-5 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:min-h-full">
-          <div className="flex flex-wrap gap-4">
-            <div className="w-[8.5rem] shrink-0 sm:w-40">
-              <div className="aspect-[17/22] w-full animate-pulse rounded-xl bg-white/20" />
-              <div className="mx-auto mt-2.5 h-4 w-24 animate-pulse rounded bg-white/20" />
-            </div>
-            <div className="w-[8.5rem] shrink-0 sm:w-40">
-              <div className="aspect-[17/22] w-full animate-pulse rounded-xl bg-white/20" />
-              <div className="mx-auto mt-2.5 h-4 w-24 animate-pulse rounded bg-white/20" />
-            </div>
-          </div>
+          <DocumentThumbGridSkeleton count={2} />
         </div>
       </div>
     </div>
@@ -238,6 +164,19 @@ export function EmployeeRecordView({
   const [visitsError, setVisitsError] = useState("");
   const [selectedVisitId, setSelectedVisitId] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
+  const scrollYRef = useRef(0);
+
+  const handlePreviewDocument = useCallback((doc) => {
+    scrollYRef.current = window.scrollY;
+    setPreviewDocument(doc);
+  }, []);
+
+  const handleClosePreview = useCallback(() => {
+    setPreviewDocument(null);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: scrollYRef.current, left: 0, behavior: "instant" });
+    });
+  }, []);
 
   // Visits/documents come only from the clinic DB API — no mock/dummy rows.
   const visits = apiVisits || [];
@@ -291,13 +230,18 @@ export function EmployeeRecordView({
       setSelectedVisitId(null);
       return;
     }
-    const preferred =
-      visits.find(
-        (visit) => !visit.isUpcoming && (visit.documents || []).length > 0
-      ) ||
-      visits.find((visit) => !visit.isUpcoming) ||
-      visits[0];
-    setSelectedVisitId(preferred?.id || null);
+    setSelectedVisitId((current) => {
+      if (current && visits.some((visit) => visit.id === current)) {
+        return current;
+      }
+      const preferred =
+        visits.find(
+          (visit) => !visit.isUpcoming && (visit.documents || []).length > 0
+        ) ||
+        visits.find((visit) => !visit.isUpcoming) ||
+        visits[0];
+      return preferred?.id || null;
+    });
   }, [profile?.id, visits]);
 
   const selectedVisit =
@@ -345,29 +289,25 @@ export function EmployeeRecordView({
         </div>
       </Card>
 
-      <div className="grid items-start gap-5 xl:grid-cols-2">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
         <div className="min-w-0 space-y-5">
           <Card className="p-5">
             <h2 className="mb-4 text-[11px] font-bold tracking-[0.1em] text-foreground-500 uppercase">
               Employee Demographics
             </h2>
-            <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
-              <div className="space-y-2.5">
-                <DetailField label="Account #" value={profile.accountNo || "—"} />
-                <DetailField label="Full Name" value={profile.name || "—"} />
-                <DetailField
-                  label="Address"
-                  value={profile.address || "Address not on file"}
-                />
-                <DetailField label="Phone" value={profile.phone || "—"} />
-              </div>
-              <div className="space-y-2.5">
-                <DetailField
-                  label="DOB"
-                  value={formatDob(profile.dateOfBirth) || "—"}
-                />
-                <DetailField label="Gender" value={profile.gender || "—"} />
-              </div>
+            <div className="space-y-2.5 text-sm">
+              <DetailField label="Account #" value={profile.accountNo || "—"} />
+              <DetailField label="Full Name" value={profile.name || "—"} />
+              <DetailField
+                label="Address"
+                value={profile.address || "Address not on file"}
+              />
+              <DetailField label="Phone" value={profile.phone || "—"} />
+              <DetailField
+                label="DOB"
+                value={formatDateOfBirth(profile.dateOfBirth)}
+              />
+              <DetailField label="Gender" value={profile.gender || "—"} />
             </div>
           </Card>
 
@@ -413,7 +353,7 @@ export function EmployeeRecordView({
                               selected ? "font-bold" : "font-normal"
                             )}
                           >
-                            {visit.date}
+                            {formatDateMMDDYY(visit.date) || "—"}
                           </td>
                           <td
                             className={cn(
@@ -465,16 +405,16 @@ export function EmployeeRecordView({
                   : "No documents for this visit."}
             </div>
           ) : (
-            <div className="flex flex-wrap gap-4">
+            <DocumentThumbGrid>
               {visitDocs.map((doc) => (
-                <VisitDocumentThumb
+                <DocumentThumbTile
                   key={doc.id}
                   doc={doc}
                   selectedVisit={selectedVisit}
-                  onPreview={setPreviewDocument}
+                  onPreview={handlePreviewDocument}
                 />
               ))}
-            </div>
+            </DocumentThumbGrid>
           )}
         </div>
       </div>
@@ -482,7 +422,7 @@ export function EmployeeRecordView({
       {previewDocument ? (
         <DocumentPreviewModal
           file={previewDocument}
-          onClose={() => setPreviewDocument(null)}
+          onClose={handleClosePreview}
         />
       ) : null}
     </div>

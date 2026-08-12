@@ -7,61 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { DetailField } from "@/components/ui/detail-field";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
-import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
+import {
+  DocumentThumbGrid,
+  DocumentThumbTile,
+} from "@/components/ui/document-thumb-tile";
 import { coverageStyles } from "@/lib/category-styles";
+import { formatDateMMDDYY, formatDateOfBirth } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-
-function shortDocLabel(doc) {
-  if (doc.previewBadge) return doc.previewBadge;
-  if (doc.previewLabel === "PT report") return "PR";
-  if (doc.previewLabel) return doc.previewLabel;
-  if (
-    doc.badgeLabel === "Work Status" ||
-    doc.documentType?.includes("Work Status")
-  ) {
-    return "WSR";
-  }
-  if (
-    doc.documentType?.includes("Doctor First") ||
-    doc.documentType?.includes("Doctor's First")
-  ) {
-    return "DFR";
-  }
-  if (doc.documentType?.includes("Physical")) return "PR";
-  return "DOC";
-}
-
-function docCaption(doc, selectedVisit) {
-  const date = doc.visitDate || selectedVisit?.date || "";
-  const label = shortDocLabel(doc);
-  return `${date} ${label}`.trim();
-}
-
-function VisitDocumentThumb({ doc, selectedVisit, onPreview }) {
-  const badge = shortDocLabel(doc);
-  const url = doc.url;
-  if (!url) return null;
-
-  return (
-    <div className="w-[8.5rem] shrink-0 sm:w-40">
-      <PdfThumbnail
-        url={url}
-        badge={badge}
-        title={doc.title || doc.name || "Document"}
-        onOpen={() =>
-          onPreview({
-            ...doc,
-            url,
-            previewBadge: badge,
-          })
-        }
-      />
-      <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
-        {docCaption(doc, selectedVisit)}
-      </p>
-    </div>
-  );
-}
 
 export function InsurancePatientDetailView({ patient, backHref }) {
   const router = useRouter();
@@ -132,7 +84,7 @@ export function InsurancePatientDetailView({ patient, backHref }) {
         </div>
       </Card>
 
-      <div className="grid items-start gap-5 xl:grid-cols-2">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
         <div className="min-w-0 space-y-5">
           <Card className="overflow-hidden p-0">
             <h2 className="border-b border-border/70 px-5 py-4 text-base font-semibold text-foreground-900">
@@ -140,35 +92,27 @@ export function InsurancePatientDetailView({ patient, backHref }) {
             </h2>
 
             <div className="px-5 py-4">
-              <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
-                <div className="space-y-2.5">
-                  <DetailField
-                    label="Account #"
-                    value={patient.accountNo || "—"}
-                  />
-                  <DetailField
-                    label="DOB"
-                    value={patient.dateOfBirth || "—"}
-                  />
-                  <DetailField
-                    label="Full Name"
-                    value={patient.patient || "—"}
-                  />
-                  <DetailField
-                    label="Address"
-                    value={
-                      addressLines.length > 0 ? addressLines.join(", ") : "—"
-                    }
-                  />
-                  <DetailField label="Phone" value={patient.phone || "—"} />
-                </div>
-
-                <div className="space-y-2.5">
-                  <DetailField
-                    label="Gender"
-                    value={patient.gender || "—"}
-                  />
-                </div>
+              <div className="space-y-2.5 text-sm">
+                <DetailField
+                  label="Account #"
+                  value={patient.accountNo || "—"}
+                />
+                <DetailField
+                  label="Full Name"
+                  value={patient.patient || "—"}
+                />
+                <DetailField
+                  label="Address"
+                  value={
+                    addressLines.length > 0 ? addressLines.join(", ") : "—"
+                  }
+                />
+                <DetailField label="Phone" value={patient.phone || "—"} />
+                <DetailField
+                  label="DOB"
+                  value={formatDateOfBirth(patient.dateOfBirth)}
+                />
+                <DetailField label="Gender" value={patient.gender || "—"} />
               </div>
 
               <div className="mt-4 grid gap-x-8 gap-y-4 border-t border-border/70 pt-4 text-sm sm:grid-cols-2">
@@ -232,7 +176,7 @@ export function InsurancePatientDetailView({ patient, backHref }) {
                           )}
                         >
                           <td className="px-5 py-3.5 font-semibold tabular-nums text-foreground-900">
-                            {visit.date}
+                            {formatDateMMDDYY(visit.date) || "—"}
                           </td>
                           <td
                             className={cn(
@@ -265,16 +209,16 @@ export function InsurancePatientDetailView({ patient, backHref }) {
               No documents for this visit.
             </div>
           ) : (
-            <div className="flex flex-wrap gap-4">
+            <DocumentThumbGrid>
               {visitDocuments.map((doc) => (
-                <VisitDocumentThumb
+                <DocumentThumbTile
                   key={doc.id}
                   doc={doc}
                   selectedVisit={selectedVisit}
                   onPreview={setPreviewDocument}
                 />
               ))}
-            </div>
+            </DocumentThumbGrid>
           )}
         </div>
       </div>

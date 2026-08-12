@@ -11,6 +11,11 @@ from fastapi.responses import FileResponse, Response
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
 from app.employer.shift_type import shift_type_label
+from app.employer.visit_document_grouping import (
+    build_grouped_visit_documents,
+    normalize_publish_datetime,
+    version_tag_from_path,
+)
 from app.employer.visit_documents import (
     _format_date_iso,
     _format_display_date,
@@ -304,6 +309,31 @@ def _fetch_visit_header(*, clinic, patient_id: int, check_in_id: int) -> dict | 
         return dict(zip(columns, row))
 
 
+def _row_to_patient_visit_document(row: dict) -> PatientVisitDocument | None:
+    report_name = (
+        (row.get("ReportName") or "").strip()
+        or (row.get("ReportTableName") or "").strip()
+        or (row.get("ReportTitle") or "").strip()
+        or (row.get("Name") or "").strip()
+        or "Document"
+    )
+    folder = (row.get("Path") or "").strip()
+    badge = _preview_badge(row.get("ReportId"), report_name)
+    return PatientVisitDocument(
+        id=int(row["Id"]),
+        check_in_id=int(row["CheckInId"]),
+        report_id=int(row["ReportId"]) if row.get("ReportId") is not None else None,
+        report_name=report_name,
+        name=(row.get("Name") or "").strip() or report_name,
+        path=folder or None,
+        preview_badge=badge,
+        preview_label=badge,
+        is_completed=bool(row.get("IsComplated")),
+        published_at=normalize_publish_datetime(row.get("CreatedDateTime")),
+        version_tag=version_tag_from_path(folder),
+    )
+
+
 def _fetch_documents_for_checkin(clinic, check_in_id: int) -> list[PatientVisitDocument]:
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
@@ -317,6 +347,7 @@ def _fetch_documents_for_checkin(clinic, check_in_id: int) -> list[PatientVisitD
                 dp.Name,
                 dp.Path,
                 dp.IsComplated,
+                CONVERT(varchar(30), dp.CreatedDateTime, 126) AS CreatedDateTime,
                 r.Name AS ReportTableName,
                 r.ReportTitle
             FROM dbo.DocterPublishes dp
@@ -330,33 +361,10 @@ def _fetch_documents_for_checkin(clinic, check_in_id: int) -> list[PatientVisitD
         columns = [col[0] for col in cursor.description]
         rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-    documents: list[PatientVisitDocument] = []
-    for row in rows:
-        report_name = (
-            (row.get("ReportName") or "").strip()
-            or (row.get("ReportTableName") or "").strip()
-            or (row.get("ReportTitle") or "").strip()
-            or (row.get("Name") or "").strip()
-            or "Document"
-        )
-        folder = (row.get("Path") or "").strip()
-        if _resolve_publish_pdf_path(folder=folder, report_name=report_name) is None:
-            continue
-        badge = _preview_badge(row.get("ReportId"), report_name)
-        documents.append(
-            PatientVisitDocument(
-                id=int(row["Id"]),
-                check_in_id=int(row["CheckInId"]),
-                report_id=int(row["ReportId"]) if row.get("ReportId") is not None else None,
-                report_name=report_name,
-                name=(row.get("Name") or "").strip() or report_name,
-                path=folder or None,
-                preview_badge=badge,
-                preview_label=badge,
-                is_completed=bool(row.get("IsComplated")),
-            )
-        )
-    return documents
+    return build_grouped_visit_documents(
+        rows,
+        row_to_document=_row_to_patient_visit_document,
+    )
 
 
 def _fetch_other_visits(

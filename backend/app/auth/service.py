@@ -18,6 +18,7 @@ from app.auth.schemas import (
 )
 from app.auth.user_profile_type import (
     UserType,
+    can_access_portal,
     resolve_login_portal,
     user_type_label,
 )
@@ -79,6 +80,7 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
         user_id=user_fields.get("id"),
         login_id=user_fields["login_id"],
         email=user_fields.get("email") or user_fields["login_id"],
+        requested_portal=payload.portal,
     )
 
     type_id = profile.get("type_id") if profile else None
@@ -90,7 +92,7 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    "This account is not enabled for the employer, patient, or insurance portal. "
+                    "This account is not enabled for a ClaudMD portal. "
                     "Contact your clinic administrator."
                 ),
             ) from exc
@@ -346,12 +348,21 @@ def _clinic_info(
     )
 
 
+_PORTAL_PREFERRED_TYPE: dict[str, UserType] = {
+    "employer": UserType.EmployerUser,
+    "patient": UserType.PatientUser,
+    "insurance": UserType.InsuranceUser,
+    "outsider": UserType.ExternalUser,
+}
+
+
 def _fetch_user_profile_type(
     *,
     clinic: ClinicConnectionInfo | None,
     user_id: int | None,
     login_id: str,
     email: str,
+    requested_portal: str | None = None,
 ) -> dict | None:
     """Read-only UserProfiles lookup for TypeId + basic identity fields."""
     if not clinic:
@@ -359,6 +370,13 @@ def _fetch_user_profile_type(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Clinic database is not available to verify portal access.",
         )
+
+    portal = (requested_portal or "").strip().lower() or None
+    preferred_type_id = (
+        int(_PORTAL_PREFERRED_TYPE[portal])
+        if portal in _PORTAL_PREFERRED_TYPE
+        else None
+    )
 
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
@@ -377,32 +395,64 @@ def _fetch_user_profile_type(
                 (int(user_id),),
             )
             row = cursor.fetchone()
+            if row is not None and portal:
+                type_id = None
+                if row.TypeId is not None:
+                    try:
+                        type_id = int(row.TypeId)
+                    except (TypeError, ValueError):
+                        type_id = None
+                if not can_access_portal(type_id, portal):
+                    row = None
 
         if not row:
-            cursor.execute(
-                """
-                SELECT TOP 1
-                    Id, LoginId, Email, FirstName, LastName, TypeId
-                FROM dbo.UserProfiles
-                WHERE (IsDeleted = 0 OR IsDeleted IS NULL)
-                  AND RecordStatusId = 1
-                  AND (
-                        LOWER(LTRIM(RTRIM(LoginId))) = LOWER(?)
-                     OR LOWER(LTRIM(RTRIM(Email))) = LOWER(?)
-                  )
-                ORDER BY
-                    CASE WHEN TypeId IN (?, ?, ?, ?) THEN 0 ELSE 1 END,
-                    Id DESC
-                """,
-                (
-                    login_id.strip(),
-                    (email or login_id).strip(),
-                    int(UserType.SuperAdmin),
-                    int(UserType.EmployerUser),
-                    int(UserType.PatientUser),
-                    int(UserType.InsuranceUser),
-                ),
-            )
+            if preferred_type_id is not None:
+                cursor.execute(
+                    """
+                    SELECT TOP 1
+                        Id, LoginId, Email, FirstName, LastName, TypeId
+                    FROM dbo.UserProfiles
+                    WHERE (IsDeleted = 0 OR IsDeleted IS NULL)
+                      AND RecordStatusId = 1
+                      AND (
+                            LOWER(LTRIM(RTRIM(LoginId))) = LOWER(?)
+                         OR LOWER(LTRIM(RTRIM(Email))) = LOWER(?)
+                      )
+                    ORDER BY
+                        CASE WHEN TypeId = ? THEN 0 ELSE 1 END,
+                        Id DESC
+                    """,
+                    (
+                        login_id.strip(),
+                        (email or login_id).strip(),
+                        preferred_type_id,
+                    ),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT TOP 1
+                        Id, LoginId, Email, FirstName, LastName, TypeId
+                    FROM dbo.UserProfiles
+                    WHERE (IsDeleted = 0 OR IsDeleted IS NULL)
+                      AND RecordStatusId = 1
+                      AND (
+                            LOWER(LTRIM(RTRIM(LoginId))) = LOWER(?)
+                         OR LOWER(LTRIM(RTRIM(Email))) = LOWER(?)
+                      )
+                    ORDER BY
+                        CASE WHEN TypeId IN (?, ?, ?, ?) THEN 0 ELSE 1 END,
+                        Id DESC
+                    """,
+                    (
+                        login_id.strip(),
+                        (email or login_id).strip(),
+                        int(UserType.SuperAdmin),
+                        int(UserType.EmployerUser),
+                        int(UserType.PatientUser),
+                        int(UserType.InsuranceUser),
+                    ),
+                )
             row = cursor.fetchone()
 
     if not row:

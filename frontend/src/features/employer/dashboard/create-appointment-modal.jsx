@@ -1342,6 +1342,8 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                 onChange={(value) => setField("visitTypeId", value)}
                 options={visitTypeOptions}
                 placeholder="Select visit type..."
+                searchPlaceholder="Search visit type..."
+                searchable
                 error={Boolean(errors.visitTypeId)}
               />
               <FieldError message={errors.visitTypeId} />

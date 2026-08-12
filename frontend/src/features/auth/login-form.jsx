@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { ArrowRight, HeartPulse, Info } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, HeartPulse, Info } from "lucide-react";
 import {
   findSecureShare,
   isSecureShareExpired,
@@ -46,6 +46,7 @@ function LoginFormInner({ portal = "employer" }) {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(
     hasActivationKey ? "" : ERROR_ACTIVATION
   );
@@ -327,19 +328,34 @@ function LoginFormInner({ portal = "employer" }) {
                     Forgot password?
                   </Link>
                 </div>
-                <input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    clearError();
-                  }}
-                  autoComplete="current-password"
-                  disabled={isSigningIn}
-                  className={inputClassName}
-                />
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      clearError();
+                    }}
+                    autoComplete="current-password"
+                    disabled={isSigningIn}
+                    className={`${inputClassName} pr-11`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    disabled={isSigningIn}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute top-1/2 right-3 -translate-y-1/2 cursor-pointer rounded p-0.5 text-foreground-500 transition hover:text-foreground-900 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" strokeWidth={2.25} />
+                    ) : (
+                      <Eye className="h-4 w-4" strokeWidth={2.25} />
+                    )}
+                  </button>
+                </div>
               </div>
 
               {error ? (

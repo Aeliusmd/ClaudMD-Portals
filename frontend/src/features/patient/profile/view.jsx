@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Check, Shield, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { PasswordField } from "@/components/ui/password-field";
 import { SkeletonBlock } from "@/components/ui/skeleton";
 import { currentPatient } from "@/data/patient";
 import { usePatientProfile } from "@/hooks/use-patient-profile";
@@ -14,6 +15,8 @@ import { updatePatientProfile } from "@/lib/api/patient";
 import { getAccessToken } from "@/lib/auth-session";
 import { patientPaths } from "@/lib/portal-paths";
 import {
+  EMAIL_MAX,
+  PHONE_MAX,
   emailError,
   phoneError,
   sanitizePhoneInput,
@@ -28,16 +31,65 @@ const profileTabs = [
 ];
 
 const ADDRESS_MAX = 500;
-const NAME_MAX = 101;
+const NAME_MAX = 50;
+const FULL_NAME_MAX = 101;
 
 function emptyProfileForm() {
   return {
-    fullName: "",
+    firstName: "",
+    lastName: "",
     dateOfBirth: "",
     email: "",
     phone: "",
     address: "",
   };
+}
+
+function splitFullName(fullName) {
+  const parts = String(fullName || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return { firstName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function joinFullName(firstName, lastName) {
+  return [firstName, lastName]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function normalizeProfileSnapshot(profile) {
+  return {
+    firstName: (profile.firstName || "").trim(),
+    lastName: (profile.lastName || "").trim(),
+    email: (profile.email || "").trim(),
+    phone: (profile.phone || "").trim(),
+    address: (profile.address || "").trim(),
+  };
+}
+
+function profilesEqual(a, b) {
+  const left = normalizeProfileSnapshot(a);
+  const right = normalizeProfileSnapshot(b);
+  return (
+    left.firstName === right.firstName &&
+    left.lastName === right.lastName &&
+    left.email === right.email &&
+    left.phone === right.phone &&
+    left.address === right.address
+  );
+}
+
+function displayFieldValue(value, editing) {
+  if (editing) return value ?? "";
+  return value || "—";
 }
 
 function ProfileTabBar({ value, onChange }) {
@@ -77,6 +129,7 @@ function Field({
   error,
   autoComplete,
   readOnly = false,
+  maxLength,
 }) {
   return (
     <label className="block space-y-1.5" htmlFor={id}>
@@ -90,6 +143,7 @@ function Field({
         placeholder={placeholder}
         autoComplete={autoComplete}
         readOnly={readOnly}
+        maxLength={maxLength}
         onChange={
           readOnly || !onChange
             ? undefined
@@ -161,12 +215,84 @@ function fieldErrorsFromApi(detail) {
   const errors = detail.errors || detail;
   if (!errors || typeof errors !== "object" || Array.isArray(errors)) return {};
   const mapped = {};
-  if (errors.full_name) mapped.fullName = errors.full_name;
+  if (errors.full_name) {
+    mapped.firstName = errors.full_name;
+    mapped.lastName = errors.full_name;
+  }
+  if (errors.first_name) mapped.firstName = errors.first_name;
+  if (errors.last_name) mapped.lastName = errors.last_name;
   if (errors.date_of_birth) mapped.dateOfBirth = errors.date_of_birth;
   if (errors.email) mapped.email = errors.email;
   if (errors.phone) mapped.phone = errors.phone;
   if (errors.address) mapped.address = errors.address;
   return mapped;
+}
+
+function validateProfileForm(values) {
+  const errors = {};
+  const firstName = (values.firstName || "").trim();
+  const lastName = (values.lastName || "").trim();
+  const fullName = joinFullName(firstName, lastName);
+
+  if (!firstName) errors.firstName = "First name is required.";
+  else if (firstName.length > NAME_MAX) {
+    errors.firstName = `First name must be at most ${NAME_MAX} characters.`;
+  } else {
+    const err = unsafeMarkupError(firstName);
+    if (err) errors.firstName = err;
+  }
+
+  if (lastName.length > NAME_MAX) {
+    errors.lastName = `Last name must be at most ${NAME_MAX} characters.`;
+  } else if (lastName) {
+    const err = unsafeMarkupError(lastName);
+    if (err) errors.lastName = err;
+  }
+
+  if (fullName.length > FULL_NAME_MAX) {
+    errors.lastName = `Full name must be at most ${FULL_NAME_MAX} characters.`;
+  }
+
+  const emailErr = emailError(values.email);
+  if (emailErr) errors.email = emailErr;
+
+  const phoneErr = phoneError(values.phone);
+  if (phoneErr) errors.phone = phoneErr;
+
+  const address = (values.address || "").trim();
+  if (address.length > ADDRESS_MAX) {
+    errors.address = `Address must be at most ${ADDRESS_MAX} characters.`;
+  } else if (address) {
+    const err = unsafeMarkupError(address);
+    if (err) errors.address = err;
+  }
+
+  return errors;
+}
+
+function validatePassword(form) {
+  const errors = {};
+  if (!form.currentPassword) {
+    errors.currentPassword = "Enter your current password.";
+  }
+  if (!form.newPassword) {
+    errors.newPassword = "New password is required.";
+  } else if (form.newPassword.length < 4) {
+    errors.newPassword = "New password must be at least 4 characters.";
+  }
+  if (!form.confirmPassword) {
+    errors.confirmPassword = "Confirm your new password.";
+  } else if (form.newPassword !== form.confirmPassword) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+  if (
+    form.currentPassword &&
+    form.newPassword &&
+    form.currentPassword === form.newPassword
+  ) {
+    errors.newPassword = "New password must be different from the current one.";
+  }
+  return errors;
 }
 
 export function PatientProfileView() {
@@ -182,9 +308,11 @@ export function PatientProfileView() {
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [profile, setProfile] = useState(emptyProfileForm);
+  const [savedProfile, setSavedProfile] = useState(null);
   const [profileErrors, setProfileErrors] = useState({});
   const [notifications, setNotifications] = useState(
     currentPatient.notifications
@@ -196,17 +324,41 @@ export function PatientProfileView() {
   });
   const [passwordErrors, setPasswordErrors] = useState({});
 
+  const profileDirty = useMemo(() => {
+    if (!savedProfile) return false;
+    return !profilesEqual(profile, savedProfile);
+  }, [profile, savedProfile]);
+
+  const passwordDirty = useMemo(() => {
+    return Boolean(
+      passwordForm.currentPassword ||
+        passwordForm.newPassword ||
+        passwordForm.confirmPassword
+    );
+  }, [passwordForm]);
+
   useEffect(() => {
     if (!liveProfile) return;
-    setProfile({
-      fullName: liveProfile.fullName || "",
+    if (isEditing) return;
+    let firstName = liveProfile.firstName || "";
+    let lastName = liveProfile.lastName || "";
+    if (!firstName && !lastName && liveProfile.fullName) {
+      const split = splitFullName(liveProfile.fullName);
+      firstName = split.firstName;
+      lastName = split.lastName;
+    }
+    const next = {
+      firstName,
+      lastName,
       dateOfBirth: liveProfile.dateOfBirth || "",
       email: liveProfile.email || "",
       phone: liveProfile.phone || "",
       address: liveProfile.address || "",
-    });
+    };
+    setProfile(next);
+    setSavedProfile(normalizeProfileSnapshot(next));
     setHydrated(true);
-  }, [liveProfile]);
+  }, [liveProfile, isEditing]);
 
   useEffect(() => {
     if (profileLoadError) {
@@ -229,12 +381,17 @@ export function PatientProfileView() {
 
   function switchTab(next) {
     clearFeedback();
+    if (isEditing) {
+      cancelEditProfile();
+    }
     setTab(next);
   }
 
   function updateProfileField(field, value) {
     clearFeedback();
-    setProfile((prev) => ({ ...prev, [field]: value }));
+    const nextValue =
+      field === "phone" ? sanitizePhoneInput(value) : value;
+    setProfile((prev) => ({ ...prev, [field]: nextValue }));
     setProfileErrors((prev) => {
       if (!prev[field]) return prev;
       const next = { ...prev };
@@ -243,41 +400,35 @@ export function PatientProfileView() {
     });
   }
 
+  function startEditProfile() {
+    clearFeedback();
+    setProfileErrors({});
+    setIsEditing(true);
+  }
+
+  function cancelEditProfile() {
+    clearFeedback();
+    setProfileErrors({});
+    if (savedProfile) {
+      setProfile((prev) => ({
+        ...prev,
+        firstName: savedProfile.firstName,
+        lastName: savedProfile.lastName,
+        email: savedProfile.email,
+        phone: savedProfile.phone,
+        address: savedProfile.address,
+      }));
+    }
+    setIsEditing(false);
+  }
+
   function toggleNotification(field) {
     clearFeedback();
     setNotifications((prev) => ({ ...prev, [field]: !prev[field] }));
   }
 
-  function validateProfileForm(values) {
-    const errors = {};
-    const fullName = values.fullName.trim();
-    if (!fullName) errors.fullName = "Full name is required.";
-    else if (fullName.length > NAME_MAX) {
-      errors.fullName = `Full name must be at most ${NAME_MAX} characters.`;
-    } else {
-      const err = unsafeMarkupError(fullName);
-      if (err) errors.fullName = err;
-    }
-
-    const emailErr = emailError(values.email);
-    if (emailErr) errors.email = emailErr;
-
-    const phoneErr = phoneError(values.phone);
-    if (phoneErr) errors.phone = phoneErr;
-
-    const address = values.address.trim();
-    if (address.length > ADDRESS_MAX) {
-      errors.address = `Address must be at most ${ADDRESS_MAX} characters.`;
-    } else if (address) {
-      const err = unsafeMarkupError(address);
-      if (err) errors.address = err;
-    }
-
-    return errors;
-  }
-
   async function handleSaveProfile() {
-    if (profileSaving) return;
+    if (profileSaving || !profileDirty) return;
     clearFeedback();
     const errors = validateProfileForm(profile);
     setProfileErrors(errors);
@@ -295,21 +446,33 @@ export function PatientProfileView() {
     setProfileSaving(true);
     try {
       const updated = await updatePatientProfile(token, {
-        fullName: profile.fullName.trim(),
+        fullName: joinFullName(profile.firstName, profile.lastName),
+        // DOB stays read-only; send current value so backend does not clear it.
         dateOfBirth: profile.dateOfBirth.trim() || null,
         email: profile.email.trim(),
         phone: profile.phone.trim() || null,
         address: profile.address.trim() || null,
       });
       setCachedProfile?.(updated);
-      setProfile({
-        fullName: updated.fullName || "",
+      let firstName = updated.firstName || "";
+      let lastName = updated.lastName || "";
+      if (!firstName && !lastName && updated.fullName) {
+        const split = splitFullName(updated.fullName);
+        firstName = split.firstName;
+        lastName = split.lastName;
+      }
+      const next = {
+        firstName,
+        lastName,
         dateOfBirth: updated.dateOfBirth || "",
         email: updated.email || "",
         phone: updated.phone || "",
         address: updated.address || "",
-      });
+      };
+      setProfile(next);
+      setSavedProfile(normalizeProfileSnapshot(next));
       setProfileErrors({});
+      setIsEditing(false);
       setMessage("Profile changes saved successfully.");
     } catch (err) {
       if (err?.status === 401) {
@@ -327,18 +490,9 @@ export function PatientProfileView() {
   }
 
   async function handleUpdatePassword() {
-    if (passwordSaving) return;
+    if (passwordSaving || !passwordDirty) return;
     clearFeedback();
-    const errors = {};
-    if (!passwordForm.currentPassword) {
-      errors.currentPassword = "Enter your current password.";
-    }
-    if (passwordForm.newPassword.length < 8) {
-      errors.newPassword = "New password must be at least 8 characters.";
-    }
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      errors.confirmPassword = "Passwords do not match.";
-    }
+    const errors = validatePassword(passwordForm);
     setPasswordErrors(errors);
     if (Object.keys(errors).length > 0) {
       setErrorMessage("Please fix the password fields before updating.");
@@ -378,6 +532,7 @@ export function PatientProfileView() {
   }
 
   const showProfileSkeleton = profileLoading && !hydrated;
+  const loginDisplay = liveProfile?.loginId || profile.email || "—";
 
   return (
     <div>
@@ -389,9 +544,36 @@ export function PatientProfileView() {
 
       {tab === "profile" ? (
         <Card className="p-5 sm:p-6">
-          <h2 className="mb-5 text-lg font-semibold text-ink">
-            Personal Information
-          </h2>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-ink">
+              Personal Information
+            </h2>
+            {!showProfileSkeleton ? (
+              isEditing ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={cancelEditProfile}
+                    disabled={profileSaving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    disabled={profileSaving || !profileDirty}
+                  >
+                    {profileSaving ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+              ) : (
+                <Button type="button" onClick={startEditProfile}>
+                  Edit
+                </Button>
+              )
+            ) : null}
+          </div>
           {showProfileSkeleton ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <SkeletonBlock className="h-16" />
@@ -401,45 +583,69 @@ export function PatientProfileView() {
               <SkeletonBlock className="h-16 sm:col-span-2" />
             </div>
           ) : (
-            <>
-              <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                id="firstName"
+                label="First Name"
+                value={displayFieldValue(profile.firstName, isEditing)}
+                readOnly={!isEditing}
+                maxLength={NAME_MAX}
+                error={profileErrors.firstName}
+                autoComplete="given-name"
+                onChange={(value) => updateProfileField("firstName", value)}
+              />
+              <Field
+                id="lastName"
+                label="Last Name"
+                value={displayFieldValue(profile.lastName, isEditing)}
+                readOnly={!isEditing}
+                maxLength={NAME_MAX}
+                error={profileErrors.lastName}
+                autoComplete="family-name"
+                onChange={(value) => updateProfileField("lastName", value)}
+              />
+              <Field
+                id="dateOfBirth"
+                label="Date of Birth"
+                type="date"
+                value={profile.dateOfBirth || ""}
+                readOnly
+              />
+              <Field
+                id="email"
+                label="Email"
+                type="email"
+                value={displayFieldValue(profile.email, isEditing)}
+                readOnly={!isEditing}
+                maxLength={EMAIL_MAX}
+                error={profileErrors.email}
+                autoComplete="email"
+                onChange={(value) => updateProfileField("email", value)}
+              />
+              <Field
+                id="phone"
+                label="Phone"
+                type="tel"
+                value={displayFieldValue(profile.phone, isEditing)}
+                readOnly={!isEditing}
+                maxLength={PHONE_MAX}
+                error={profileErrors.phone}
+                autoComplete="tel"
+                onChange={(value) => updateProfileField("phone", value)}
+              />
+              <div className="sm:col-span-2">
                 <Field
-                  id="fullName"
-                  label="Full Name"
-                  value={profile.fullName || "—"}
-                  readOnly
+                  id="address"
+                  label="Address"
+                  value={displayFieldValue(profile.address, isEditing)}
+                  readOnly={!isEditing}
+                  maxLength={ADDRESS_MAX}
+                  error={profileErrors.address}
+                  autoComplete="street-address"
+                  onChange={(value) => updateProfileField("address", value)}
                 />
-                <Field
-                  id="dateOfBirth"
-                  label="Date of Birth"
-                  type="date"
-                  value={profile.dateOfBirth || ""}
-                  readOnly
-                />
-                <Field
-                  id="email"
-                  label="Email"
-                  type="email"
-                  value={profile.email || "—"}
-                  readOnly
-                />
-                <Field
-                  id="phone"
-                  label="Phone"
-                  type="tel"
-                  value={profile.phone || "—"}
-                  readOnly
-                />
-                <div className="sm:col-span-2">
-                  <Field
-                    id="address"
-                    label="Address"
-                    value={profile.address || "—"}
-                    readOnly
-                  />
-                </div>
               </div>
-            </>
+            </div>
           )}
         </Card>
       ) : null}
@@ -448,16 +654,91 @@ export function PatientProfileView() {
         <Card className="p-5 sm:p-6">
           <h2 className="mb-3 text-lg font-semibold text-ink">Security</h2>
           <p className="text-sm text-muted">
-            Profile and password details are view-only in this portal. Contact
-            your administrator if changes are required.
+            Update your password below. Your login cannot be changed here.
           </p>
-          <div className="mt-5 max-w-xl">
+          <div className="mt-5 max-w-xl space-y-4">
             <Field
               id="security-email"
               label="Email / Login"
-              value={profile.email || "—"}
+              value={loginDisplay}
               readOnly
             />
+            <div className="border-t border-border/60 pt-5">
+              <h3 className="mb-4 text-base font-semibold text-ink">
+                Change Password
+              </h3>
+              <div className="space-y-4">
+                <PasswordField
+                  id="patient-current-password"
+                  label="Current Password"
+                  value={passwordForm.currentPassword}
+                  autoComplete="off"
+                  error={passwordErrors.currentPassword}
+                  onChange={(value) => {
+                    clearFeedback();
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      currentPassword: value,
+                    }));
+                    setPasswordErrors((prev) => {
+                      if (!prev.currentPassword) return prev;
+                      const next = { ...prev };
+                      delete next.currentPassword;
+                      return next;
+                    });
+                  }}
+                />
+                <PasswordField
+                  id="patient-new-password"
+                  label="New Password"
+                  value={passwordForm.newPassword}
+                  autoComplete="new-password"
+                  error={passwordErrors.newPassword}
+                  onChange={(value) => {
+                    clearFeedback();
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      newPassword: value,
+                    }));
+                    setPasswordErrors((prev) => {
+                      if (!prev.newPassword) return prev;
+                      const next = { ...prev };
+                      delete next.newPassword;
+                      return next;
+                    });
+                  }}
+                />
+                <PasswordField
+                  id="patient-confirm-password"
+                  label="Confirm New Password"
+                  value={passwordForm.confirmPassword}
+                  autoComplete="new-password"
+                  error={passwordErrors.confirmPassword}
+                  onChange={(value) => {
+                    clearFeedback();
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      confirmPassword: value,
+                    }));
+                    setPasswordErrors((prev) => {
+                      if (!prev.confirmPassword) return prev;
+                      const next = { ...prev };
+                      delete next.confirmPassword;
+                      return next;
+                    });
+                  }}
+                />
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="button"
+                    onClick={handleUpdatePassword}
+                    disabled={passwordSaving || !passwordDirty}
+                  >
+                    {passwordSaving ? "Updating…" : "Update Password"}
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </Card>
       ) : null}

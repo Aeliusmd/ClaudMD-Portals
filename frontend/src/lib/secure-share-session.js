@@ -1,7 +1,9 @@
 /**
- * Client-side session for Epic 4 secure email links.
- * Stored in sessionStorage so normal browser tabs / logins stay independent,
- * and closing the tab ends the scoped session.
+ * Client-side session for secure shared-document links.
+ * Supports:
+ * - live `sharedid` UUID from ClaudMD email links
+ * - legacy Epic 4 mock `share` tokens
+ * Stored in sessionStorage so normal tabs stay independent.
  */
 
 import { getLoginHref } from "@/lib/auth-routes";
@@ -14,13 +16,19 @@ function canUseStorage() {
 }
 
 export function saveSecureShareSession(share) {
-  if (!canUseStorage() || !share?.token) return;
+  if (!canUseStorage() || !share) return;
+  const sharedId = (share.sharedId || share.sharedid || "").trim();
+  const token = (share.token || "").trim();
+  if (!sharedId && !token) return;
+
   const payload = {
-    token: share.token,
+    mode: sharedId ? "live" : "mock",
+    sharedId: sharedId || undefined,
+    token: token || undefined,
     sharedDocumentId: share.sharedDocumentId,
     employeeId: share.employeeId,
     recipientEmail: share.recipientEmail,
-    recipientRole: share.recipientRole,
+    recipientRole: share.recipientRole || "employer",
     patientName: share.patientName,
     reportType: share.reportType,
     visitLabel: share.visitLabel,
@@ -36,8 +44,15 @@ export function getSecureShareSession() {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed?.token) return null;
-    return parsed;
+    const sharedId = (parsed?.sharedId || "").trim();
+    const token = (parsed?.token || "").trim();
+    if (!sharedId && !token) return null;
+    return {
+      ...parsed,
+      mode: sharedId ? "live" : "mock",
+      sharedId: sharedId || undefined,
+      token: token || undefined,
+    };
   } catch {
     return null;
   }
@@ -48,8 +63,22 @@ export function clearSecureShareSession() {
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
-export function getSecureShareLoginHref(token) {
-  return getLoginHref({ share: token });
+export function hasLiveSharedIdSession(session = getSecureShareSession()) {
+  return Boolean(session?.sharedId);
+}
+
+export function getSecureShareLoginHref(tokenOrOptions, maybeOptions) {
+  if (typeof tokenOrOptions === "string") {
+    return getLoginHref({
+      share: tokenOrOptions,
+      ...(maybeOptions || {}),
+    });
+  }
+  return getLoginHref({
+    share: tokenOrOptions?.token,
+    sharedId: tokenOrOptions?.sharedId,
+    activationKey: tokenOrOptions?.activationKey,
+  });
 }
 
 export function getSecureShareScopedHref() {
@@ -58,7 +87,8 @@ export function getSecureShareScopedHref() {
 
 /**
  * Resolve post-login destination.
- * Only employer accounts with a matching active share enter the scoped view.
+ * Live sharedid links always enter the scoped view after employer login.
+ * Mock share tokens still require the demo recipient email.
  */
 export function resolvePostLoginDestination({
   email,
@@ -66,11 +96,16 @@ export function resolvePostLoginDestination({
   shareSession,
   isShareExpired,
 }) {
-  const normalized = (email || "").trim().toLowerCase();
+  if (!shareSession || isShareExpired) {
+    return defaultDestination;
+  }
 
+  if (shareSession.sharedId) {
+    return getSecureShareScopedHref();
+  }
+
+  const normalized = (email || "").trim().toLowerCase();
   if (
-    shareSession &&
-    !isShareExpired &&
     shareSession.recipientRole === "employer" &&
     shareSession.recipientEmail === normalized &&
     normalized === "employer@demo.com"

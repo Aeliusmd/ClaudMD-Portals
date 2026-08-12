@@ -27,6 +27,12 @@ import {
   DATE_RANGE_ERROR,
   isInvalidDateRange,
 } from "@/lib/date-range";
+import {
+  buildDashboardStateParams,
+  hrefWithParams,
+  parseDashboardStateParams,
+  withReturnParams,
+} from "@/lib/dashboard-return-state";
 import { searchQueryError } from "@/lib/text-validation";
 import { cn } from "@/lib/utils";
 
@@ -149,18 +155,18 @@ function Cell({ column, row }) {
 function InsuranceDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tabParam = searchParams.get("tab");
+  const initial = parseDashboardStateParams(searchParams);
 
   const [activeTab, setActiveTab] = useState(
-    tabDefs.some((item) => item.key === tabParam) ? tabParam : tabDefs[0].key
+    tabDefs.some((item) => item.key === initial.tab) ? initial.tab : tabDefs[0].key
   );
-  const [draftQuery, setDraftQuery] = useState("");
-  const [draftFromDate, setDraftFromDate] = useState("");
-  const [draftToDate, setDraftToDate] = useState("");
-  const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedFromDate, setAppliedFromDate] = useState(null);
-  const [appliedToDate, setAppliedToDate] = useState(null);
-  const [page, setPage] = useState(1);
+  const [draftQuery, setDraftQuery] = useState(initial.search || "");
+  const [draftFromDate, setDraftFromDate] = useState(initial.fromDate || "");
+  const [draftToDate, setDraftToDate] = useState(initial.toDate || "");
+  const [appliedQuery, setAppliedQuery] = useState(initial.search || "");
+  const [appliedFromDate, setAppliedFromDate] = useState(initial.fromDate);
+  const [appliedToDate, setAppliedToDate] = useState(initial.toDate);
+  const [page, setPage] = useState(initial.page || 1);
   const [summary, setSummary] = useState(null);
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [summaryError, setSummaryError] = useState(null);
@@ -354,6 +360,15 @@ function InsuranceDashboardContent() {
     setPage(1);
   }
 
+  function clearDateRange() {
+    setDraftFromDate("");
+    setDraftToDate("");
+    setAppliedFromDate(null);
+    setAppliedToDate(null);
+    setFilterError(null);
+    setPage(1);
+  }
+
   function handleSearchChange(event) {
     const next = event.target.value;
     setDraftQuery(next);
@@ -384,6 +399,33 @@ function InsuranceDashboardContent() {
     setActiveTab(key);
     setPage(1);
   }
+
+  useEffect(() => {
+    const next = buildDashboardStateParams({
+      tab: activeTab,
+      search: appliedQuery,
+      fromDate: effectiveAppliedFrom,
+      toDate: effectiveAppliedTo,
+      page,
+    });
+    const nextQs = next.toString();
+    const currentQs = buildDashboardStateParams(
+      parseDashboardStateParams(searchParams)
+    ).toString();
+    if (nextQs !== currentQs) {
+      router.replace(hrefWithParams(insurancePaths.dashboard, next), {
+        scroll: false,
+      });
+    }
+  }, [
+    activeTab,
+    appliedQuery,
+    effectiveAppliedFrom,
+    effectiveAppliedTo,
+    page,
+    router,
+    searchParams,
+  ]);
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -494,6 +536,15 @@ function InsuranceDashboardContent() {
             <Filter className="h-3.5 w-3.5" strokeWidth={2.25} />
             Filter
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={clearDateRange}
+            className="h-[2.625rem] shrink-0 rounded-xl px-3.5 py-0 text-sm"
+            aria-label="Clear date range"
+          >
+            Clear
+          </Button>
         </div>
       </div>
 
@@ -546,12 +597,23 @@ function InsuranceDashboardContent() {
                       onClick={
                         tab.rowsAreLinked
                           ? () => {
-                              const coverageQs = tab.coverage
-                                ? `?coverage=${encodeURIComponent(tab.coverage)}`
-                                : "";
-                              const patientId = row.patientId ?? row.id;
+                              const params = new URLSearchParams();
+                              if (tab.coverage) {
+                                params.set("coverage", tab.coverage);
+                              }
+                              const returnParams = buildDashboardStateParams({
+                                tab: activeTab,
+                                search: appliedQuery,
+                                fromDate: effectiveAppliedFrom,
+                                toDate: effectiveAppliedTo,
+                                page,
+                              });
+                              withReturnParams(params, returnParams);
+                              const qs = params.toString();
                               router.push(
-                                `${insurancePaths.patients}/${encodeURIComponent(patientId)}${coverageQs}`
+                                `${insurancePaths.patients}/${encodeURIComponent(row.id)}${
+                                  qs ? `?${qs}` : ""
+                                }`
                               );
                             }
                           : undefined

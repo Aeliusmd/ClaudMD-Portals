@@ -2,19 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, UserRound } from "lucide-react";
+import { UserRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
+import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { employees, sharedDocuments } from "@/data/employer";
 import {
   findSecureShare,
   isSecureShareExpired,
 } from "@/data/secure-shares";
+import { fetchSharedDocumentBySharedId } from "@/lib/api/employer";
+import { getAccessToken } from "@/lib/auth-session";
+import { LOGIN_PATH } from "@/lib/auth-routes";
 import {
   clearSecureShareSession,
   getSecureShareSession,
 } from "@/lib/secure-share-session";
-import { LOGIN_PATH } from "@/lib/auth-routes";
 
 function formatDob(value) {
   if (!value) return "—";
@@ -23,6 +26,20 @@ function formatDob(value) {
     return asDate.toLocaleDateString("en-US");
   }
   return value;
+}
+
+function shortDocLabel(doc) {
+  if (doc.previewBadge) return doc.previewBadge;
+  if (doc.previewLabel === "PT report") return "PR";
+  if (doc.previewLabel) return doc.previewLabel;
+  if (
+    doc.documentType?.includes("Doctor First") ||
+    doc.documentType?.includes("Doctor's First")
+  ) {
+    return "DFR";
+  }
+  if (doc.documentType?.includes("Physical")) return "PR";
+  return "DOC";
 }
 
 function DemoField({ label, value }) {
@@ -37,56 +54,113 @@ function DemoField({ label, value }) {
 }
 
 /**
- * US-4.3 — Scoped Shared Documents view after secure-link login.
- * Shows only the single shared report + employee metadata from the email link.
- * Does not alter the full Shared Documents inbox used on normal login.
+ * Scoped Shared Documents view after secure-link login.
+ * Live path: SharedDocuments.SharedId → DocumentUploads.FilePath via API.
+ * Mock path: Epic 4 demo tokens (unchanged).
  */
 export function EmployerScopedSharedDocumentsView() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState(null);
   const [session, setSession] = useState(null);
+  const [livePayload, setLivePayload] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
 
   useEffect(() => {
     const active = getSecureShareSession();
-    if (!active?.token) {
+    if (!active?.sharedId && !active?.token) {
       router.replace(LOGIN_PATH);
-      return;
+      return undefined;
     }
 
-    const share = findSecureShare(active.token);
-    if (!share || isSecureShareExpired(share)) {
-      clearSecureShareSession();
-      router.replace(LOGIN_PATH);
-      return;
+    let cancelled = false;
+
+    async function load() {
+      if (active.sharedId) {
+        const token = getAccessToken();
+        if (!token) {
+          clearSecureShareSession();
+          router.replace(LOGIN_PATH);
+          return;
+        }
+        try {
+          const detail = await fetchSharedDocumentBySharedId(
+            token,
+            active.sharedId
+          );
+          if (cancelled) return;
+          setLivePayload(detail);
+          setSession(active);
+          setError(null);
+          setReady(true);
+        } catch (err) {
+          if (cancelled) return;
+          setError(err?.message || "Unable to load shared document.");
+          setReady(true);
+        }
+        return;
+      }
+
+      const share = findSecureShare(active.token);
+      if (!share || isSecureShareExpired(share)) {
+        clearSecureShareSession();
+        router.replace(LOGIN_PATH);
+        return;
+      }
+
+      if (cancelled) return;
+      setLivePayload(null);
+      setSession(share);
+      setError(null);
+      setReady(true);
     }
 
-    setSession(share);
-    setReady(true);
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  const employee = useMemo(
-    () => employees.find((row) => row.id === session?.employeeId) || null,
-    [session]
-  );
+  const employee = useMemo(() => {
+    if (livePayload?.employee) {
+      return {
+        name: livePayload.employee.name,
+        patientId: livePayload.employee.patientId,
+        accountNo: livePayload.employee.accountNo,
+        phone: livePayload.employee.phone,
+        dateOfBirth: livePayload.employee.dateOfBirth,
+        gender: livePayload.employee.gender,
+        address: livePayload.employee.address,
+      };
+    }
+    return employees.find((row) => row.id === session?.employeeId) || null;
+  }, [livePayload, session]);
 
-  const document = useMemo(
-    () =>
+  const document = useMemo(() => {
+    if (livePayload?.document) return livePayload.document;
+    return (
       sharedDocuments.find((doc) => doc.id === session?.sharedDocumentId) ||
-      null,
-    [session]
-  );
+      null
+    );
+  }, [livePayload, session]);
 
   const visitRow = useMemo(() => {
+    if (livePayload) {
+      return {
+        id: "scoped-visit",
+        date: livePayload.visitDate || "—",
+        label: livePayload.visitLabel || "Visit",
+      };
+    }
     if (!session) return null;
     return {
       id: "scoped-visit",
       date: session.visitDate,
       label: session.visitLabel || "Visit",
     };
-  }, [session]);
+  }, [livePayload, session]);
 
-  if (!ready || !session || !employee || !document || !visitRow) {
+  if (!ready) {
     return (
       <div className="flex min-h-48 items-center justify-center text-sm text-muted">
         Loading shared report…
@@ -94,10 +168,24 @@ export function EmployerScopedSharedDocumentsView() {
     );
   }
 
-  const previewLabel = document.previewLabel || "PT report";
-  const shortLabel =
-    document.previewBadge ||
-    (document.documentType?.includes("Physical") ? "PR" : "DOC");
+  if (error) {
+    return (
+      <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+        {error}
+      </div>
+    );
+  }
+
+  if (!session || !employee || !document || !visitRow) {
+    return (
+      <div className="flex min-h-48 items-center justify-center text-sm text-muted">
+        Loading shared report…
+      </div>
+    );
+  }
+
+  const badge = shortDocLabel(document);
+  const caption = `${visitRow.date || ""} ${badge}`.trim();
 
   return (
     <div className="space-y-5">
@@ -113,13 +201,13 @@ export function EmployerScopedSharedDocumentsView() {
           <div className="min-w-0">
             <p className="text-lg font-semibold text-ink">{employee.name}</p>
             <p className="mt-0.5 text-sm tabular-nums text-muted">
-              {employee.patientId} · {employee.accountNo}
+              {employee.patientId || "—"} · {employee.accountNo || "—"}
             </p>
           </div>
         </div>
       </Card>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <div className="min-w-0 space-y-5">
           <Card className="p-5">
             <h2 className="mb-4 text-[11px] font-semibold tracking-[0.1em] text-muted uppercase">
@@ -161,27 +249,33 @@ export function EmployerScopedSharedDocumentsView() {
           </Card>
         </div>
 
-        <div className="h-fit w-fit max-w-full justify-self-start rounded-2xl bg-foreground-900 p-4 shadow-sm sm:p-5">
-          <div className="w-[8.75rem] sm:w-[9.5rem]">
-            <button
-              type="button"
-              onClick={() => setPreviewDocument(document)}
-              className="flex aspect-[3/4] w-full cursor-pointer flex-col items-center justify-center rounded-xl bg-white shadow-sm transition hover:ring-2 hover:ring-primary-400/50"
-            >
-              <div className="flex h-14 w-12 flex-col items-center justify-center rounded-md bg-background-100 text-foreground-700">
-                <FileText className="h-5 w-5" />
-                <span className="mt-1 text-[10px] font-bold tracking-wide">
-                  {shortLabel}
-                </span>
-              </div>
-            </button>
-            <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
-              {visitRow.date} {previewLabel}
-            </p>
-            <p className="mt-3 text-center text-[11px] leading-relaxed text-white/55">
-              {document.documentType} · {document.provider}
-            </p>
-          </div>
+        <div className="min-h-[20rem] w-full min-w-0 self-stretch rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[24rem] sm:p-5 xl:min-h-full">
+          {document.url ? (
+            <div className="w-full max-w-md">
+              <PdfThumbnail
+                url={document.url}
+                badge={badge}
+                title={document.title || document.documentType || "Document"}
+                onOpen={() =>
+                  setPreviewDocument({
+                    ...document,
+                    previewBadge: badge,
+                  })
+                }
+              />
+              <p className="mt-2.5 text-center text-xs font-medium text-white sm:text-sm">
+                {caption}
+              </p>
+              <p className="mt-2 text-center text-[11px] leading-relaxed text-white/55">
+                {document.documentType}
+                {document.provider ? ` · ${document.provider}` : ""}
+              </p>
+            </div>
+          ) : (
+            <div className="flex h-full min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">
+              Document preview is not available.
+            </div>
+          )}
         </div>
       </div>
 

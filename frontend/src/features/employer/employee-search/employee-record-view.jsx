@@ -5,6 +5,7 @@ import { UserRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
+import { DetailField } from "@/components/ui/detail-field";
 import { SkeletonBlock } from "@/components/ui/skeleton";
 import { fetchEmployeeVisits } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
@@ -349,24 +350,20 @@ export function EmployeeRecordView({
             </h2>
             <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
               <div className="space-y-2.5">
-                <p className="font-bold tabular-nums text-foreground-900">
-                  {profile.accountNo || "—"}
-                </p>
-                <p className="font-bold text-foreground-900">{profile.name}</p>
-                <p className="font-normal text-foreground-900">
-                  {profile.address || "Address not on file"}
-                </p>
-                <p className="font-normal tabular-nums text-foreground-900">
-                  {profile.phone || "—"}
-                </p>
+                <DetailField label="Account #" value={profile.accountNo || "—"} />
+                <DetailField label="Full Name" value={profile.name || "—"} />
+                <DetailField
+                  label="Address"
+                  value={profile.address || "Address not on file"}
+                />
+                <DetailField label="Phone" value={profile.phone || "—"} />
               </div>
               <div className="space-y-2.5">
-                <p className="font-normal tabular-nums text-foreground-900">
-                  {formatDob(profile.dateOfBirth)}
-                </p>
-                <p className="font-normal text-foreground-900">
-                  {profile.gender || "—"}
-                </p>
+                <DetailField
+                  label="DOB"
+                  value={formatDob(profile.dateOfBirth) || "—"}
+                />
+                <DetailField label="Gender" value={profile.gender || "—"} />
               </div>
             </div>
           </Card>

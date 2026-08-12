@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { InsurancePatientDetailView } from "@/features/insurance/patient-detail/view";
 import { fetchInsurancePatientDetail } from "@/lib/api/insurance";
 import { getAccessToken } from "@/lib/auth-session";
+import { dashboardHrefFromReturn } from "@/lib/dashboard-return-state";
 import { insurancePaths } from "@/lib/portal-paths";
 
 const backHrefByCoverage = {
@@ -90,9 +91,7 @@ export function InsurancePatientDetailLoader({ patientId }) {
           type="button"
           onClick={() =>
             router.push(
-              coverage === "private"
-                ? backHrefByCoverage["Private Insurance"]
-                : insurancePaths.dashboard
+              dashboardHrefFromReturn(insurancePaths.dashboard, searchParams)
             )
           }
           className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-cream"
@@ -106,11 +105,18 @@ export function InsurancePatientDetailLoader({ patientId }) {
     );
   }
 
+  const restoredBack = dashboardHrefFromReturn(
+    insurancePaths.dashboard,
+    searchParams
+  );
+  const fallbackBack =
+    backHrefByCoverage[patient.coverage] || insurancePaths.dashboard;
+
   return (
     <InsurancePatientDetailView
       patient={patient}
       backHref={
-        backHrefByCoverage[patient.coverage] || insurancePaths.dashboard
+        restoredBack !== insurancePaths.dashboard ? restoredBack : fallbackBack
       }
     />
   );

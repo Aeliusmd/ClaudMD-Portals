@@ -53,6 +53,7 @@ export function getLoginHref({
   portal = "employer",
   activationKey,
   share,
+  sharedId,
 } = {}) {
   const base =
     portal === "patient"
@@ -63,6 +64,7 @@ export function getLoginHref({
   const params = new URLSearchParams();
   if (activationKey) params.set("activationkey", activationKey);
   if (share) params.set("share", share);
+  if (sharedId) params.set("sharedid", sharedId);
   const query = params.toString();
   return query ? `${base}?${query}` : base;
 }

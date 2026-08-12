@@ -32,6 +32,11 @@ function LoginFormInner({ portal = "employer" }) {
   // URL path is source of truth: /employerportal | /patientportal | /insuranceportal
   const portalFromUrl = resolvePortalFromPathname(pathname) || portal;
   const shareToken = searchParams.get("share") || "";
+  const sharedId = (
+    searchParams.get("sharedid") ||
+    searchParams.get("sharedId") ||
+    ""
+  ).trim();
   const activationKey = (
     searchParams.get("activationkey") ||
     searchParams.get("activationKey") ||
@@ -55,7 +60,23 @@ function LoginFormInner({ portal = "employer" }) {
   }, [hasActivationKey]);
 
   useEffect(() => {
+    // Prefer live SharedDocuments.SharedId links from ClaudMD emails.
+    if (sharedId) {
+      saveSecureShareSession({
+        sharedId,
+        recipientRole: "employer",
+      });
+      setShareBanner({
+        tone: "info",
+        message:
+          "Secure shared report ready. Sign in to view the document.",
+      });
+      return;
+    }
+
     if (!shareToken) {
+      // Normal activation-key login must not keep a prior shared-doc scoped session.
+      clearSecureShareSession();
       setShareBanner(null);
       return;
     }
@@ -86,7 +107,7 @@ function LoginFormInner({ portal = "employer" }) {
       tone: "info",
       message: `Secure report ready for ${share.patientName} — ${share.reportType}. Sign in to continue.`,
     });
-  }, [shareToken]);
+  }, [shareToken, sharedId]);
 
   function clearError() {
     if (!error) return;
@@ -146,25 +167,38 @@ function LoginFormInner({ portal = "employer" }) {
       });
 
       const defaultDestination = resolvePortalDestination(resolvedPortal);
+      // Only honor sharedid from the current login URL (not a leftover session).
+      const liveSharedId = (sharedId || "").trim();
       const shareSession = getSecureShareSession();
-      const share =
-        shareSession && findSecureShare(shareSession.token)
+      const mockShare =
+        !liveSharedId && shareSession?.token
           ? findSecureShare(shareSession.token)
           : null;
-      const shareValid = Boolean(share && !isSecureShareExpired(share));
+      const shareValid = Boolean(
+        liveSharedId || (mockShare && !isSecureShareExpired(mockShare))
+      );
 
       const destination = resolvePostLoginDestination({
         email: (result.user?.email || normalizedEmail).toLowerCase(),
         defaultDestination,
-        shareSession: shareValid ? shareSession : null,
+        shareSession: shareValid
+          ? liveSharedId
+            ? { sharedId: liveSharedId, recipientRole: "employer" }
+            : shareSession
+          : null,
         isShareExpired: !shareValid,
       });
 
       // Normal login must not keep scoped session (US-4.3).
       if (destination === defaultDestination) {
         clearSecureShareSession();
-      } else if (share) {
-        saveSecureShareSession(share);
+      } else if (liveSharedId) {
+        saveSecureShareSession({
+          sharedId: liveSharedId,
+          recipientRole: "employer",
+        });
+      } else if (mockShare) {
+        saveSecureShareSession(mockShare);
       }
 
       router.push(destination);

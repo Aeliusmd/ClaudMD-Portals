@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState, useSyncExternalStore, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Filter, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,12 @@ import {
 } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { LOGIN_PATH } from "@/lib/auth-routes";
+import {
+  buildDashboardStateParams,
+  hrefWithParams,
+  parseDashboardStateParams,
+  withReturnParams,
+} from "@/lib/dashboard-return-state";
 import { employerPaths } from "@/lib/portal-paths";
 import {
   applyNotificationReadState,
@@ -143,7 +149,26 @@ const kpiItems = [
 ];
 
 export function EmployerDashboardView() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-4 sm:space-y-5">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+            Last 30 Days
+          </h1>
+          <KpiSkeletonStrip count={5} />
+        </div>
+      }
+    >
+      <EmployerDashboardContent />
+    </Suspense>
+  );
+}
+
+function EmployerDashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initial = parseDashboardStateParams(searchParams);
 
   // Client-only defaults (server snapshot is empty) avoid timezone hydration mismatches.
   const defaultTo = useSyncExternalStore(emptySubscribe, todayIso, () => "");
@@ -154,14 +179,24 @@ export function EmployerDashboardView() {
   );
   const rangeReady = Boolean(defaultFrom && defaultTo);
 
-  const [activeFilter, setActiveFilter] = useState(null);
+  const validFilters = new Set([
+    "injury",
+    "physicals",
+    "drugScreens",
+    "appointments",
+    "unreadReports",
+  ]);
+  const initialFilter =
+    initial.filter && validFilters.has(initial.filter) ? initial.filter : null;
 
-  const [draftQuery, setDraftQuery] = useState("");
-  const [draftFromDate, setDraftFromDate] = useState(null);
-  const [draftToDate, setDraftToDate] = useState(null);
-  const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedFromDate, setAppliedFromDate] = useState(null);
-  const [appliedToDate, setAppliedToDate] = useState(null);
+  const [activeFilter, setActiveFilter] = useState(initialFilter);
+
+  const [draftQuery, setDraftQuery] = useState(initial.search || "");
+  const [draftFromDate, setDraftFromDate] = useState(initial.fromDate);
+  const [draftToDate, setDraftToDate] = useState(initial.toDate);
+  const [appliedQuery, setAppliedQuery] = useState(initial.search || "");
+  const [appliedFromDate, setAppliedFromDate] = useState(initial.fromDate);
+  const [appliedToDate, setAppliedToDate] = useState(initial.toDate);
 
   const effectiveDraftFrom = draftFromDate ?? defaultFrom;
   const effectiveDraftTo = draftToDate ?? defaultTo;
@@ -375,6 +410,15 @@ export function EmployerDashboardView() {
     setEmployeePage(1);
   }
 
+  function clearDateRange() {
+    setDraftFromDate(null);
+    setDraftToDate(null);
+    setAppliedFromDate(null);
+    setAppliedToDate(null);
+    setFilterError(null);
+    setEmployeePage(1);
+  }
+
   function handleSearchChange(event) {
     const next = event.target.value;
     setDraftQuery(next);
@@ -491,8 +535,40 @@ export function EmployerDashboardView() {
     if (effectiveAppliedTo) params.set("toDate", effectiveAppliedTo);
     const category = serverCategory(activeFilter);
     if (category) params.set("category", category);
+    const returnParams = buildDashboardStateParams({
+      filter: activeFilter,
+      search: appliedQuery,
+      fromDate: effectiveAppliedFrom,
+      toDate: effectiveAppliedTo,
+    });
+    withReturnParams(params, returnParams);
     router.push(`${employerPaths.employeeSearch}?${params.toString()}`);
   }
+
+  useEffect(() => {
+    const next = buildDashboardStateParams({
+      filter: activeFilter,
+      search: appliedQuery,
+      fromDate: effectiveAppliedFrom,
+      toDate: effectiveAppliedTo,
+    });
+    const nextQs = next.toString();
+    const currentQs = buildDashboardStateParams(
+      parseDashboardStateParams(searchParams)
+    ).toString();
+    if (nextQs !== currentQs) {
+      router.replace(hrefWithParams(employerPaths.dashboard, next), {
+        scroll: false,
+      });
+    }
+  }, [
+    activeFilter,
+    appliedQuery,
+    effectiveAppliedFrom,
+    effectiveAppliedTo,
+    router,
+    searchParams,
+  ]);
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -631,6 +707,15 @@ export function EmployerDashboardView() {
           >
             <Filter className="h-3.5 w-3.5" strokeWidth={2.25} />
             Filter
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={clearDateRange}
+            className="h-[2.625rem] shrink-0 rounded-xl px-3.5 py-0 text-sm"
+            aria-label="Clear date range"
+          >
+            Clear
           </Button>
         </div>
       </div>

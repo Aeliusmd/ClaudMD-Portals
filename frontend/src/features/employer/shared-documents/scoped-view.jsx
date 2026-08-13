@@ -254,10 +254,11 @@ export function EmployerScopedSharedDocumentsView() {
                   className="text-sm font-semibold text-white sm:text-base"
                 />
               </div>
-              <p className="mt-2 text-center text-[11px] leading-relaxed text-white/55">
-                {document.documentType}
-                {document.provider ? ` · ${document.provider}` : ""}
-              </p>
+              {document.provider ? (
+                <p className="mt-2 text-center text-[11px] leading-relaxed text-white/55">
+                  {document.provider}
+                </p>
+              ) : null}
             </div>
           ) : (
             <div className="flex h-full min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">

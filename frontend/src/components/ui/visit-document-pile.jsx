@@ -13,9 +13,9 @@ const STRIP_HEIGHT_PX = 28;
 /**
  * Version pile — only for docs with 2+ versions.
  *
- * Front = latest (V2) initially. Each version is one continuous white page with
- * its datetime on that page’s bottom. Sheets are offset so every datetime stays
- * visible; click any datetime to bring that version forward.
+ * - Latest (e.g. V2) starts in front
+ * - Click any version datetime → that sheet comes to the front
+ * - Latest datetime is colored so it stays obvious after switching
  */
 export function VisitDocumentPile({
   layers,
@@ -55,25 +55,32 @@ export function VisitDocumentPile({
   const activePos = sortedLayers.findIndex((item) => item.index === activeIndex);
   const frontLayer = layers[activeIndex];
 
-  /** Peek slots under the front page — one per non-front version (bottom → up). */
-  const peekBottomByIndex = useMemo(() => {
-    const map = new Map();
-    let slot = 0;
-    for (const { index } of sortedLayers) {
-      if (index === activeIndex) continue;
-      map.set(index, slot * STRIP_HEIGHT_PX);
-      slot += 1;
-    }
-    return map;
-  }, [sortedLayers, activeIndex]);
+  /**
+   * Front version’s datetime sits directly under the page;
+   * remaining versions peek below — always all visible / clickable.
+   */
+  const stampOrder = useMemo(() => {
+    if (activePos < 0) return sortedLayers;
+    return [
+      sortedLayers[activePos],
+      ...sortedLayers.filter((_, pos) => pos !== activePos),
+    ];
+  }, [sortedLayers, activePos]);
 
   function versionLabel(layer) {
     return layer.label || layer.versionTag || "Previous version";
   }
 
-  function selectVersion(index) {
+  function selectVersion(index, event) {
+    event?.preventDefault();
+    event?.stopPropagation();
     if (index === activeIndex) return;
     setActiveIndex(index);
+  }
+
+  function sheetOffset(pos, isActive) {
+    if (isActive) return 0;
+    return Math.max(1, Math.abs(activePos - pos)) * PILE_OFFSET_PX;
   }
 
   return (
@@ -83,69 +90,94 @@ export function VisitDocumentPile({
         style={{
           paddingTop: pileDepth * PILE_OFFSET_PX,
           paddingRight: pileDepth * PILE_OFFSET_PX,
-          paddingBottom: pileDepth * STRIP_HEIGHT_PX,
+          paddingBottom: versionCount * STRIP_HEIGHT_PX,
         }}
       >
         <div className="relative aspect-[17/22] w-full">
           {sortedLayers.map(({ layer, index }, pos) => {
             const isActive = index === activeIndex;
-            const depth = isActive ? 0 : Math.max(1, Math.abs(activePos - pos));
-            const offset = depth * PILE_OFFSET_PX;
-
-            /*
-              Front page sits above the peek area; its datetime is on its own bottom.
-              Behind pages sit lower so their bottom datetimes peek out — still one
-              continuous sheet each (no extra boxes).
-            */
-            const bottom = isActive
-              ? pileDepth * STRIP_HEIGHT_PX
-              : (peekBottomByIndex.get(index) ?? 0);
+            const offset = sheetOffset(pos, isActive);
 
             return (
               <div
-                key={`sheet-${layer.id}-${layer.versionTag || layer.path || index}`}
+                key={`body-${layer.id}-${layer.versionTag || layer.path || index}`}
                 className={cn(
-                  "absolute flex flex-col overflow-hidden rounded-sm border border-[#bdbdbd] bg-white",
+                  "absolute overflow-hidden rounded-t-sm border border-b-0 border-[#bdbdbd] bg-white",
                   isActive ? "shadow-md" : "shadow-sm"
                 )}
                 style={{
                   top: -offset,
                   right: -offset,
                   left: offset,
-                  bottom,
-                  zIndex: isActive ? 50 : pos + 1,
+                  bottom: 0,
+                  zIndex: isActive ? 40 : pos + 1,
                 }}
               >
-                <div className="relative min-h-0 flex-1 overflow-hidden">
-                  {isActive && layer.url ? (
-                    <PdfThumbnail
-                      url={layer.url}
-                      badge={badge}
-                      title={reportName || "Document"}
-                      onOpen={() =>
-                        onOpenLayer(frontLayer, activeIndex !== latestIndex)
-                      }
-                      className="h-full min-h-full w-full rounded-none shadow-none"
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="absolute inset-0 cursor-pointer bg-white"
-                      onClick={() => selectVersion(index)}
-                      aria-label={`Show ${versionLabel(layer)}`}
-                    />
-                  )}
-                </div>
-
-                {/* Same page — datetime on the bottom edge (not a separate box) */}
-                <button
-                  type="button"
-                  onClick={() => selectVersion(index)}
-                  className="flex h-7 shrink-0 cursor-pointer items-center justify-center bg-white px-2 text-[12px] font-bold tracking-tight text-black tabular-nums sm:text-[13px]"
-                >
-                  {versionLabel(layer)}
-                </button>
+                {isActive && layer.url ? (
+                  <PdfThumbnail
+                    url={layer.url}
+                    badge={badge}
+                    title={reportName || "Document"}
+                    onOpen={() =>
+                      onOpenLayer(frontLayer, activeIndex !== latestIndex)
+                    }
+                    className="h-full min-h-full w-full rounded-none shadow-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="absolute inset-0 cursor-pointer bg-white"
+                    onClick={(event) => selectVersion(index, event)}
+                    aria-label={`Show ${versionLabel(layer)}`}
+                  />
+                )}
               </div>
+            );
+          })}
+
+          {/*
+            Datetimes sit above page bodies so every version date is clickable.
+            Latest version uses a distinct color even when it is not in front.
+          */}
+          {stampOrder.map(({ layer, index }, stampPos) => {
+            const isActive = index === activeIndex;
+            const isLatest = index === latestIndex;
+            const sortPos = sortedLayers.findIndex((item) => item.index === index);
+            const offset = sheetOffset(sortPos, isActive);
+            const isLast = stampPos === stampOrder.length - 1;
+
+            return (
+              <button
+                key={`stamp-${layer.id}-${layer.versionTag || layer.path || index}`}
+                type="button"
+                onClick={(event) => selectVersion(index, event)}
+                aria-label={
+                  isLatest
+                    ? `Latest version ${versionLabel(layer)}`
+                    : `Show version ${versionLabel(layer)}`
+                }
+                className={cn(
+                  "absolute flex cursor-pointer items-center justify-center px-2 text-[12px] font-bold tracking-tight tabular-nums sm:text-[13px]",
+                  isLatest
+                    ? "bg-sky-100 text-sky-800"
+                    : "bg-white text-black"
+                )}
+                style={{
+                  top: `calc(100% + ${stampPos * STRIP_HEIGHT_PX}px)`,
+                  left: offset,
+                  right: -offset,
+                  height: STRIP_HEIGHT_PX,
+                  zIndex: 80 + stampPos,
+                  borderLeft: "1px solid #bdbdbd",
+                  borderRight: "1px solid #bdbdbd",
+                  borderBottom: isLast ? "1px solid #bdbdbd" : "0",
+                  borderTop: stampPos === 0 ? "1px solid #e5e5e5" : "0",
+                  borderBottomLeftRadius: isLast ? "2px" : 0,
+                  borderBottomRightRadius: isLast ? "2px" : 0,
+                }}
+              >
+                {versionLabel(layer)}
+              </button>
             );
           })}
         </div>
@@ -154,7 +186,7 @@ export function VisitDocumentPile({
       <div className="mt-2 text-center">
         <button
           type="button"
-          onClick={() => selectVersion(latestIndex)}
+          onClick={(event) => selectVersion(latestIndex, event)}
           className={cn(
             "mx-auto block max-w-full cursor-pointer text-sm font-semibold sm:text-base",
             activeIndex === latestIndex

@@ -71,18 +71,15 @@ export function EmployeeRecordSkeleton({
 }) {
   return (
     <div className="space-y-5" aria-busy="true" aria-label="Loading employee">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <SkeletonBlock className="h-10 w-56" />
-        {onBack ? (
-          <button
-            type="button"
-            onClick={onBack}
-            className="cursor-pointer text-sm font-semibold text-primary-500 hover:text-primary-600"
-          >
-            {backLabel}
-          </button>
-        ) : null}
-      </div>
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="cursor-pointer text-sm font-semibold text-primary-500 hover:text-primary-600"
+        >
+          {backLabel}
+        </button>
+      ) : null}
 
       <Card className="p-5">
         <div className="flex items-center gap-3.5">
@@ -257,20 +254,15 @@ export function EmployeeRecordView({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="font-heading text-3xl font-bold tracking-tight text-foreground-900 md:text-4xl">
-          {profile.name}
-        </h1>
-        {onBack ? (
-          <button
-            type="button"
-            onClick={onBack}
-            className="cursor-pointer text-sm font-semibold text-primary-500 hover:text-primary-600"
-          >
-            {backLabel}
-          </button>
-        ) : null}
-      </div>
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="cursor-pointer text-sm font-semibold text-primary-500 hover:text-primary-600"
+        >
+          {backLabel}
+        </button>
+      ) : null}
 
       <Card className="p-5">
         <div className="flex items-center gap-3.5">

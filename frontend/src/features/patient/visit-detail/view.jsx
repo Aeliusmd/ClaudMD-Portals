@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Hospital } from "lucide-react";
+import { Hospital } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { DetailField } from "@/components/ui/detail-field";
@@ -41,19 +41,13 @@ export function PatientVisitDetailView({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-4">
-        <button
-          type="button"
-          onClick={() => router.push(backHref)}
-          className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-cream"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground-900 sm:text-3xl md:text-4xl">
-          {visit.provider} — {visit.location}
-        </h1>
-      </div>
+      <button
+        type="button"
+        onClick={() => router.push(backHref)}
+        className="cursor-pointer text-sm font-semibold text-primary-500 hover:text-primary-600"
+      >
+        ← Back to dashboard
+      </button>
 
       <Card className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">

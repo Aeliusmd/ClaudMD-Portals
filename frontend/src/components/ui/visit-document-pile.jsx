@@ -53,11 +53,15 @@ export function VisitDocumentPile({
   const activePos = sortedLayers.findIndex((item) => item.index === activeIndex);
   const frontLayer = layers[activeIndex];
 
-  /** How far below the front page each behind sheet peeks. */
+  /**
+   * How far below the front page each behind sheet peeks.
+   * Newest-behind first (V5 under V6), oldest furthest down (V1).
+   */
   const peekByIndex = useMemo(() => {
     const map = new Map();
     let slot = 1;
-    for (const { index } of sortedLayers) {
+    for (let i = sortedLayers.length - 1; i >= 0; i -= 1) {
+      const index = sortedLayers[i].index;
       if (index === activeIndex) continue;
       map.set(index, slot * PEEK_HEIGHT_PX);
       slot += 1;

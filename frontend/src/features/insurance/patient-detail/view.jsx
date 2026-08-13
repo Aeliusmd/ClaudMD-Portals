@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, UserRound } from "lucide-react";
+import { UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { DetailField } from "@/components/ui/detail-field";
@@ -15,7 +15,11 @@ import { coverageStyles } from "@/lib/category-styles";
 import { formatDateMMDDYY, formatDateOfBirth } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
-export function InsurancePatientDetailView({ patient, backHref }) {
+export function InsurancePatientDetailView({
+  patient,
+  backHref,
+  backLabel = "← Back to dashboard",
+}) {
   const router = useRouter();
   const visits = patient?.visits || [];
   const [selectedVisitId, setSelectedVisitId] = useState(null);
@@ -42,19 +46,13 @@ export function InsurancePatientDetailView({ patient, backHref }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-4">
-        <button
-          type="button"
-          onClick={() => router.push(backHref)}
-          className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-cream"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
-        <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground-900 md:text-4xl">
-          {patient.patient}
-        </h1>
-      </div>
+      <button
+        type="button"
+        onClick={() => router.push(backHref)}
+        className="cursor-pointer text-sm font-semibold text-primary-500 hover:text-primary-600"
+      >
+        {backLabel}
+      </button>
 
       <Card className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">

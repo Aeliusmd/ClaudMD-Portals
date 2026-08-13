@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   LogOut,
+  Receipt,
   Share2,
   Shield,
   User,
@@ -30,6 +31,7 @@ const icons = {
   CalendarDays,
   Share2,
   FileText,
+  Receipt,
   Shield,
   LifeBuoy,
 };

@@ -176,6 +176,8 @@ class PatientVisitOtherRow(BaseModel):
 class PatientVisitPatientInfo(BaseModel):
     patient_id: int
     full_name: str
+    account_no: str | None = None
+    gender: str | None = None
     date_of_birth: str | None = None
     phone: str | None = None
     email: str | None = None

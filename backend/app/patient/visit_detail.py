@@ -242,6 +242,8 @@ def _fetch_visit_header(*, clinic, patient_id: int, check_in_id: int) -> dict | 
             COALESCE(NULLIF(LTRIM(RTRIM(loc.Name)), ''), '—') AS LocationName,
             p.FirstName,
             p.LastName,
+            p.AccountNumber,
+            p.GenderId,
             p.DateOfBirth,
             p.Email AS PatientEmail,
             p.CellPhone,
@@ -463,10 +465,14 @@ def _map_patient_info(row: dict, patient_id: int) -> PatientVisitPatientInfo:
     ]
     address_lines = [part for part in address_parts if part]
     address = ", ".join(address_lines) if address_lines else None
+    account = row.get("AccountNumber")
+    account_no = str(account).strip() if account is not None else None
 
     return PatientVisitPatientInfo(
         patient_id=patient_id,
         full_name=full_name,
+        account_no=account_no or None,
+        gender=_gender_short(row.get("GenderId")),
         date_of_birth=_format_display_date(row.get("DateOfBirth")),
         phone=phone,
         email=(row.get("PatientEmail") or "").strip() or None,
@@ -562,6 +568,20 @@ def _visit_category(category_id, code) -> str | None:
         return "Urgent Care"
     if cid == 4:
         return "Personal Injury"
+    return None
+
+
+def _gender_short(gender_id) -> str | None:
+    if gender_id is None:
+        return None
+    try:
+        gid = int(gender_id)
+    except (TypeError, ValueError):
+        return None
+    if gid == 1:
+        return "M"
+    if gid == 2:
+        return "F"
     return None
 
 

@@ -50,7 +50,7 @@ export async function fetchEmployerProfile(accessToken) {
   }
 
   return {
-    fullName: data.full_name,
+    fullName: [firstName, lastName].filter(Boolean).join(" ") || data.full_name || "",
     firstName,
     lastName,
     title: data.title || "",
@@ -85,10 +85,12 @@ export async function updateEmployerProfile(accessToken, payload) {
     }
   );
 
+  const firstName = data.first_name || "";
+  const lastName = data.last_name || "";
   return {
-    fullName: data.full_name,
-    firstName: data.first_name || "",
-    lastName: data.last_name || "",
+    fullName: [firstName, lastName].filter(Boolean).join(" ") || data.full_name || "",
+    firstName,
+    lastName,
     title: data.title || "",
     role: data.type_label || null,
     jobTitle: data.title || null,

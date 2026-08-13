@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchInsuranceProfile } from "@/lib/api/insurance";
-import { getAccessToken } from "@/lib/auth-session";
+import { getAccessToken, updateAuthSessionUser } from "@/lib/auth-session";
 import { insurancePaths } from "@/lib/portal-paths";
+import { displayFullName } from "@/lib/profile-display";
+
+const PROFILE_CACHE_EVENT = "claudmd-insurance-profile-cache";
 
 let cachedProfile = null;
 let cachedToken = null;
@@ -44,9 +47,14 @@ export function useInsuranceProfile() {
       // Cache cleared — force reload.
       setCacheVersion((version) => version + 1);
     };
+    const onWindowCache = (event) => {
+      onCacheChange(event?.detail ?? null);
+    };
     listeners.add(onCacheChange);
+    window.addEventListener(PROFILE_CACHE_EVENT, onWindowCache);
     return () => {
       listeners.delete(onCacheChange);
+      window.removeEventListener(PROFILE_CACHE_EVENT, onWindowCache);
     };
   }, []);
 
@@ -118,12 +126,19 @@ export function useInsuranceProfile() {
   }, [router, cacheVersion]);
 
   function setCachedProfile(next) {
-    cachedProfile = next;
+    const withName = {
+      ...next,
+      fullName: displayFullName(next) || next?.fullName || "",
+    };
+    cachedProfile = withName;
     cachedToken = getAccessToken();
-    // Resolve waiters to the saved profile so in-flight GETs cannot overwrite it.
-    inflightPromise = Promise.resolve(next);
-    setProfile(next);
-    notifyProfileListeners(next);
+    inflightPromise = Promise.resolve(withName);
+    setProfile(withName);
+    notifyProfileListeners(withName);
+    updateAuthSessionUser(withName);
+    window.dispatchEvent(
+      new CustomEvent(PROFILE_CACHE_EVENT, { detail: withName })
+    );
   }
 
   return { profile, loading, error, setCachedProfile };

@@ -154,7 +154,7 @@ export function useEmployerNotifications({ enabled = true } = {}) {
     const token = getAccessToken();
     if (!token) return;
 
-    const openedAt = setNotificationsLastOpenedAt();
+    setNotificationsLastOpenedAt(new Date().toISOString(), "employer");
     const cleared = (cachedItems || []).map((item) => ({
       ...item,
       unread: false,
@@ -168,15 +168,6 @@ export function useEmployerNotifications({ enabled = true } = {}) {
 
     try {
       await markEmployerNotificationsRead(token);
-      inflightPromise = null;
-      const data = await fetchEmployerNotifications(token, {
-        page: 1,
-        pageSize: 10,
-      });
-      applyAndStore(data.items || [], openedAt, token, {
-        total: data.total,
-        apiUnreadCount: data.unreadCount,
-      });
     } catch (err) {
       if (err?.status === 401) {
         router.replace(LOGIN_PATH);

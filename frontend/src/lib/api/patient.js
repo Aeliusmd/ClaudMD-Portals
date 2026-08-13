@@ -35,10 +35,18 @@ async function patientFetch(
 }
 
 function mapPatientProfile(data) {
+  let firstName = data.first_name || "";
+  let lastName = data.last_name || "";
+  if (!firstName && !lastName && data.full_name) {
+    const parts = String(data.full_name).trim().split(/\s+/).filter(Boolean);
+    firstName = parts[0] || "";
+    lastName = parts.slice(1).join(" ");
+  }
   return {
-    fullName: data.full_name || "",
-    firstName: data.first_name || "",
-    lastName: data.last_name || "",
+    fullName:
+      [firstName, lastName].filter(Boolean).join(" ") || data.full_name || "",
+    firstName,
+    lastName,
     dateOfBirth: data.date_of_birth || "",
     email: data.email || "",
     phone: data.phone || "",
@@ -264,6 +272,13 @@ export async function fetchPatientVisitDetail(accessToken, checkInId) {
     showWorkStatus: data.show_work_status ?? data.showWorkStatus ?? true,
     patient: {
       fullName: patient.full_name ?? patient.fullName ?? "Patient",
+      accountNo:
+        patient.account_no != null
+          ? String(patient.account_no)
+          : patient.accountNo != null
+            ? String(patient.accountNo)
+            : null,
+      gender: patient.gender || null,
       dateOfBirth: patient.date_of_birth ?? patient.dateOfBirth ?? null,
       phone: patient.phone || null,
       email: patient.email || null,

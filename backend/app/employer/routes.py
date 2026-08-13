@@ -18,6 +18,7 @@ from app.employer.booking import (
     list_booking_visit_types,
     list_providers_for_date,
 )
+from app.employer.billing import list_bill_review
 from app.employer.employee_search import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -43,6 +44,7 @@ from app.employer.schemas import (
     AppointmentProviderOption,
     AppointmentSlotsResponse,
     AppointmentVisitTypeOption,
+    BillReviewResponse,
     DashboardSummaryResponse,
     EmployeeSearchResponse,
     EmployeeVisitsResponse,
@@ -191,6 +193,17 @@ def employer_dashboard_summary_endpoint(
     Also returns upcoming-appointment count and unread notification count.
     """
     return get_dashboard_summary(current_user)
+
+
+@router.get("/billing/review", response_model=BillReviewResponse)
+def employer_billing_review_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Bill Review queue: Physical-category visit bills for the logged-in employer.
+    SELECT-only. No schema changes.
+    """
+    return list_bill_review(current_user)
 
 
 @router.get(

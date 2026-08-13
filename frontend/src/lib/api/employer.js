@@ -128,6 +128,32 @@ export async function fetchEmployerDashboardSummary(accessToken) {
   };
 }
 
+export async function fetchEmployerBillReview(accessToken) {
+  const data = await employerFetch(
+    "/api/employer/billing/review",
+    accessToken,
+    "Unable to load bill review."
+  );
+
+  return {
+    employerId: data.employer_id ?? null,
+    total: data.total ?? 0,
+    payableCount: data.payable_count ?? 0,
+    outstandingTotal: Number(data.outstanding_total ?? 0),
+    items: (data.items || []).map((row) => ({
+      id: row.id,
+      billingHeaderId: row.billing_header_id,
+      historyId: row.history_id ?? null,
+      dos: row.dos || "—",
+      accountNo: row.account_no || "—",
+      patientName: row.patient_name || "Patient",
+      visit: row.visit || "—",
+      amount: Number(row.amount ?? 0),
+      invoiceNumber: row.invoice_number || null,
+    })),
+  };
+}
+
 export async function fetchEmployerNotifications(
   accessToken,
   { page = 1, pageSize = 10 } = {}

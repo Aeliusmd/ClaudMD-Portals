@@ -27,6 +27,7 @@ export const employerPaths = {
   sharedDocuments: `${EMPLOYER_PORTAL_BASE}/shared-documents`,
   sharedDocumentsScoped: `${EMPLOYER_PORTAL_BASE}/shared-documents/scoped`,
   notifications: `${EMPLOYER_PORTAL_BASE}/notifications`,
+  support: `${EMPLOYER_PORTAL_BASE}/support`,
 };
 
 export const patientPaths = {
@@ -39,6 +40,7 @@ export const patientPaths = {
   documentShare: `${PATIENT_PORTAL_BASE}/document-share`,
   profile: `${PATIENT_PORTAL_BASE}/profile`,
   notifications: `${PATIENT_PORTAL_BASE}/notifications`,
+  support: `${PATIENT_PORTAL_BASE}/support`,
   sharedDocumentsScoped: `${PATIENT_PORTAL_BASE}/shared-documents/scoped`,
 };
 
@@ -49,6 +51,7 @@ export const insurancePaths = {
   profile: `${INSURANCE_PORTAL_BASE}/profile`,
   profilePermissions: `${INSURANCE_PORTAL_BASE}/profile?tab=permissions`,
   notifications: `${INSURANCE_PORTAL_BASE}/notifications`,
+  support: `${INSURANCE_PORTAL_BASE}/support`,
   patients: `${INSURANCE_PORTAL_BASE}/patients`,
   sharedDocumentsScoped: `${INSURANCE_PORTAL_BASE}/shared-documents/scoped`,
 };

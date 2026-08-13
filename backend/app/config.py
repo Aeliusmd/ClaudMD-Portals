@@ -32,6 +32,10 @@ class Settings(BaseSettings):
 
     default_activation_key: str = "20000002"
 
+    # Optional clinic inbox for employer Support messages (portal → clinic).
+    # Used when LocationGeneralSettings.SMTPFromMail is not available.
+    clinic_support_email: str | None = None
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

@@ -10,7 +10,11 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
-from app.auth.user_profile_type import UserType, user_type_label
+from app.auth.user_profile_type import (
+    is_employer_admin,
+    organization_permission_role,
+    user_type_label,
+)
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
 from app.employer.schemas import (
     OrganizationUserAccessUpdateResponse,
@@ -22,10 +26,6 @@ from app.employer.profile import fetch_profile_from_clinic
 ACCESS_PORTAL = "Portal Access"
 ACCESS_NONE = "No Access"
 ALLOWED_ACCESS_LEVELS = {ACCESS_PORTAL, ACCESS_NONE}
-# Only Super Admin may grant / modify / revoke portal access.
-MANAGE_ACCESS_TYPE_IDS = {int(UserType.SuperAdmin)}
-# Kept for PATCH (unused by display-only Permissions tab).
-EMPLOYER_PORTAL_TYPE_IDS = {int(UserType.SuperAdmin), int(UserType.EmployerUser)}
 
 # Future Permissions activity log: allowlisted AuditLogEntries.Action values only.
 # Do not surface these (or any audit rows) in the notification bell.
@@ -53,13 +53,19 @@ def get_organization_users(current_user: CurrentUser) -> OrganizationUsersRespon
             detail="Employer not found for this user.",
         )
 
+    if not is_employer_admin(profile.user_group_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only employer admins can view organization users.",
+        )
+
     items = _fetch_organization_users(clinic, profile.employer_id)
     return OrganizationUsersResponse(
         employer_id=profile.employer_id,
         organization=profile.organization,
         items=items,
         total=len(items),
-        can_manage_access=False,
+        can_manage_access=True,
     )
 
 
@@ -71,7 +77,7 @@ def update_organization_user_access(
     """
     Grant / modify / revoke portal access (EmployerContacts.IsAllowPortalAccess).
 
-    Allowed callers: Super Admin (0) only.
+    Allowed callers: employer admin (UserProfiles.UserGroupId = 11).
     Does not write AuditLogEntries yet (deferred). When wired, AuditLogEntries
     is for a Permissions activity log only — not the in-app notification bell.
     """
@@ -96,10 +102,10 @@ def update_organization_user_access(
             detail="Employer not found for this user.",
         )
 
-    if not _can_manage_access(profile.type_id):
+    if not is_employer_admin(profile.user_group_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only Super Admin accounts can grant, modify, or revoke portal access.",
+            detail="Only employer admins can grant, modify, or revoke portal access.",
         )
 
     allow_portal = normalized == ACCESS_PORTAL
@@ -123,15 +129,6 @@ def update_organization_user_access(
         item=updated,
         can_manage_access=True,
     )
-
-
-def _can_manage_access(type_id: int | None) -> bool:
-    if type_id is None:
-        return False
-    try:
-        return int(type_id) in MANAGE_ACCESS_TYPE_IDS
-    except (TypeError, ValueError):
-        return False
 
 
 def _apply_portal_access(
@@ -232,9 +229,10 @@ def _apply_portal_access(
 
 def _fetch_organization_users(clinic, employer_id: int) -> list[OrganizationUserRow]:
     """
-    List EmployerContacts for the employer.
+    List EmployerContacts for the employer (SELECT only).
 
-    Role  → UserProfiles.TypeId (UserType spaced label), matched by UserId or email.
+    Role  → Admin when UserProfiles.UserGroupId = 11; otherwise User for org contacts.
+            TypeId is also read (employer portal types) via organization_permission_role.
     Access → EmployerContacts.IsAllowPortalAccess (Portal Access / No Access).
     Active → True when a matching UserProfiles row exists.
     """
@@ -253,6 +251,7 @@ def _fetch_organization_users(clinic, employer_id: int) -> list[OrganizationUser
                 ec.ServiceTypeId,
                 COALESCE(up_by_id.Id, up_by_email.Id) AS ResolvedUserId,
                 COALESCE(up_by_id.TypeId, up_by_email.TypeId) AS TypeId,
+                COALESCE(up_by_id.UserGroupId, up_by_email.UserGroupId) AS UserGroupId,
                 COALESCE(up_by_id.Title, up_by_email.Title) AS UserTitle,
                 COALESCE(up_by_id.LoginId, up_by_email.LoginId) AS LoginId,
                 ct.Value AS ContactTypeName,
@@ -289,6 +288,10 @@ def _fetch_organization_users(clinic, employer_id: int) -> list[OrganizationUser
                  OR pa.EmployerId = ?
               )
             ORDER BY
+                CASE
+                    WHEN COALESCE(up_by_id.UserGroupId, up_by_email.UserGroupId) = 11 THEN 0
+                    ELSE 1
+                END,
                 CASE WHEN ec.IsAllowPortalAccess = 1 THEN 0 ELSE 1 END,
                 ec.LastName,
                 ec.FirstName,
@@ -321,9 +324,17 @@ def _fetch_organization_users(clinic, employer_id: int) -> list[OrganizationUser
             except (TypeError, ValueError):
                 type_id = None
 
+        user_group_id = None
+        if row.UserGroupId is not None:
+            try:
+                user_group_id = int(row.UserGroupId)
+            except (TypeError, ValueError):
+                user_group_id = None
+
         allow_portal = bool(row.IsAllowPortalAccess)
         access_level = ACCESS_PORTAL if allow_portal else ACCESS_NONE
-        role_label = user_type_label(type_id)
+        type_label = user_type_label(type_id)
+        role_label, is_admin = organization_permission_role(type_id, user_group_id)
         has_user_profile = row.ResolvedUserId is not None
 
         items.append(
@@ -336,8 +347,10 @@ def _fetch_organization_users(clinic, employer_id: int) -> list[OrganizationUser
                 title=(row.UserTitle or "").strip() or None,
                 login_id=(row.LoginId or "").strip() or None,
                 type_id=type_id,
-                type_label=role_label,
-                role=role_label or "—",
+                type_label=type_label,
+                user_group_id=user_group_id,
+                is_admin=is_admin,
+                role=role_label,
                 access_level=access_level,
                 active=has_user_profile,
                 contact_type=(row.ContactTypeName or "").strip() or None,

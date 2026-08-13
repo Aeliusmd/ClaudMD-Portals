@@ -58,6 +58,8 @@ function mapInsuranceProfile(data) {
     loginId: data.login_id,
     typeId: data.type_id,
     typeLabel: data.type_label,
+    userGroupId: data.user_group_id ?? null,
+    isAdmin: Boolean(data.is_admin),
   };
 }
 
@@ -101,21 +103,54 @@ export async function fetchInsuranceOrganizationUsers(accessToken) {
     organization: data.organization || "",
     total: data.total ?? 0,
     canManageAccess: Boolean(data.can_manage_access),
-    items: (data.items || []).map((row) => ({
-      id: row.id,
-      contactId: row.contact_id,
-      userId: row.user_id,
-      fullName: row.full_name,
-      email: row.email || "",
-      title: row.title || "",
-      loginId: row.login_id || "",
-      typeId: row.type_id,
-      typeLabel: row.type_label,
-      role: row.role || row.type_label || "—",
-      accessLevel: row.access_level,
-      active: Boolean(row.active),
-      contactType: row.contact_type || "",
-    })),
+    items: (data.items || []).map(mapInsuranceOrganizationUser),
+  };
+}
+
+function mapInsuranceOrganizationUser(row) {
+  return {
+    id: row.id,
+    contactId: row.contact_id,
+    userId: row.user_id,
+    fullName: row.full_name,
+    email: row.email || "",
+    title: row.title || "",
+    loginId: row.login_id || "",
+    typeId: row.type_id,
+    typeLabel: row.type_label,
+    userGroupId: row.user_group_id ?? null,
+    isAdmin: Boolean(row.is_admin),
+    role: row.role || row.type_label || "—",
+    accessLevel: row.access_level,
+    active: Boolean(row.active),
+    contactType: row.contact_type || "",
+  };
+}
+
+export async function updateInsuranceOrganizationUserAccess(
+  accessToken,
+  contactId,
+  accessLevel
+) {
+  const data = await fetchJson(
+    `${API_BASE_URL}/api/insurance/organization-users/${encodeURIComponent(
+      contactId
+    )}/access`,
+    {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ access_level: accessLevel }),
+    },
+    "Unable to update portal access."
+  );
+
+  return {
+    canManageAccess: Boolean(data.can_manage_access),
+    item: mapInsuranceOrganizationUser(data.item),
   };
 }
 

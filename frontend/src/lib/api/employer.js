@@ -65,6 +65,8 @@ export async function fetchEmployerProfile(accessToken) {
     loginId: data.login_id,
     typeId: data.type_id,
     typeLabel: data.type_label,
+    userGroupId: data.user_group_id ?? null,
+    isAdmin: Boolean(data.is_admin),
   };
 }
 
@@ -103,6 +105,8 @@ export async function updateEmployerProfile(accessToken, payload) {
     loginId: data.login_id,
     typeId: data.type_id,
     typeLabel: data.type_label,
+    userGroupId: data.user_group_id ?? null,
+    isAdmin: Boolean(data.is_admin),
   };
 }
 
@@ -681,6 +685,8 @@ function mapOrganizationUser(row) {
     loginId: row.login_id || "",
     typeId: row.type_id,
     typeLabel: row.type_label,
+    userGroupId: row.user_group_id ?? null,
+    isAdmin: Boolean(row.is_admin),
     role: row.role || row.type_label || "—",
     accessLevel: row.access_level,
     active: Boolean(row.active),
@@ -766,5 +772,152 @@ export async function fetchSharedDocumentBySharedId(accessToken, sharedId) {
       provider: null,
       url: fileUrl,
     },
+  };
+}
+
+function mapSupportUser(user) {
+  if (!user) return null;
+  return {
+    userId: user.user_id ?? user.userId ?? null,
+    fullName: user.full_name || user.fullName || "",
+    email: user.email || null,
+    displayLabel: user.display_label || user.displayLabel || user.email || user.full_name || "",
+  };
+}
+
+function mapSupportMessage(row) {
+  return {
+    id: String(row.id),
+    subject: row.subject || "",
+    body: row.body || "",
+    category: row.category || "internal",
+    categoryLabel: row.category_label || row.categoryLabel || "Internal",
+    toEmail: row.to_email || row.toEmail || null,
+    fromEmail: row.from_email || row.fromEmail || null,
+    fromName: row.from_name || row.fromName || null,
+    clinicName: row.clinic_name || row.clinicName || null,
+    organization: row.organization || null,
+    status: row.status || "sent",
+    deliveryNote: row.delivery_note || row.deliveryNote || null,
+    createdAt: row.created_at || row.createdAt || null,
+    preview: row.preview || null,
+    fromUser: mapSupportUser(row.from_user || row.fromUser),
+    toUser: mapSupportUser(row.to_user || row.toUser),
+    ccUsers: (row.cc_users || row.ccUsers || []).map(mapSupportUser).filter(Boolean),
+    ccLabels: row.cc_labels || row.ccLabels || [],
+    attachments: (row.attachments || []).map((item) => ({
+      id: item.id,
+      fileName: item.file_name || item.fileName || "file",
+      mailInboxId: item.mail_inbox_id ?? item.mailInboxId ?? null,
+    })),
+    direction: row.direction || row.status || "sent",
+    isSeen: Boolean(row.is_seen ?? row.isSeen),
+  };
+}
+
+export async function fetchEmployerSupportClinic(accessToken) {
+  const data = await employerFetch(
+    "/api/employer/support/clinic",
+    accessToken,
+    "Unable to load clinic support details."
+  );
+  return {
+    clinicName: data.clinic_name || "Clinic",
+    clinicEmail: data.clinic_email || null,
+    locationId: data.location_id ?? null,
+    canSend: Boolean(data.can_send),
+    smtpConfigured: Boolean(data.smtp_configured),
+    employerId: data.employer_id ?? null,
+    fromEmail: data.from_email || null,
+    fromName: data.from_name || null,
+    fromUserId: data.from_user_id ?? data.fromUserId ?? null,
+  };
+}
+
+export async function fetchEmployerSupportRecipients(accessToken, { search = "" } = {}) {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  const suffix = params.toString() ? `?${params}` : "";
+  const data = await employerFetch(
+    `/api/employer/support/recipients${suffix}`,
+    accessToken,
+    "Unable to load clinic users."
+  );
+  return {
+    clinicName: data.clinic_name || null,
+    total: data.total ?? 0,
+    items: (data.items || []).map((row) => ({
+      userId: row.user_id,
+      fullName: row.full_name || "",
+      email: row.email || null,
+      loginId: row.login_id || null,
+      occupation: row.occupation || null,
+      displayLabel: row.display_label || row.email || row.full_name || "",
+      typeId: row.type_id ?? null,
+    })),
+  };
+}
+
+export async function fetchEmployerSupportMessages(
+  accessToken,
+  { page = 1, pageSize = 10 } = {}
+) {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+  const data = await employerFetch(
+    `/api/employer/support/messages?${params}`,
+    accessToken,
+    "Unable to load support messages."
+  );
+  return {
+    items: (data.items || []).map(mapSupportMessage),
+    total: data.total ?? 0,
+    page: data.page ?? page,
+    pageSize: data.page_size ?? pageSize,
+    totalPages: data.total_pages ?? 1,
+    clinicName: data.clinic_name || null,
+    clinicEmail: data.clinic_email || null,
+  };
+}
+
+export async function fetchEmployerSupportMessage(accessToken, messageId) {
+  const data = await employerFetch(
+    `/api/employer/support/messages/${encodeURIComponent(messageId)}`,
+    accessToken,
+    "Unable to load support message."
+  );
+  return mapSupportMessage(data);
+}
+
+export async function sendEmployerSupportMessage(accessToken, payload) {
+  const form = new FormData();
+  form.append("toUserId", String(payload.toUserId));
+  form.append("subject", payload.subject || "");
+  form.append("body", payload.body || "");
+  if (Array.isArray(payload.ccUserIds) && payload.ccUserIds.length) {
+    form.append("ccUserIds", payload.ccUserIds.join(","));
+  }
+  for (const file of payload.files || []) {
+    if (file) form.append("files", file);
+  }
+
+  const data = await fetchJson(
+    `${API_BASE_URL}/api/employer/support/messages`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: form,
+    },
+    "Unable to send support message."
+  );
+
+  return {
+    message: mapSupportMessage(data.message || {}),
+    deliveryStatus: data.delivery_status || data.deliveryStatus || "sent",
+    deliveryNote: data.delivery_note || data.deliveryNote || null,
   };
 }

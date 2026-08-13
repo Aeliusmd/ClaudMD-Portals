@@ -19,6 +19,8 @@ class EmployerProfileResponse(BaseModel):
     login_id: str | None = None
     type_id: int | None = None
     type_label: str | None = None
+    user_group_id: int | None = None
+    is_admin: bool = False
 
 
 class EmployerProfileUpdateRequest(BaseModel):
@@ -339,6 +341,8 @@ class OrganizationUserRow(BaseModel):
     login_id: str | None = None
     type_id: int | None = None
     type_label: str | None = None
+    user_group_id: int | None = None
+    is_admin: bool = False
     role: str
     access_level: str
     active: bool = True
@@ -395,3 +399,111 @@ class OrganizationUserAccessUpdateRequest(BaseModel):
 class OrganizationUserAccessUpdateResponse(BaseModel):
     item: OrganizationUserRow
     can_manage_access: bool = False
+
+
+class SupportClinicInfoResponse(BaseModel):
+    clinic_name: str
+    clinic_email: str | None = None
+    location_id: int | None = None
+    can_send: bool = False
+    smtp_configured: bool = False
+    employer_id: int | None = None
+    insurance_id: int | None = None
+    patient_id: int | None = None
+    from_email: str | None = None
+    from_name: str | None = None
+    from_user_id: int | None = None
+
+
+class SupportUserRef(BaseModel):
+    user_id: int
+    full_name: str
+    email: str | None = None
+    display_label: str
+
+
+class SupportRecipientRow(BaseModel):
+    user_id: int
+    full_name: str
+    email: str | None = None
+    login_id: str | None = None
+    occupation: str | None = None
+    display_label: str
+    type_id: int | None = None
+
+
+class SupportRecipientsResponse(BaseModel):
+    items: list[SupportRecipientRow] = []
+    total: int = 0
+    clinic_name: str | None = None
+
+
+class SupportAttachmentRow(BaseModel):
+    id: int
+    file_name: str
+    mail_inbox_id: int | None = None
+
+
+class SupportMessageRow(BaseModel):
+    id: str
+    subject: str
+    category: str = "internal"
+    category_label: str = "Internal"
+    to_email: str | None = None
+    from_email: str | None = None
+    status: str
+    created_at: str | None = None
+    preview: str | None = None
+    from_user: SupportUserRef | None = None
+    to_user: SupportUserRef | None = None
+    cc_labels: list[str] = []
+    direction: str = "sent"
+    is_seen: bool = False
+
+
+class SupportMessageDetail(BaseModel):
+    id: str
+    subject: str
+    body: str
+    category: str = "internal"
+    category_label: str = "Internal"
+    to_email: str | None = None
+    from_email: str | None = None
+    from_name: str | None = None
+    clinic_name: str | None = None
+    organization: str | None = None
+    status: str
+    delivery_note: str | None = None
+    created_at: str | None = None
+    from_user: SupportUserRef | None = None
+    to_user: SupportUserRef | None = None
+    cc_users: list[SupportUserRef] = []
+    attachments: list[SupportAttachmentRow] = []
+    direction: str = "sent"
+    is_seen: bool = False
+
+
+class SupportMessagesResponse(BaseModel):
+    items: list[SupportMessageRow]
+    total: int
+    page: int = 1
+    page_size: int = 10
+    total_pages: int = 1
+    clinic_name: str | None = None
+    clinic_email: str | None = None
+
+
+class SupportSendRequest(BaseModel):
+    """Legacy JSON body (kept for compatibility; multipart preferred)."""
+
+    subject: str
+    body: str
+    category: str | None = None
+    to_user_id: int | None = None
+    cc_user_ids: list[int] = []
+
+
+class SupportSendResponse(BaseModel):
+    message: SupportMessageDetail
+    delivery_status: str
+    delivery_note: str | None = None

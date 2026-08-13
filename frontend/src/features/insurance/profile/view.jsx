@@ -13,6 +13,7 @@ import { useInsuranceProfile } from "@/hooks/use-insurance-profile";
 import { changePassword } from "@/lib/api/auth";
 import {
   fetchInsuranceOrganizationUsers,
+  updateInsuranceOrganizationUserAccess,
   updateInsuranceProfile,
 } from "@/lib/api/insurance";
 import { getAccessToken } from "@/lib/auth-session";
@@ -25,22 +26,27 @@ import {
   sanitizePhoneInput,
 } from "@/lib/contact-validation";
 import { unsafeMarkupError } from "@/lib/text-validation";
+import { isInsuranceAdmin } from "@/lib/user-type";
 import { cn } from "@/lib/utils";
 
-const profileTabs = [
+const ALL_PROFILE_TABS = [
   { id: "profile", label: "Profile Info", icon: UserRound },
   { id: "security", label: "Security", icon: Shield },
   { id: "permissions", label: "Permissions", icon: Lock },
 ];
 
-const VALID_PROFILE_TABS = new Set(profileTabs.map((tab) => tab.id));
+// Must match backend ACCESS_PORTAL / ACCESS_NONE (InsuranceContacts.IsAllowPortalAccess).
+const PORTAL_ACCESS_LEVELS = [
+  { value: "Portal Access", label: "Portal Access" },
+  { value: "No Access", label: "No Access" },
+];
 
 const NAME_MAX = 50;
 
-function ProfileTabBar({ value, onChange }) {
+function ProfileTabBar({ value, onChange, tabs }) {
   return (
     <div className="mb-5 flex flex-wrap gap-2">
-      {profileTabs.map((item) => {
+      {tabs.map((item) => {
         const Icon = item.icon;
         const active = value === item.id;
         return (
@@ -301,9 +307,24 @@ function InsuranceProfileContent() {
     setCachedProfile,
   } = useInsuranceProfile();
 
+  const isAdmin = Boolean(
+    liveProfile?.isAdmin || isInsuranceAdmin(liveProfile?.userGroupId)
+  );
+  const visibleTabs = useMemo(
+    () =>
+      ALL_PROFILE_TABS.filter(
+        (item) => item.id !== "permissions" || isAdmin
+      ),
+    [isAdmin]
+  );
+  const validTabIds = useMemo(
+    () => new Set(visibleTabs.map((item) => item.id)),
+    [visibleTabs]
+  );
+
   const tabFromUrl = searchParams.get("tab");
   const initialTab =
-    tabFromUrl && VALID_PROFILE_TABS.has(tabFromUrl) ? tabFromUrl : "profile";
+    tabFromUrl && validTabIds.has(tabFromUrl) ? tabFromUrl : "profile";
   const [tab, setTab] = useState(initialTab);
   const [message, setMessage] = useState("");
   const [successToast, setSuccessToast] = useState(null);
@@ -337,6 +358,8 @@ function InsuranceProfileContent() {
   const [orgUsers, setOrgUsers] = useState([]);
   const [orgUsersLoading, setOrgUsersLoading] = useState(false);
   const [orgUsersLoaded, setOrgUsersLoaded] = useState(false);
+  const [canManageAccess, setCanManageAccess] = useState(false);
+  const [accessUpdatingContactId, setAccessUpdatingContactId] = useState(null);
 
   const profileDirty = useMemo(() => {
     if (!savedProfile) return false;
@@ -400,6 +423,7 @@ function InsuranceProfileContent() {
         const data = await fetchInsuranceOrganizationUsers(token);
         if (!cancelled) {
           setOrgUsers(data.items);
+          setCanManageAccess(Boolean(data.canManageAccess));
           setOrgUsersLoaded(true);
           setErrorMessage("");
         }
@@ -407,6 +431,15 @@ function InsuranceProfileContent() {
         if (cancelled) return;
         if (err?.status === 401) {
           router.replace(insurancePaths.login);
+          return;
+        }
+        if (err?.status === 403) {
+          setOrgUsers([]);
+          setCanManageAccess(false);
+          setOrgUsersLoaded(true);
+          setErrorMessage(
+            err?.message || "Only insurance admins can view organization users."
+          );
           return;
         }
         setErrorMessage(err?.message || "Unable to load organization users.");
@@ -425,6 +458,77 @@ function InsuranceProfileContent() {
     setMessage("");
     setSuccessToast(null);
     setErrorMessage("");
+  }
+
+  function isCurrentUserOrgContact(user) {
+    if (!liveProfile || !user) return false;
+    if (
+      liveProfile.userId != null &&
+      user.userId != null &&
+      Number(liveProfile.userId) === Number(user.userId)
+    ) {
+      return true;
+    }
+    const selfEmail = String(liveProfile.email || "")
+      .trim()
+      .toLowerCase();
+    const rowEmail = String(user.email || "")
+      .trim()
+      .toLowerCase();
+    return Boolean(selfEmail && rowEmail && selfEmail === rowEmail);
+  }
+
+  async function handleOrgUserAccessChange(user, nextAccessLevel) {
+    if (!canManageAccess || !user?.contactId) return;
+    if (nextAccessLevel === user.accessLevel) return;
+    if (isCurrentUserOrgContact(user) && nextAccessLevel === "No Access") {
+      setErrorMessage(
+        "You cannot revoke your own portal access from this screen."
+      );
+      return;
+    }
+
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(insurancePaths.login);
+      return;
+    }
+
+    clearFeedback();
+    setAccessUpdatingContactId(user.contactId);
+    try {
+      const result = await updateInsuranceOrganizationUserAccess(
+        token,
+        user.contactId,
+        nextAccessLevel
+      );
+      setOrgUsers((prev) =>
+        prev.map((row) =>
+          row.contactId === user.contactId ? result.item : row
+        )
+      );
+      if (typeof result.canManageAccess === "boolean") {
+        setCanManageAccess(result.canManageAccess);
+      }
+      setSuccessToast({
+        title: "Portal access updated",
+        message: `${result.item.fullName}: ${result.item.accessLevel}`,
+      });
+    } catch (err) {
+      if (err?.status === 401) {
+        router.replace(insurancePaths.login);
+        return;
+      }
+      if (err?.status === 403) {
+        setErrorMessage(
+          err?.message || "Only insurance admins can change portal access."
+        );
+        return;
+      }
+      setErrorMessage(err?.message || "Unable to update portal access.");
+    } finally {
+      setAccessUpdatingContactId(null);
+    }
   }
 
   function updateProfileField(field, value) {
@@ -602,9 +706,18 @@ function InsuranceProfileContent() {
 
   useEffect(() => {
     const nextTab =
-      tabFromUrl && VALID_PROFILE_TABS.has(tabFromUrl) ? tabFromUrl : "profile";
+      tabFromUrl && validTabIds.has(tabFromUrl) ? tabFromUrl : "profile";
     setTab((current) => (current === nextTab ? current : nextTab));
-  }, [tabFromUrl]);
+  }, [tabFromUrl, validTabIds]);
+
+  useEffect(() => {
+    if (!liveProfile) return;
+    if (tab === "permissions" && !isAdmin) {
+      switchTab("profile");
+    }
+    // switchTab is stable enough for this guard; avoid re-running on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveProfile, isAdmin, tab]);
 
   const showProfileSkeleton = profileLoading && !hydrated;
 
@@ -616,7 +729,7 @@ function InsuranceProfileContent() {
         onDismiss={() => setSuccessToast(null)}
       />
       <PageHeader title="Profile / Security" className="mb-5" />
-      <ProfileTabBar value={tab} onChange={switchTab} />
+      <ProfileTabBar value={tab} onChange={switchTab} tabs={visibleTabs} />
 
       <StatusBanner tone="success">{message}</StatusBanner>
       <StatusBanner tone="error">{errorMessage}</StatusBanner>
@@ -834,7 +947,8 @@ function InsuranceProfileContent() {
               Organization Users
             </h2>
             <p className="mt-1 text-sm text-muted">
-              Users linked to this insurance organization and their access.
+              Organization contacts for this insurance company. Admins can
+              enable or disable portal access for each user.
             </p>
           </div>
 
@@ -860,25 +974,83 @@ function InsuranceProfileContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {orgUsers.map((user) => (
-                    <tr key={user.id} className="bg-white">
-                      <td className="px-5 py-4">
-                        <p className="font-semibold text-ink">{user.fullName}</p>
-                        <p className="mt-0.5 text-xs text-muted">
-                          {user.email || "—"}
-                        </p>
-                        {user.title ? (
-                          <p className="mt-0.5 text-xs text-muted">{user.title}</p>
-                        ) : null}
-                      </td>
-                      <td className="px-5 py-4 text-ink">{user.role}</td>
-                      <td className="px-5 py-4 text-ink">{user.accessLevel}</td>
-                    </tr>
-                  ))}
+                  {orgUsers.map((user) => {
+                    const updating =
+                      accessUpdatingContactId === user.contactId;
+                    const selfRow = isCurrentUserOrgContact(user);
+                    const showAccessControl = canManageAccess && isAdmin;
+                    return (
+                      <tr key={user.id} className="bg-white">
+                        <td className="px-5 py-4">
+                          <p className="font-semibold text-ink">
+                            {user.fullName}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted">
+                            {user.email || "—"}
+                          </p>
+                          {user.title ? (
+                            <p className="mt-0.5 text-xs text-muted">
+                              {user.title}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-5 py-4 text-ink">{user.role}</td>
+                        <td className="px-5 py-4 text-ink">
+                          {showAccessControl ? (
+                            <select
+                              className={cn(
+                                "w-full max-w-[11.5rem] rounded-md border border-border/80 bg-white px-2.5 py-1.5 text-sm text-ink outline-none",
+                                "focus:border-ink/40 focus:ring-1 focus:ring-ink/15",
+                                "disabled:cursor-not-allowed disabled:opacity-60"
+                              )}
+                              value={user.accessLevel || "No Access"}
+                              disabled={updating}
+                              aria-label={`Portal access for ${user.fullName}`}
+                              onChange={(event) =>
+                                handleOrgUserAccessChange(
+                                  user,
+                                  event.target.value
+                                )
+                              }
+                            >
+                              {PORTAL_ACCESS_LEVELS.map((option) => (
+                                <option
+                                  key={option.value}
+                                  value={option.value}
+                                  disabled={
+                                    selfRow && option.value === "No Access"
+                                  }
+                                >
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            user.accessLevel
+                          )}
+                          {updating ? (
+                            <p className="mt-1 text-xs text-muted">Saving…</p>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
+
+          <div className="border-t border-border/60 bg-cream-deep/70 px-5 py-3.5 sm:px-6">
+            <p className="text-sm font-medium text-ink">
+              Users:{" "}
+              <span className="font-semibold">{orgUsers.length}</span>
+              {" · "}
+              Insurance ID:{" "}
+              <span className="font-semibold">
+                {liveProfile?.insuranceId ?? "—"}
+              </span>
+            </p>
+          </div>
         </Card>
       ) : null}
     </div>

@@ -37,6 +37,7 @@ yarn-error.log*
 backend/.venv/
 backend/**/__pycache__/
 backend/**/*.pyc
+backend/data/
 *.py[cod]
 
 # typescript / vercel

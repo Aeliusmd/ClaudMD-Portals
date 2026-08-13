@@ -30,6 +30,8 @@ def _to_profile_response(profile) -> EmployerProfileResponse:
         login_id=profile.login_id,
         type_id=profile.type_id,
         type_label=profile.type_label,
+        user_group_id=profile.user_group_id,
+        is_admin=bool(profile.is_admin),
     )
 
 

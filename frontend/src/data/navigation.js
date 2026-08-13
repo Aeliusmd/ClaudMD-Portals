@@ -13,6 +13,11 @@ export const patientNavItems = [
     label: "My Information",
     icon: "User",
   },
+  {
+    href: patientPaths.support,
+    label: "Support",
+    icon: "LifeBuoy",
+  },
   { href: patientPaths.profile, label: "Profile / Security", icon: "Shield" },
 ];
 
@@ -30,6 +35,11 @@ export const employerNavItems = [
   //   icon: "ClipboardCheck",
   // },
   {
+    href: employerPaths.support,
+    label: "Support",
+    icon: "LifeBuoy",
+  },
+  {
     href: employerPaths.profile,
     label: "Profile / Security",
     icon: "Shield",
@@ -41,6 +51,11 @@ export const insuranceNavItems = [
     href: insurancePaths.dashboard,
     label: "Dashboard",
     icon: "LayoutDashboard",
+  },
+  {
+    href: insurancePaths.support,
+    label: "Support",
+    icon: "LifeBuoy",
   },
   {
     href: insurancePaths.profile,

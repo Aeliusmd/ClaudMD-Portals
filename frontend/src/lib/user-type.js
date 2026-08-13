@@ -50,6 +50,22 @@ export function isSuperAdmin(typeId) {
   return Number(typeId) === UserType.SuperAdmin;
 }
 
+/** Portal admin role from UserProfiles.UserGroupId (portal still uses TypeId). */
+export const PORTAL_ADMIN_USER_GROUP_ID = 11;
+export const EMPLOYER_ADMIN_USER_GROUP_ID = PORTAL_ADMIN_USER_GROUP_ID;
+
+export function isPortalAdmin(userGroupId) {
+  return Number(userGroupId) === PORTAL_ADMIN_USER_GROUP_ID;
+}
+
+export function isEmployerAdmin(userGroupId) {
+  return isPortalAdmin(userGroupId);
+}
+
+export function isInsuranceAdmin(userGroupId) {
+  return isPortalAdmin(userGroupId);
+}
+
 export function portalsAllowedForTypeId(typeId) {
   const id = Number(typeId);
   if (!Number.isFinite(id)) return [];

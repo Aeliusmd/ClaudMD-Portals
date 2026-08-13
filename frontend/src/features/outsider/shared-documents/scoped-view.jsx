@@ -169,9 +169,6 @@ export function OutsiderScopedSharedDocumentsView() {
                     name={docName}
                     className="text-base font-semibold text-white"
                   />
-                  <p className="text-xs text-white/60">
-                    {document.documentType || "Report"}
-                  </p>
                 </div>
               </div>
             ) : (

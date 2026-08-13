@@ -28,6 +28,11 @@ export const employerNavItems = [
     label: "Dashboard",
     icon: "LayoutDashboard",
   },
+  {
+    href: employerPaths.billing,
+    label: "Billing",
+    icon: "Receipt",
+  },
   // TEMP: hide Authorizations tab for all employer portal users.
   // {
   //   href: employerPaths.authorizations,

@@ -22,6 +22,7 @@ export const employerPaths = {
   employeeSearch: `${EMPLOYER_PORTAL_BASE}/employee-search`,
   appointments: `${EMPLOYER_PORTAL_BASE}/appointments`,
   authorizations: `${EMPLOYER_PORTAL_BASE}/authorizations`,
+  billing: `${EMPLOYER_PORTAL_BASE}/billing`,
   profile: `${EMPLOYER_PORTAL_BASE}/profile`,
   profilePermissions: `${EMPLOYER_PORTAL_BASE}/profile?tab=permissions`,
   sharedDocuments: `${EMPLOYER_PORTAL_BASE}/shared-documents`,

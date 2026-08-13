@@ -27,6 +27,7 @@ class UserInfo(BaseModel):
     type_id: int | None = None
     type_label: str | None = None
     activation_key: str | None = None
+    must_change_password: bool = False
 
 
 class ClinicInfo(BaseModel):

@@ -65,6 +65,19 @@ export function subscribeAuthSession(listener) {
   };
 }
 
+export function markPasswordChanged() {
+  const session = getAuthSession();
+  if (!session?.user) return;
+  saveAuthSession({
+    ...session,
+    user: {
+      ...session.user,
+      must_change_password: false,
+      mustChangePassword: false,
+    },
+  });
+}
+
 export function getAccessToken() {
   return getAuthSession()?.accessToken || null;
 }

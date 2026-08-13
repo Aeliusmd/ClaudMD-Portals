@@ -29,6 +29,12 @@ uvicorn app.main:app --reload --port 8000
 - `GET /health`
 - `GET /api/auth/clinic?activationKey=20000002` (optional read-only)
 - `POST /api/auth/login`
+- `POST /api/auth/change-password` (Bearer token; same as Profile → Security)
+
+  1. IdentityServer password grant verifies the current password
+  2. `UserProfiles.Password` is updated with an ASP.NET Identity V3 hash
+  3. `IsPasswordChanged` is set to `1`
+  4. IdentityServer password grant confirms the new password before success is returned
 
 ```json
 {

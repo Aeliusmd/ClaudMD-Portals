@@ -19,16 +19,7 @@ async function outsiderFetch(path, accessToken, fallbackMessage) {
   );
 }
 
-export async function fetchOutsiderSharedDocumentBySharedId(
-  accessToken,
-  sharedId
-) {
-  const data = await outsiderFetch(
-    `/api/outsider/shared-documents/by-shared-id/${encodeURIComponent(sharedId)}`,
-    accessToken,
-    "Unable to load shared document."
-  );
-
+function mapOutsiderSharedDetail(data) {
   const fileUrl = outsiderSharedDocumentFileUrl(data.shared_id);
   const employee = data.employee || {};
 
@@ -40,6 +31,10 @@ export async function fetchOutsiderSharedDocumentBySharedId(
     fileName: data.file_name || null,
     visitDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
     visitLabel: data.visit_label || "Visit",
+    checkInId: data.check_in_id ?? data.checkInId ?? null,
+    reportId: data.report_id ?? data.reportId ?? null,
+    sharedAt: data.shared_at || data.sharedAt || null,
+    isViewed: Boolean(data.is_viewed ?? data.isViewed),
     employee: {
       patientId: employee.patient_id ?? null,
       name: employee.name || "Patient",
@@ -73,4 +68,51 @@ export async function fetchOutsiderSharedDocumentBySharedId(
       url: fileUrl,
     },
   };
+}
+
+export async function fetchOutsiderProfile(accessToken) {
+  const data = await outsiderFetch(
+    "/api/outsider/me",
+    accessToken,
+    "Unable to load profile."
+  );
+  const firstName = data.first_name || "";
+  const lastName = data.last_name || "";
+  return {
+    fullName:
+      [firstName, lastName].filter(Boolean).join(" ") || data.full_name || "",
+    firstName,
+    lastName,
+    title: data.title || "",
+    email: data.email || "",
+    loginId: data.login_id || "",
+    userId: data.user_id,
+    typeId: data.type_id,
+    typeLabel: data.type_label,
+  };
+}
+
+export async function fetchOutsiderSharedDocuments(accessToken) {
+  const data = await outsiderFetch(
+    "/api/outsider/shared-documents",
+    accessToken,
+    "Unable to load shared documents."
+  );
+  const items = Array.isArray(data.items) ? data.items : [];
+  return {
+    items: items.map(mapOutsiderSharedDetail),
+    total: data.total ?? items.length,
+  };
+}
+
+export async function fetchOutsiderSharedDocumentBySharedId(
+  accessToken,
+  sharedId
+) {
+  const data = await outsiderFetch(
+    `/api/outsider/shared-documents/by-shared-id/${encodeURIComponent(sharedId)}`,
+    accessToken,
+    "Unable to load shared document."
+  );
+  return mapOutsiderSharedDetail(data);
 }

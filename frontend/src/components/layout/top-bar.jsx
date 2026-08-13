@@ -20,6 +20,7 @@ export function TopBar({
   notificationsTotalCount,
   notificationsUnreadCount,
   showSearch = true,
+  showNotifications = true,
   className,
 }) {
   return (
@@ -66,14 +67,16 @@ export function TopBar({
       )}
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-        <NotificationsMenu
-          items={notifications}
-          variant={showSearch ? "soft" : "ghost"}
-          viewAllHref={notificationsViewAllHref}
-          onOpen={onNotificationsOpen}
-          totalCount={notificationsTotalCount}
-          unreadCount={notificationsUnreadCount}
-        />
+        {showNotifications ? (
+          <NotificationsMenu
+            items={notifications}
+            variant={showSearch ? "soft" : "ghost"}
+            viewAllHref={notificationsViewAllHref}
+            onOpen={onNotificationsOpen}
+            totalCount={notificationsTotalCount}
+            unreadCount={notificationsUnreadCount}
+          />
+        ) : null}
         <span className="hidden text-sm text-[#9ca3af] sm:inline">Welcome</span>
         <ProfileMenu
           user={profileUser}

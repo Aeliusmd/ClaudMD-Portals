@@ -37,6 +37,7 @@ import {
 } from "@/lib/date-range";
 import { searchQueryError } from "@/lib/text-validation";
 import { formatDateMMDDYY } from "@/lib/dates";
+import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { cn } from "@/lib/utils";
 
 const emptySubscribe = () => () => {};
@@ -189,47 +190,42 @@ function EmployerDashboardContent() {
   const [filterError, setFilterError] = useState(null);
   const [showCreateAppt, setShowCreateAppt] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSummary() {
+  const loadSummary = useCallback(
+    async ({ silent = false } = {}) => {
       const token = getAccessToken();
       if (!token) {
         router.replace(LOGIN_PATH);
         return;
       }
 
-      setLoadingSummary(true);
+      if (!silent) setLoadingSummary(true);
       try {
         const data = await fetchEmployerDashboardSummary(token);
-        if (!cancelled) {
-          setSummaryCounts({
-            injury: data.injury,
-            physicals: data.physicals,
-            drugScreens: data.drugScreens,
-            appointments: data.appointments,
-            unreadReports: data.unreadReports ?? 0,
-          });
-          setApptCount(data.appointments ?? 0);
-        }
+        setSummaryCounts({
+          injury: data.injury,
+          physicals: data.physicals,
+          drugScreens: data.drugScreens,
+          appointments: data.appointments,
+          unreadReports: data.unreadReports ?? 0,
+        });
+        setApptCount(data.appointments ?? 0);
       } catch (err) {
-        if (cancelled) return;
         if (err?.status === 401) {
           router.replace(LOGIN_PATH);
           return;
         }
-        setLoadError(err?.message || "Unable to load dashboard.");
-        setSummaryCounts(emptyCounts);
+        if (!silent) {
+          setLoadError(err?.message || "Unable to load dashboard.");
+          setSummaryCounts(emptyCounts);
+        }
       } finally {
-        if (!cancelled) setLoadingSummary(false);
+        if (!silent) setLoadingSummary(false);
       }
-    }
+    },
+    [router]
+  );
 
-    loadSummary();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+  useVisiblePoll(loadSummary);
 
   useEffect(() => {
     let cancelled = false;

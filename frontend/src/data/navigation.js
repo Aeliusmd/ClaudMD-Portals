@@ -1,4 +1,9 @@
-import { employerPaths, insurancePaths, patientPaths } from "@/lib/portal-paths";
+import {
+  employerPaths,
+  insurancePaths,
+  outsiderPaths,
+  patientPaths,
+} from "@/lib/portal-paths";
 
 /** Visits and appointments are surfaced on the dashboard itself, so they are not separate nav items. */
 export const patientNavItems = [
@@ -64,6 +69,23 @@ export const insuranceScopedShareNavItems = [
 export const patientScopedShareNavItems = [
   {
     href: patientPaths.sharedDocumentsScoped,
+    label: "Shared Documents",
+    icon: "FileText",
+  },
+];
+
+/** Other-contact / family portal — shared documents only. */
+export const outsiderNavItems = [
+  {
+    href: outsiderPaths.sharedDocuments,
+    label: "Shared Documents",
+    icon: "FileText",
+  },
+];
+
+export const outsiderScopedShareNavItems = [
+  {
+    href: outsiderPaths.sharedDocumentsScoped,
     label: "Shared Documents",
     icon: "FileText",
   },

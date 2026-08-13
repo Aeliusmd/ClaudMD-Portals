@@ -4,7 +4,7 @@ export const EMPLOYER_PORTAL_BASE = "/employerportal";
 /** Chanuka patient portal keeps the /patient prefix (dummy data UI). */
 export const PATIENT_PORTAL_BASE = "/patient";
 export const INSURANCE_PORTAL_BASE = "/insuranceportal";
-export const OUTSIDER_PORTAL_BASE = "/outsiderportal";
+export const OUTSIDER_PORTAL_BASE = "/shareportal";
 
 export const EMPLOYER_LOGIN_PATH = `${EMPLOYER_PORTAL_BASE}/authentication/login`;
 /** Patient auth pages live under patientportal (from main); portal UI stays on /patient. */
@@ -56,6 +56,11 @@ export const insurancePaths = {
 export const outsiderPaths = {
   base: OUTSIDER_PORTAL_BASE,
   login: OUTSIDER_LOGIN_PATH,
+  forgotPassword: `${OUTSIDER_PORTAL_BASE}/authentication/forgot-password`,
+  changePassword: `${OUTSIDER_PORTAL_BASE}/authentication/change-password`,
+  sharedDocuments: `${OUTSIDER_PORTAL_BASE}/shared-documents`,
+  sharedDocumentsPatient: (patientId) =>
+    `${OUTSIDER_PORTAL_BASE}/shared-documents/patient/${encodeURIComponent(patientId)}`,
   sharedDocumentsScoped: `${OUTSIDER_PORTAL_BASE}/shared-documents/scoped`,
 };
 
@@ -84,7 +89,7 @@ export function getLoginHref({
 export function resolvePortalDestination(portal) {
   if (portal === "patient") return patientPaths.dashboard;
   if (portal === "insurance") return insurancePaths.dashboard;
-  if (portal === "outsider") return outsiderPaths.sharedDocumentsScoped;
+  if (portal === "outsider") return outsiderPaths.sharedDocuments;
   return employerPaths.dashboard;
 }
 
@@ -93,12 +98,14 @@ export function resolvePortalDestination(portal) {
  * /employerportal/... → employer
  * /patientportal/...  → patient
  * /insuranceportal/... or /insurance/... → insurance
- * /outsiderportal/... → outsider
+ * /shareportal/... or /outsiderportal/... → outsider
  */
 export function resolvePortalFromPathname(pathname) {
   const path = String(pathname || "").toLowerCase();
   if (path.includes("/patientportal")) return "patient";
-  if (path.includes("/outsiderportal")) return "outsider";
+  if (path.includes("/outsiderportal") || path.includes("/shareportal")) {
+    return "outsider";
+  }
   if (path.includes("/insuranceportal") || path.includes("/insurance/")) {
     return "insurance";
   }

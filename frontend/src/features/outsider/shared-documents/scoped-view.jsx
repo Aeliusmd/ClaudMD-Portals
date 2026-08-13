@@ -2,26 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, LogOut } from "lucide-react";
+import { UserRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { DocumentNameText } from "@/components/ui/document-name-text";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
-import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
+import {
+  DocumentThumbGrid,
+  DocumentThumbTile,
+} from "@/components/ui/document-thumb-tile";
 import { fetchOutsiderSharedDocumentBySharedId } from "@/lib/api/outsider";
-import { clearAuthSession, getAccessToken } from "@/lib/auth-session";
+import { getAccessToken } from "@/lib/auth-session";
 import { outsiderPaths } from "@/lib/portal-paths";
 import {
   clearSecureShareSession,
   getSecureShareSession,
 } from "@/lib/secure-share-session";
-import {
-  documentDisplayName,
-  shortDocumentBadge,
-} from "@/lib/document-labels";
-import { formatDateMMDDYY } from "@/lib/dates";
 
 /**
- * Document-only view for external recipients (family/other) after secure-link login.
+ * Single-document view after share-link login (sharedid).
+ * No patient table / summary — only the document from that URL.
  */
 export function OutsiderScopedSharedDocumentsView() {
   const router = useRouter();
@@ -33,7 +31,7 @@ export function OutsiderScopedSharedDocumentsView() {
   useEffect(() => {
     const active = getSecureShareSession();
     if (!active?.sharedId) {
-      router.replace(outsiderPaths.login);
+      router.replace(outsiderPaths.sharedDocuments);
       return undefined;
     }
 
@@ -68,117 +66,73 @@ export function OutsiderScopedSharedDocumentsView() {
     };
   }, [router]);
 
+  const tile = useMemo(() => {
+    if (!livePayload?.document?.url) return null;
+    return {
+      id: String(livePayload.documentId),
+      documentId: String(livePayload.documentId),
+      sharedId: livePayload.sharedId,
+      title:
+        livePayload.document?.title ||
+        livePayload.reportTitle ||
+        livePayload.documentType,
+      documentType: livePayload.documentType,
+      reportTitle: livePayload.reportTitle,
+      visitDate: livePayload.visitDate,
+      publishedAt: livePayload.sharedAt || livePayload.visitDate || null,
+      url: livePayload.document.url,
+      previousVersions: [],
+    };
+  }, [livePayload]);
+
   const patientName = livePayload?.employee?.name || "Patient";
-  const document = livePayload?.document || null;
-  const visitLabel = livePayload?.visitLabel || "Visit";
-  const visitDate = livePayload?.visitDate || null;
-
-  const badge = useMemo(
-    () => (document ? shortDocumentBadge(document) : "DOC"),
-    [document]
-  );
-  const docName = useMemo(
-    () => (document ? documentDisplayName(document) : "Document"),
-    [document]
-  );
-  const dateLabel = formatDateMMDDYY(visitDate);
-
-  function handleSignOut() {
-    clearSecureShareSession();
-    clearAuthSession();
-    router.replace(outsiderPaths.login);
-  }
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted">
-        Loading shared report…
+      <div className="flex min-h-48 items-center justify-center text-sm text-muted">
+        Loading shared document…
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-6">
-        <div className="max-w-lg rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-          {error}
-        </div>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+        {error}
       </div>
     );
   }
 
-  if (!document) {
+  if (!tile) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted">
+      <div className="flex min-h-48 items-center justify-center text-sm text-muted">
         Shared document is not available.
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-cream/30">
-      <header className="border-b border-border/70 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-primary">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-ink">Shared document</p>
-              <p className="truncate text-xs text-muted">
-                {patientName}
-                {dateLabel ? ` · ${dateLabel}` : ""}
-                {visitLabel ? ` · ${visitLabel}` : ""}
-              </p>
-            </div>
+    <div className="space-y-5">
+      <Card className="p-5">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-600">
+            <UserRound className="h-5 w-5" />
           </div>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border/80 bg-white px-3 py-2 text-sm font-medium text-ink transition hover:bg-cream/60"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
+          <div className="min-w-0">
+            <p className="text-lg font-bold text-foreground-900">{patientName}</p>
+            <p className="mt-0.5 text-sm text-foreground-500">Patient</p>
+          </div>
         </div>
-      </header>
+      </Card>
 
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-        <Card className="overflow-hidden p-0">
-          <div className="bg-foreground-900 p-4 sm:p-6">
-            {document.url ? (
-              <div className="w-full">
-                <PdfThumbnail
-                  url={document.url}
-                  badge={badge}
-                  title={document.title || document.documentType || "Document"}
-                  onOpen={() =>
-                    setPreviewDocument({
-                      ...document,
-                      previewBadge: badge,
-                    })
-                  }
-                />
-                <div className="mt-4 space-y-1 text-center">
-                  {dateLabel ? (
-                    <p className="text-sm font-semibold text-white/90">
-                      {dateLabel}
-                    </p>
-                  ) : null}
-                  <DocumentNameText
-                    name={docName}
-                    className="text-base font-semibold text-white"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="flex min-h-[16rem] items-center justify-center rounded-xl bg-white/5 text-sm text-white/70">
-                Document preview is not available.
-              </div>
-            )}
-          </div>
-        </Card>
-      </main>
+      <div className="min-h-[18rem] w-full rounded-2xl bg-foreground-900 p-4 shadow-sm sm:min-h-[22rem] sm:p-5">
+        <DocumentThumbGrid showVersionHint={false}>
+          <DocumentThumbTile
+            doc={tile}
+            onPreview={setPreviewDocument}
+          />
+        </DocumentThumbGrid>
+      </div>
 
       {previewDocument ? (
         <DocumentPreviewModal

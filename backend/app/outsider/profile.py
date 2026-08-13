@@ -17,6 +17,7 @@ class OutsiderProfile:
     full_name: str
     first_name: str | None
     last_name: str | None
+    title: str | None
     email: str | None
     login_id: str | None
     type_id: int | None = None
@@ -37,7 +38,7 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> OutsiderProf
             cursor.execute(
                 """
                 SELECT TOP 1
-                    Id, LoginId, Email, FirstName, LastName, TypeId
+                    Id, LoginId, Email, FirstName, LastName, Title, TypeId
                 FROM dbo.UserProfiles
                 WHERE Id = ?
                   AND (IsDeleted = 0 OR IsDeleted IS NULL)
@@ -51,7 +52,7 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> OutsiderProf
             cursor.execute(
                 """
                 SELECT TOP 1
-                    Id, LoginId, Email, FirstName, LastName, TypeId
+                    Id, LoginId, Email, FirstName, LastName, Title, TypeId
                 FROM dbo.UserProfiles
                 WHERE (IsDeleted = 0 OR IsDeleted IS NULL)
                   AND RecordStatusId = 1
@@ -92,6 +93,7 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> OutsiderProf
 
         first_name = (user_row.FirstName or "").strip() or None
         last_name = (user_row.LastName or "").strip() or None
+        title = (user_row.Title or "").strip() or None
         full_name = " ".join(part for part in [first_name, last_name] if part).strip()
         if not full_name:
             full_name = (user_row.Email or user_row.LoginId or "User").strip()
@@ -101,6 +103,7 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> OutsiderProf
             full_name=full_name,
             first_name=first_name,
             last_name=last_name,
+            title=title,
             email=(user_row.Email or "").strip() or email or None,
             login_id=(user_row.LoginId or "").strip() or login or None,
             type_id=type_id,

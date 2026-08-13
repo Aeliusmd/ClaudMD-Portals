@@ -23,6 +23,7 @@ export function VisitDocumentPile({
   reportName,
   onOpenLayer,
   className,
+  hideCaption = false,
 }) {
   const latestIndex = Math.max(0, layers.length - 1);
   const [activeIndex, setActiveIndex] = useState(latestIndex);
@@ -157,20 +158,22 @@ export function VisitDocumentPile({
         </div>
       </div>
 
-      <div className="mt-2 text-center">
-        <button
-          type="button"
-          onClick={(event) => selectVersion(latestIndex, event)}
-          className={cn(
-            "mx-auto block max-w-full cursor-pointer text-sm font-semibold sm:text-base",
-            activeIndex === latestIndex
-              ? "text-white"
-              : "text-white/45 hover:text-white/70"
-          )}
-        >
-          <DocumentNameText name={tileLabel} title={reportName} />
-        </button>
-      </div>
+      {hideCaption ? null : (
+        <div className="mt-2 text-center">
+          <button
+            type="button"
+            onClick={(event) => selectVersion(latestIndex, event)}
+            className={cn(
+              "mx-auto block max-w-full cursor-pointer text-sm font-semibold sm:text-base",
+              activeIndex === latestIndex
+                ? "text-white"
+                : "text-white/45 hover:text-white/70"
+            )}
+          >
+            <DocumentNameText name={tileLabel} title={reportName} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

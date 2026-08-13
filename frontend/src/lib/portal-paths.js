@@ -58,6 +58,8 @@ export const outsiderPaths = {
   login: OUTSIDER_LOGIN_PATH,
   forgotPassword: `${OUTSIDER_PORTAL_BASE}/authentication/forgot-password`,
   changePassword: `${OUTSIDER_PORTAL_BASE}/authentication/change-password`,
+  profile: `${OUTSIDER_PORTAL_BASE}/profile`,
+  profileSecurity: `${OUTSIDER_PORTAL_BASE}/profile?tab=security`,
   sharedDocuments: `${OUTSIDER_PORTAL_BASE}/shared-documents`,
   sharedDocumentsPatient: (patientId) =>
     `${OUTSIDER_PORTAL_BASE}/shared-documents/patient/${encodeURIComponent(patientId)}`,

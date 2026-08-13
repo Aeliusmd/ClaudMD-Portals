@@ -20,6 +20,7 @@ class OutsiderProfile:
     title: str | None
     email: str | None
     login_id: str | None
+    phone: str | None = None
     type_id: int | None = None
     type_label: str | None = None
 
@@ -38,7 +39,7 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> OutsiderProf
             cursor.execute(
                 """
                 SELECT TOP 1
-                    Id, LoginId, Email, FirstName, LastName, Title, TypeId
+                    Id, LoginId, Email, FirstName, LastName, Title, Phone, CellPhone, TypeId
                 FROM dbo.UserProfiles
                 WHERE Id = ?
                   AND (IsDeleted = 0 OR IsDeleted IS NULL)
@@ -52,7 +53,7 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> OutsiderProf
             cursor.execute(
                 """
                 SELECT TOP 1
-                    Id, LoginId, Email, FirstName, LastName, Title, TypeId
+                    Id, LoginId, Email, FirstName, LastName, Title, Phone, CellPhone, TypeId
                 FROM dbo.UserProfiles
                 WHERE (IsDeleted = 0 OR IsDeleted IS NULL)
                   AND RecordStatusId = 1
@@ -94,6 +95,11 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> OutsiderProf
         first_name = (user_row.FirstName or "").strip() or None
         last_name = (user_row.LastName or "").strip() or None
         title = (user_row.Title or "").strip() or None
+        phone = (
+            (getattr(user_row, "CellPhone", None) or "").strip()
+            or (getattr(user_row, "Phone", None) or "").strip()
+            or None
+        )
         full_name = " ".join(part for part in [first_name, last_name] if part).strip()
         if not full_name:
             full_name = (user_row.Email or user_row.LoginId or "User").strip()
@@ -106,6 +112,7 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> OutsiderProf
             title=title,
             email=(user_row.Email or "").strip() or email or None,
             login_id=(user_row.LoginId or "").strip() or login or None,
+            phone=phone,
             type_id=type_id,
             type_label=user_type_label(type_id),
         )

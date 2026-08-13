@@ -53,7 +53,11 @@ export function OutsiderShell({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
-  const [scopedSession, setScopedSession] = useState(false);
+  const scopedByPath = Boolean(
+    pathname?.startsWith(outsiderPaths.sharedDocumentsScoped)
+  );
+  const [scopedSession, setScopedSession] = useState(scopedByPath);
+  const isScoped = scopedByPath || scopedSession;
   const sessionName = useSyncExternalStore(
     subscribeAuthSession,
     readSessionFullName,
@@ -99,11 +103,11 @@ export function OutsiderShell({ children }) {
   }, [router]);
 
   useEffect(() => {
-    if (!scopedSession) return;
+    if (!isScoped) return;
     if (pathname && !pathname.startsWith(outsiderPaths.sharedDocumentsScoped)) {
       router.replace(outsiderPaths.sharedDocumentsScoped);
     }
-  }, [pathname, router, scopedSession]);
+  }, [pathname, router, isScoped]);
 
   useEffect(() => {
     if (!navOpen) return undefined;
@@ -127,7 +131,7 @@ export function OutsiderShell({ children }) {
       <Sidebar
         open={navOpen}
         onClose={() => setNavOpen(false)}
-        items={scopedSession ? outsiderScopedShareNavItems : outsiderNavItems}
+        items={isScoped ? outsiderScopedShareNavItems : outsiderNavItems}
         onLogout={handleLogout}
         loginHref={outsiderPaths.login}
       />
@@ -138,20 +142,20 @@ export function OutsiderShell({ children }) {
           portalLabel="Share Portal"
           profileUser={profileUser}
           profileHref={
-            scopedSession
+            isScoped
               ? outsiderPaths.sharedDocumentsScoped
-              : outsiderPaths.sharedDocuments
+              : outsiderPaths.profile
           }
           settingsHref={
-            scopedSession
+            isScoped
               ? outsiderPaths.sharedDocumentsScoped
-              : outsiderPaths.sharedDocuments
+              : outsiderPaths.profileSecurity
           }
           loginHref={outsiderPaths.login}
           notifications={[]}
           showNotifications={false}
           showSearch={false}
-          showAccountLinks={false}
+          showAccountLinks={!isScoped}
         />
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6">
           {children}

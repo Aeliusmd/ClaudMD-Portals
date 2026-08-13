@@ -135,6 +135,15 @@ def _load_shared_document_access(
             sd.DocumentId,
             sd.Email AS ShareEmail,
             sd.ShareWithUserId,
+            CONVERT(varchar(33), sd.CreatedDateTime, 127) AS SharedAt,
+            (
+                SELECT TOP (1) CONVERT(varchar(33), dp.CreatedDateTime, 127)
+                FROM dbo.DocterPublishes dp
+                WHERE dp.CheckInId = ch.Id
+                  AND (du.ReportId IS NULL OR dp.ReportId = du.ReportId)
+                  AND (dp.IsDeleted = 0 OR dp.IsDeleted IS NULL)
+                ORDER BY dp.CreatedDateTime DESC, dp.Id DESC
+            ) AS PublishedAt,
             du.FileName,
             du.FilePath,
             du.FileExtention,
@@ -306,6 +315,8 @@ def _to_detail_response(row: dict[str, Any]) -> SharedDocumentDetailResponse:
         file_name=(row.get("FileName") or "").strip() or None,
         visit_date=_format_display_date(row.get("VisitDate")),
         visit_label=visit_label,
+        published_at=(row.get("PublishedAt") or "").strip() or None,
+        shared_at=(row.get("SharedAt") or "").strip() or None,
         employee=SharedDocumentEmployee(
             patient_id=int(patient_id) if patient_id is not None else None,
             name=_patient_display_name(row.get("FirstName"), row.get("LastName")),

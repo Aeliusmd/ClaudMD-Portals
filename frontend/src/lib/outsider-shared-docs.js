@@ -48,7 +48,12 @@ function toVisitDocument(versions) {
     documentType: latest.documentType,
     reportTitle: latest.reportTitle,
     visitDate: latest.visitDate,
-    publishedAt: latest.sharedAt || latest.visitDate || null,
+    publishedAt:
+      latest.publishedAt ||
+      latest.document?.publishedAt ||
+      latest.visitDate ||
+      null,
+    sharedAt: latest.sharedAt || null,
     url: latest.document?.url || null,
     isViewed: versions.every((item) => item.isViewed),
     previousVersions,

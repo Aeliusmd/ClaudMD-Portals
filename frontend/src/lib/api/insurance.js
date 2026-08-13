@@ -369,6 +369,8 @@ export async function fetchInsuranceSharedDocumentBySharedId(
     fileName: data.file_name || null,
     visitDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
     visitLabel: data.visit_label || "Visit",
+    publishedAt: data.published_at || data.publishedAt || null,
+    sharedAt: data.shared_at || data.sharedAt || null,
     employee: {
       patientId: employee.patient_id ?? null,
       name: employee.name || "Patient",
@@ -395,6 +397,7 @@ export async function fetchInsuranceSharedDocumentBySharedId(
           : "DOC",
       visitDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
       reportDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
+      publishedAt: data.published_at || data.publishedAt || null,
       provider: null,
       url: fileUrl,
     },

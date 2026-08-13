@@ -81,6 +81,11 @@ export const outsiderNavItems = [
     label: "Shared Documents",
     icon: "FileText",
   },
+  {
+    href: outsiderPaths.profile,
+    label: "Profile / Security",
+    icon: "Shield",
+  },
 ];
 
 export const outsiderScopedShareNavItems = [

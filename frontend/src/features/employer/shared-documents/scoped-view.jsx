@@ -23,6 +23,7 @@ import {
   documentDisplayName,
   shortDocumentBadge,
 } from "@/lib/document-labels";
+import { SharedAtStamp } from "@/components/ui/shared-at-stamp";
 import { formatDateMMDDYY, formatDateOfBirth } from "@/lib/dates";
 
 function DemoField({ label, value }) {
@@ -169,7 +170,9 @@ export function EmployerScopedSharedDocumentsView() {
 
   const badge = shortDocumentBadge(document);
   const docName = documentDisplayName(document);
-  const dateLabel = formatDateMMDDYY(visitRow.date);
+  const dateLabel = formatDateMMDDYY(
+    document.publishedAt || livePayload?.publishedAt || visitRow.date
+  );
 
   return (
     <div className="space-y-5">
@@ -246,12 +249,15 @@ export function EmployerScopedSharedDocumentsView() {
                 }
               />
               <div className="mt-3 space-y-1 text-center">
-                {dateLabel ? (
-                  <p className="text-sm font-semibold text-white/90">{dateLabel}</p>
-                ) : null}
                 <DocumentNameText
                   name={docName}
                   className="text-sm font-semibold text-white sm:text-base"
+                />
+                {dateLabel ? (
+                  <p className="text-sm font-semibold text-white/90">{dateLabel}</p>
+                ) : null}
+                <SharedAtStamp
+                  value={livePayload?.sharedAt || session?.sharedAt}
                 />
               </div>
               {document.provider ? (

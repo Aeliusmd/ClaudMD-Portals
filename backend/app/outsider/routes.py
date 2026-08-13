@@ -42,6 +42,7 @@ def outsider_profile_endpoint(
         title=profile.title,
         email=profile.email,
         login_id=profile.login_id,
+        phone=profile.phone,
         type_id=profile.type_id,
         type_label=profile.type_label,
     )

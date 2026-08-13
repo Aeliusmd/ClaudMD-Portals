@@ -3,7 +3,9 @@
 import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { DocumentNameText } from "@/components/ui/document-name-text";
 import { VisitDocumentPile } from "@/components/ui/visit-document-pile";
+import { SharedAtStamp } from "@/components/ui/shared-at-stamp";
 import { documentDisplayName, shortDocumentBadge } from "@/lib/document-labels";
+import { formatDateMMDDYY } from "@/lib/dates";
 import { visitDocumentIdFromUrl } from "@/lib/documents";
 import {
   visitDocumentReportName,
@@ -38,6 +40,7 @@ export function DocumentThumbTile({
   doc,
   onPreview,
   className,
+  showSharedAt = false,
 }) {
   const badge = shortDocumentBadge(doc);
   const url = doc?.url;
@@ -48,6 +51,14 @@ export function DocumentThumbTile({
   const tileLabel = visitDocumentTileLabel(doc);
   const pileLayers = visibleVisitPileLayers(doc);
   const hasVersionPile = pileLayers.length > 1;
+  const publishedDateLabel =
+    formatDateMMDDYY(
+      doc.publishedAt || doc.visitDate || doc.reportDate || doc.date
+    ) ||
+    doc.publishedAt ||
+    doc.visitDate ||
+    null;
+  const showShareStamp = showSharedAt || Boolean(doc.sharedAt);
 
   function openLayer(layer, isPreviousVersion) {
     if (!onPreview) return;
@@ -84,27 +95,32 @@ export function DocumentThumbTile({
           tileLabel={tileLabel}
           reportName={reportName}
           onOpenLayer={openLayer}
+          hideCaption
         />
       ) : (
-        <>
-          <div className="overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-black/5">
-            <PdfThumbnail
-              url={url}
-              badge={badge}
-              title={name}
-              onOpen={() => openLayer(pileLayers[0] || { url }, false)}
-              className="rounded-2xl shadow-none"
-            />
-          </div>
-          <div className="mt-3 text-center">
-            <DocumentNameText
-              name={tileLabel}
-              title={reportName}
-              className="text-sm font-semibold text-white sm:text-base"
-            />
-          </div>
-        </>
+        <div className="overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-black/5">
+          <PdfThumbnail
+            url={url}
+            badge={badge}
+            title={name}
+            onOpen={() => openLayer(pileLayers[0] || { url }, false)}
+            className="rounded-2xl shadow-none"
+          />
+        </div>
       )}
+      <div className="mt-3 space-y-1 text-center">
+        <DocumentNameText
+          name={reportName}
+          title={reportName}
+          className="text-sm font-semibold text-white sm:text-base"
+        />
+        {publishedDateLabel ? (
+          <p className="text-sm font-semibold text-white/90">
+            {publishedDateLabel}
+          </p>
+        ) : null}
+        {showShareStamp ? <SharedAtStamp value={doc.sharedAt} /> : null}
+      </div>
     </div>
   );
 }

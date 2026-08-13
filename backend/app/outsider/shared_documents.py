@@ -24,7 +24,10 @@ from app.employer.schemas import (
     SharedDocumentDetailResponse,
     SharedDocumentEmployee,
 )
-from app.outsider.schemas import SharedDocumentListResponse
+from app.outsider.schemas import (
+    MarkSharedDocumentViewedResponse,
+    SharedDocumentListResponse,
+)
 from app.employer.visit_documents import render_pdf_first_page_png
 from app.insurance.patients import _format_display_date, _gender_label
 from app.outsider.profile import OutsiderProfile, fetch_profile_from_clinic
@@ -313,6 +316,27 @@ def _mark_shared_id_viewed(
         return int(cursor.rowcount or 0)
 
 
+def mark_shared_document_viewed(
+    current_user: CurrentUser,
+    shared_id: str,
+) -> MarkSharedDocumentViewedResponse:
+    """Mark one SharedDocuments row as viewed when the recipient opens it."""
+    clinic, profile, row = _load_shared_document_access(current_user, shared_id)
+    resolved_id = str(row.get("SharedId") or shared_id)
+    _mark_shared_id_viewed(clinic, profile, resolved_id)
+    return MarkSharedDocumentViewedResponse(shared_id=resolved_id, viewed=True)
+
+
+def _coerce_is_viewed(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bytes):
+        return any(byte != 0 for byte in value)
+    if isinstance(value, (int, float, bool)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "yes"}
+
+
 def _resolve_upload_pdf_path(row: dict[str, Any]) -> Path | None:
     folder_or_file = (row.get("FilePath") or "").strip()
     if not folder_or_file:
@@ -388,7 +412,7 @@ def _to_detail_response(row: dict[str, Any]) -> SharedDocumentDetailResponse:
         check_in_id=int(check_in_id) if check_in_id is not None else None,
         report_id=int(report_id) if report_id is not None else None,
         shared_at=(row.get("SharedAt") or "").strip() or None,
-        is_viewed=bool(row.get("IsViewed")),
+        is_viewed=_coerce_is_viewed(row.get("IsViewed")),
         employee=SharedDocumentEmployee(
             patient_id=int(patient_id) if patient_id is not None else None,
             name=_patient_display_name(row.get("FirstName"), row.get("LastName")),

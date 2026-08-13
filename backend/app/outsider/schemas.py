@@ -18,3 +18,8 @@ class OutsiderProfileResponse(BaseModel):
 class SharedDocumentListResponse(BaseModel):
     items: list[SharedDocumentDetailResponse] = []
     total: int = 0
+
+
+class MarkSharedDocumentViewedResponse(BaseModel):
+    shared_id: str
+    viewed: bool = True

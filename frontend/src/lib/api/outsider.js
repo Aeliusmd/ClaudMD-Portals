@@ -116,3 +116,20 @@ export async function fetchOutsiderSharedDocumentBySharedId(
   );
   return mapOutsiderSharedDetail(data);
 }
+
+export async function markOutsiderSharedDocumentViewed(accessToken, sharedId) {
+  if (!sharedId) return null;
+  return fetchJson(
+    `${API_BASE_URL}/api/outsider/shared-documents/by-shared-id/${encodeURIComponent(
+      sharedId
+    )}/viewed`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+    "Unable to mark document as viewed."
+  );
+}

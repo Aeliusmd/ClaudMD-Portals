@@ -97,6 +97,7 @@ export function OutsiderSharedDocumentsView() {
               <tr>
                 <th className="px-5 py-3 font-bold">Patient</th>
                 <th className="px-5 py-3 font-bold">Last shared</th>
+                <th className="px-5 py-3 font-bold">Unread</th>
                 <th className="px-5 py-3 font-bold">Documents</th>
               </tr>
             </thead>
@@ -125,6 +126,16 @@ export function OutsiderSharedDocumentsView() {
                   </td>
                   <td className="px-5 py-3.5 tabular-nums text-foreground-900">
                     {formatDateTimeCompactMMDDYY(patient.lastSharedAt) || "—"}
+                  </td>
+                  <td
+                    className={cn(
+                      "px-5 py-3.5 tabular-nums",
+                      patient.unreadCount
+                        ? "font-bold text-primary-600"
+                        : "text-foreground-900"
+                    )}
+                  >
+                    {patient.unreadCount}
                   </td>
                   <td className="px-5 py-3.5 tabular-nums text-foreground-900">
                     {patient.documentCount}

@@ -7,10 +7,15 @@ from app.auth.dependencies import CurrentUser, get_current_user
 from app.db.clinic import get_clinic_by_activation_key
 from app.employer.schemas import SharedDocumentDetailResponse
 from app.outsider.profile import fetch_profile_from_clinic
-from app.outsider.schemas import OutsiderProfileResponse, SharedDocumentListResponse
+from app.outsider.schemas import (
+    MarkSharedDocumentViewedResponse,
+    OutsiderProfileResponse,
+    SharedDocumentListResponse,
+)
 from app.outsider.shared_documents import (
     get_shared_document_detail,
     list_shared_documents,
+    mark_shared_document_viewed,
     open_shared_document_file,
     open_shared_document_thumbnail,
 )
@@ -60,6 +65,18 @@ def outsider_shared_document_detail_endpoint(
 ):
     """Resolve a secure share link for an external recipient (family/other)."""
     return get_shared_document_detail(current_user, shared_id)
+
+
+@router.post(
+    "/shared-documents/by-shared-id/{shared_id}/viewed",
+    response_model=MarkSharedDocumentViewedResponse,
+)
+def outsider_shared_document_viewed_endpoint(
+    shared_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """Mark SharedDocuments.IsViewed = 1 when the contact opens that document."""
+    return mark_shared_document_viewed(current_user, shared_id)
 
 
 @router.get("/shared-documents/by-shared-id/{shared_id}/file")

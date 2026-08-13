@@ -99,7 +99,14 @@ export function NotificationsMenu({
   }, [open, onOpen]);
 
   function handleToggle() {
-    setOpen((prev) => !prev);
+    setOpen((prev) => {
+      const next = !prev;
+      if (next && !markedOnOpenRef.current) {
+        markedOnOpenRef.current = true;
+        onOpen?.();
+      }
+      return next;
+    });
   }
 
   return (

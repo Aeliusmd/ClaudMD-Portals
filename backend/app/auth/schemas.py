@@ -5,10 +5,10 @@ class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, description="Email or login id")
     password: str = Field(..., min_length=1)
     activation_key: str = Field(..., min_length=1, alias="activationKey")
-    """Optional portal the user is signing into (employer | patient | insurance)."""
+    """Optional portal the user is signing into (employer | patient | insurance | outsider)."""
     portal: str | None = Field(
         default=None,
-        description="Expected portal from the login page: employer, patient, or insurance.",
+        description="Expected portal from the login page: employer, patient, insurance, or outsider.",
     )
 
     model_config = {
@@ -29,6 +29,7 @@ class UserInfo(BaseModel):
     user_group_id: int | None = None
     is_admin: bool = False
     activation_key: str | None = None
+    must_change_password: bool = False
 
 
 class ClinicInfo(BaseModel):

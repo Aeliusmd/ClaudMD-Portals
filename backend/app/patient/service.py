@@ -14,6 +14,7 @@ from app.db.clinic import (
 )
 from app.employer.shift_type import shift_type_label
 from app.patient.information import get_patient_information
+from app.patient.notifications import _recipient_clause
 from app.patient.profile import PatientProfile, fetch_profile_from_clinic, update_profile_in_clinic
 from app.patient.schemas import (
     PatientDashboardSummaryResponse,
@@ -422,37 +423,46 @@ def _count_upcoming_appointments(clinic, patient_id: int) -> int:
 
 def _count_unread_shared_reports(clinic, profile: PatientProfile) -> int:
     """
-    Unread SharedDocuments for the logged-in patient's own chart only
-    (last 30 days). Does not include appointments or other notification types.
+    Unread SharedDocuments shared with this patient user (last 30 days).
+
+    Recipient: ShareWithUserId or Email for the logged-in patient.
+    Scope: visit must belong to this patient's own chart.
     """
     if not shared_documents_has_is_viewed(clinic):
         return 0
     if profile.patient_id is None:
         return 0
 
+    email_norm = (profile.email or profile.login_id or "").strip().lower() or None
+    recipient_sql, recipient_params = _recipient_clause(profile.user_id, email_norm)
+    if recipient_sql == "1 = 0":
+        return 0
+
+    sql = f"""
+        SELECT COUNT(DISTINCT sd.Id)
+        FROM dbo.SharedDocuments sd
+        INNER JOIN dbo.DocumentUploads du
+            ON du.Id = sd.DocumentId
+           AND sd.DocumentTypeId = 2
+           AND (du.IsDeleted = 0 OR du.IsDeleted IS NULL)
+        INNER JOIN dbo.CheckInsHeader ch
+            ON ch.Id = du.HeaderObjectId
+           AND du.ObjectTypeId = 53
+           AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+        WHERE (sd.IsDeleted = 0 OR sd.IsDeleted IS NULL)
+          AND ISNULL(sd.IsViewed, 0) = 0
+          AND sd.CreatedDateTime >= DATEADD(day, -?, SYSDATETIMEOFFSET())
+          AND ({recipient_sql})
+          AND ch.PatientId = ?
+    """
+    params = [
+        LOOKBACK_DAYS,
+        *recipient_params,
+        int(profile.patient_id),
+    ]
+
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT COUNT(DISTINCT sd.Id)
-            FROM dbo.SharedDocuments sd
-            INNER JOIN dbo.DocumentUploads du
-                ON du.Id = sd.DocumentId
-               AND sd.DocumentTypeId = 2
-               AND (du.IsDeleted = 0 OR du.IsDeleted IS NULL)
-            INNER JOIN dbo.CheckInsHeader ch
-                ON ch.Id = du.HeaderObjectId
-               AND du.ObjectTypeId = 53
-               AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
-            WHERE (sd.IsDeleted = 0 OR sd.IsDeleted IS NULL)
-              AND ISNULL(sd.IsViewed, 0) = 0
-              AND sd.CreatedDateTime >= DATEADD(day, -?, SYSDATETIMEOFFSET())
-              AND ch.PatientId = ?
-            """,
-            (
-                LOOKBACK_DAYS,
-                int(profile.patient_id),
-            ),
-        )
+        cursor.execute(sql, tuple(params))
         row = cursor.fetchone()
         return int(row[0] or 0) if row else 0

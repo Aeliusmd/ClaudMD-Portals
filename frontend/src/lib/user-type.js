@@ -23,7 +23,12 @@ export const USER_TYPE_LABELS = Object.freeze({
 });
 
 /** Must match backend app.auth.user_profile_type.ALL_PORTALS */
-export const ALL_PORTALS = Object.freeze(["employer", "patient", "insurance"]);
+export const ALL_PORTALS = Object.freeze([
+  "employer",
+  "patient",
+  "insurance",
+  "outsider",
+]);
 
 /** Must match backend USER_TYPE_ALLOWED_PORTALS (Super Admin → employer only). */
 export const USER_TYPE_ALLOWED_PORTALS = Object.freeze({
@@ -31,6 +36,7 @@ export const USER_TYPE_ALLOWED_PORTALS = Object.freeze({
   [UserType.EmployerUser]: Object.freeze(["employer"]),
   [UserType.PatientUser]: Object.freeze(["patient"]),
   [UserType.InsuranceUser]: Object.freeze(["insurance"]),
+  [UserType.ExternalUser]: Object.freeze(["outsider"]),
 });
 
 export function userTypeLabel(typeId) {

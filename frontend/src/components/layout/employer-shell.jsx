@@ -22,6 +22,7 @@ import {
 } from "@/lib/secure-share-session";
 import { portalAccessRedirect } from "@/lib/portal-access";
 import { employerPaths } from "@/lib/portal-paths";
+import { displayFullName } from "@/lib/profile-display";
 import { userTypeLabel } from "@/lib/user-type";
 
 const emptySubscribe = () => () => {};
@@ -83,6 +84,7 @@ export function EmployerShell({ children }) {
     if (profile) {
       return {
         ...profile,
+        fullName: displayFullName(profile) || profile.fullName || "User",
         title: typeLabel || profile.jobTitle || profile.title || "",
         role: typeLabel,
       };
@@ -106,6 +108,7 @@ export function EmployerShell({ children }) {
     if (!session) return;
 
     if (hasLiveSharedIdSession(session)) {
+      if (session.recipientRole && session.recipientRole !== "employer") return;
       if (pathname && !pathname.startsWith(employerPaths.sharedDocumentsScoped)) {
         router.replace(employerPaths.sharedDocumentsScoped);
       }

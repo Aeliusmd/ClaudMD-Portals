@@ -11,6 +11,11 @@ from fastapi.responses import FileResponse, Response
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
 from app.employer.shift_type import shift_type_label
+from app.employer.visit_document_grouping import (
+    build_grouped_visit_documents,
+    normalize_publish_datetime,
+    version_tag_from_path,
+)
 from app.employer.visit_documents import (
     _format_date_iso,
     _format_display_date,
@@ -134,7 +139,7 @@ def open_visit_document_thumbnail(
     except Exception as exc:  # noqa: BLE001 — surface as 404 for missing/unreadable PDF
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document preview is not available.",
+            detail="Document does not exist.",
         ) from exc
     return Response(content=png_bytes, media_type="image/png")
 
@@ -190,7 +195,7 @@ def _require_patient_publish_pdf(
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found for this visit.",
+            detail="Document does not exist.",
         )
 
     report_name = (
@@ -205,7 +210,7 @@ def _require_patient_publish_pdf(
     if pdf_path is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document file is not available.",
+            detail="Document does not exist.",
         )
     return pdf_path
 
@@ -237,6 +242,8 @@ def _fetch_visit_header(*, clinic, patient_id: int, check_in_id: int) -> dict | 
             COALESCE(NULLIF(LTRIM(RTRIM(loc.Name)), ''), '—') AS LocationName,
             p.FirstName,
             p.LastName,
+            p.AccountNumber,
+            p.GenderId,
             p.DateOfBirth,
             p.Email AS PatientEmail,
             p.CellPhone,
@@ -304,6 +311,31 @@ def _fetch_visit_header(*, clinic, patient_id: int, check_in_id: int) -> dict | 
         return dict(zip(columns, row))
 
 
+def _row_to_patient_visit_document(row: dict) -> PatientVisitDocument | None:
+    report_name = (
+        (row.get("ReportName") or "").strip()
+        or (row.get("ReportTableName") or "").strip()
+        or (row.get("ReportTitle") or "").strip()
+        or (row.get("Name") or "").strip()
+        or "Document"
+    )
+    folder = (row.get("Path") or "").strip()
+    badge = _preview_badge(row.get("ReportId"), report_name)
+    return PatientVisitDocument(
+        id=int(row["Id"]),
+        check_in_id=int(row["CheckInId"]),
+        report_id=int(row["ReportId"]) if row.get("ReportId") is not None else None,
+        report_name=report_name,
+        name=(row.get("Name") or "").strip() or report_name,
+        path=folder or None,
+        preview_badge=badge,
+        preview_label=badge,
+        is_completed=bool(row.get("IsComplated")),
+        published_at=normalize_publish_datetime(row.get("CreatedDateTime")),
+        version_tag=version_tag_from_path(folder),
+    )
+
+
 def _fetch_documents_for_checkin(clinic, check_in_id: int) -> list[PatientVisitDocument]:
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
@@ -317,6 +349,7 @@ def _fetch_documents_for_checkin(clinic, check_in_id: int) -> list[PatientVisitD
                 dp.Name,
                 dp.Path,
                 dp.IsComplated,
+                CONVERT(varchar(30), dp.CreatedDateTime, 126) AS CreatedDateTime,
                 r.Name AS ReportTableName,
                 r.ReportTitle
             FROM dbo.DocterPublishes dp
@@ -330,33 +363,10 @@ def _fetch_documents_for_checkin(clinic, check_in_id: int) -> list[PatientVisitD
         columns = [col[0] for col in cursor.description]
         rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-    documents: list[PatientVisitDocument] = []
-    for row in rows:
-        report_name = (
-            (row.get("ReportName") or "").strip()
-            or (row.get("ReportTableName") or "").strip()
-            or (row.get("ReportTitle") or "").strip()
-            or (row.get("Name") or "").strip()
-            or "Document"
-        )
-        folder = (row.get("Path") or "").strip()
-        if _resolve_publish_pdf_path(folder=folder, report_name=report_name) is None:
-            continue
-        badge = _preview_badge(row.get("ReportId"), report_name)
-        documents.append(
-            PatientVisitDocument(
-                id=int(row["Id"]),
-                check_in_id=int(row["CheckInId"]),
-                report_id=int(row["ReportId"]) if row.get("ReportId") is not None else None,
-                report_name=report_name,
-                name=(row.get("Name") or "").strip() or report_name,
-                path=folder or None,
-                preview_badge=badge,
-                preview_label=badge,
-                is_completed=bool(row.get("IsComplated")),
-            )
-        )
-    return documents
+    return build_grouped_visit_documents(
+        rows,
+        row_to_document=_row_to_patient_visit_document,
+    )
 
 
 def _fetch_other_visits(
@@ -455,10 +465,14 @@ def _map_patient_info(row: dict, patient_id: int) -> PatientVisitPatientInfo:
     ]
     address_lines = [part for part in address_parts if part]
     address = ", ".join(address_lines) if address_lines else None
+    account = row.get("AccountNumber")
+    account_no = str(account).strip() if account is not None else None
 
     return PatientVisitPatientInfo(
         patient_id=patient_id,
         full_name=full_name,
+        account_no=account_no or None,
+        gender=_gender_short(row.get("GenderId")),
         date_of_birth=_format_display_date(row.get("DateOfBirth")),
         phone=phone,
         email=(row.get("PatientEmail") or "").strip() or None,
@@ -554,6 +568,20 @@ def _visit_category(category_id, code) -> str | None:
         return "Urgent Care"
     if cid == 4:
         return "Personal Injury"
+    return None
+
+
+def _gender_short(gender_id) -> str | None:
+    if gender_id is None:
+        return None
+    try:
+        gid = int(gender_id)
+    except (TypeError, ValueError):
+        return None
+    if gid == 1:
+        return "M"
+    if gid == 2:
+        return "F"
     return None
 
 

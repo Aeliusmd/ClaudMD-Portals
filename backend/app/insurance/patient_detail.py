@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -10,6 +11,11 @@ from fastapi.responses import FileResponse, Response
 
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
+from app.employer.visit_document_grouping import (
+    build_grouped_visit_documents,
+    normalize_publish_datetime,
+    version_tag_from_path,
+)
 from app.employer.visit_documents import (
     _format_date_iso,
     _format_display_date,
@@ -237,6 +243,32 @@ def _fetch_patient_header(
     }
 
 
+def _row_to_insurance_visit_document(row: dict) -> InsurancePatientVisitDocument | None:
+    check_in_id = int(row["CheckInId"])
+    report_name = (
+        (row.get("ReportName") or "").strip()
+        or (row.get("ReportTableName") or "").strip()
+        or (row.get("ReportTitle") or "").strip()
+        or (row.get("Name") or "").strip()
+        or "Document"
+    )
+    folder = (row.get("Path") or "").strip()
+    badge = _preview_badge(row.get("ReportId"), report_name)
+    return InsurancePatientVisitDocument(
+        id=int(row["Id"]),
+        check_in_id=check_in_id,
+        report_id=int(row["ReportId"]) if row.get("ReportId") is not None else None,
+        report_name=report_name,
+        name=(row.get("Name") or "").strip() or report_name,
+        path=folder or None,
+        preview_badge=badge,
+        preview_label=badge,
+        is_completed=bool(row.get("IsComplated")),
+        published_at=normalize_publish_datetime(row.get("CreatedDateTime")),
+        version_tag=version_tag_from_path(folder),
+    )
+
+
 def _fetch_visits_with_documents(
     *,
     clinic,
@@ -288,6 +320,7 @@ def _fetch_visits_with_documents(
                 dp.Name,
                 dp.Path,
                 dp.IsComplated,
+                CONVERT(varchar(30), dp.CreatedDateTime, 126) AS CreatedDateTime,
                 r.Name AS ReportTableName,
                 r.ReportTitle,
                 r.Code AS ReportCode
@@ -302,32 +335,14 @@ def _fetch_visits_with_documents(
         doc_rows = [dict(zip(doc_columns, row)) for row in cursor.fetchall()]
 
     docs_by_checkin: dict[int, list[InsurancePatientVisitDocument]] = {}
+    rows_by_checkin: dict[int, list[dict]] = defaultdict(list)
     for row in doc_rows:
-        check_in_id = int(row["CheckInId"])
-        report_name = (
-            (row.get("ReportName") or "").strip()
-            or (row.get("ReportTableName") or "").strip()
-            or (row.get("ReportTitle") or "").strip()
-            or (row.get("Name") or "").strip()
-            or "Document"
-        )
-        folder = (row.get("Path") or "").strip()
-        # Match employer portal: only include publishes with a resolvable PDF.
-        if _resolve_publish_pdf_path(folder=folder, report_name=report_name) is None:
-            continue
-        badge = _preview_badge(row.get("ReportId"), report_name)
-        docs_by_checkin.setdefault(check_in_id, []).append(
-            InsurancePatientVisitDocument(
-                id=int(row["Id"]),
-                check_in_id=check_in_id,
-                report_id=int(row["ReportId"]) if row.get("ReportId") is not None else None,
-                report_name=report_name,
-                name=(row.get("Name") or "").strip() or report_name,
-                path=folder or None,
-                preview_badge=badge,
-                preview_label=badge,
-                is_completed=bool(row.get("IsComplated")),
-            )
+        rows_by_checkin[int(row["CheckInId"])].append(row)
+
+    for check_in_id, rows in rows_by_checkin.items():
+        docs_by_checkin[check_in_id] = build_grouped_visit_documents(
+            rows,
+            row_to_document=_row_to_insurance_visit_document,
         )
 
     visits: list[InsurancePatientVisitRecord] = []
@@ -406,12 +421,12 @@ def open_insurance_visit_document_file(
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found.",
+            detail="Document does not exist.",
         )
     if int(row.PatientId) != int(patient_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found for this patient.",
+            detail="Document does not exist.",
         )
     if row.InsuranceId is None or int(row.InsuranceId) != int(profile.insurance_id):
         raise HTTPException(
@@ -426,7 +441,7 @@ def open_insurance_visit_document_file(
     if pdf_path is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document file is not available on the publish share.",
+            detail="Document does not exist.",
         )
 
     return FileResponse(
@@ -452,7 +467,7 @@ def open_insurance_visit_document_thumbnail(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document preview is not available.",
+            detail="Document does not exist.",
         ) from exc
     return Response(content=png_bytes, media_type="image/png")
 

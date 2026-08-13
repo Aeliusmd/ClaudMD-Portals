@@ -3,5 +3,6 @@ export {
   EMPLOYER_LOGIN_PATH,
   PATIENT_LOGIN_PATH,
   INSURANCE_LOGIN_PATH,
+  OUTSIDER_LOGIN_PATH,
   getLoginHref,
 } from "@/lib/portal-paths";

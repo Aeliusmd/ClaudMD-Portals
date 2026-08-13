@@ -49,7 +49,8 @@ export function applyNotificationReadState(items, lastOpenedAt) {
       return { ...item, unread: false };
     }
     const created = Date.parse(item.createdAt);
-    if (Number.isNaN(created) || created <= opened) {
+    // Allow small client/server clock skew so opening the bell always clears.
+    if (Number.isNaN(created) || created <= opened + 120000) {
       return { ...item, unread: false };
     }
     return item;

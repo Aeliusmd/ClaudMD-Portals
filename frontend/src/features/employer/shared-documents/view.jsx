@@ -21,6 +21,7 @@ import { sharedDocuments } from "@/data/employer";
 import { reportBadgeStyles } from "@/lib/report-badge-styles";
 import { openDocumentInNewTab } from "@/lib/documents";
 import { coerceToDate, daysAgoIso, todayIso } from "@/lib/date-range";
+import { formatDateMMDDYY } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 const SHARED_DOCS_PAGE_SIZE = 15;
@@ -210,7 +211,7 @@ export function EmployerSharedDocumentsView() {
                         <span className="inline-flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5 shrink-0" />
                           {doc.dateOfInjury
-                            ? `DOI ${doc.dateOfInjury}`
+                            ? `DOI ${formatDateMMDDYY(doc.dateOfInjury)}`
                             : "DOI N/A"}
                         </span>
                         <span className="inline-flex items-center gap-1.5">
@@ -219,7 +220,7 @@ export function EmployerSharedDocumentsView() {
                         </span>
                         <span className="inline-flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5 shrink-0" />
-                          {doc.shareDate}
+                          {formatDateMMDDYY(doc.shareDate) || doc.shareDate}
                         </span>
                       </div>
                     </div>

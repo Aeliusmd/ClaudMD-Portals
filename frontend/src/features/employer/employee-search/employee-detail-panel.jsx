@@ -74,29 +74,25 @@ export function EmployeeDetailPanel({
             Employee Demographics
           </h3>
           <div className="rounded-xl border border-border/70 bg-cream/30 p-4 text-sm">
-            <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <DetailField label="Full Name" value={employee.name || "—"} />
-                <DetailField
-                  label="Account #"
-                  value={employee.accountNo || "—"}
-                />
-                <DetailField label="Phone" value={employee.phone || "—"} />
-              </div>
-              <div className="space-y-2">
-                <DetailField
-                  label="DOB"
-                  value={employee.dateOfBirth || "—"}
-                />
-                <DetailField
-                  label="Gender"
-                  value={employee.gender || "—"}
-                />
-                <DetailField
-                  label="Address"
-                  value={employee.address || "—"}
-                />
-              </div>
+            <div className="space-y-2 text-sm">
+              <DetailField label="Full Name" value={employee.name || "—"} />
+              <DetailField
+                label="Account #"
+                value={employee.accountNo || "—"}
+              />
+              <DetailField label="Phone" value={employee.phone || "—"} />
+              <DetailField
+                label="DOB"
+                value={employee.dateOfBirth || "—"}
+              />
+              <DetailField
+                label="Gender"
+                value={employee.gender || "—"}
+              />
+              <DetailField
+                label="Address"
+                value={employee.address || "—"}
+              />
             </div>
           </div>
         </section>

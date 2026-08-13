@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DetailField } from "@/components/ui/detail-field";
 import { categoryStyles } from "@/lib/category-styles";
+import { formatDateMMDDYY } from "@/lib/dates";
 import { openDocumentInNewTab } from "@/lib/documents";
 import { reportBadgeStyles } from "@/lib/report-badge-styles";
 
 export function ReportDetailPanel({ doc, onClose, onPreview }) {
   const badgeLabel = doc.badgeLabel || doc.documentType;
-  const reportDate = doc.reportDate || doc.shareDate;
-  const visitDate = doc.visitDate || "N/A";
+  const reportDate = formatDateMMDDYY(doc.reportDate || doc.shareDate) || "N/A";
+  const visitDate = formatDateMMDDYY(doc.visitDate) || "N/A";
 
   return (
     <Card className="sticky top-6 overflow-hidden p-0">
@@ -65,11 +66,17 @@ export function ReportDetailPanel({ doc, onClose, onPreview }) {
           </p>
           <Badge className={categoryStyles[doc.category]}>{doc.category}</Badge>
         </div>
-        <DetailField label="Date of Injury" value={doc.dateOfInjury || "N/A"} />
+        <DetailField
+          label="Date of Injury"
+          value={formatDateMMDDYY(doc.dateOfInjury) || "N/A"}
+        />
         <DetailField label="Visit Date" value={visitDate} />
         <DetailField label="Provider" value={doc.provider} />
         <DetailField label="Report Date" value={reportDate} />
-        <DetailField label="Shared Date" value={doc.shareDate} />
+        <DetailField
+          label="Shared Date"
+          value={formatDateMMDDYY(doc.shareDate) || "N/A"}
+        />
         <div className="space-y-1">
           <p className="text-[11px] font-semibold tracking-[0.06em] text-muted uppercase">
             Status

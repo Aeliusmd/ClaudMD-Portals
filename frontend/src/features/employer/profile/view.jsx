@@ -664,6 +664,15 @@ function EmployerProfileContent() {
         router.replace(LOGIN_PATH);
         return;
       }
+      if (err?.status === 400) {
+        setPasswordErrors((prev) => ({
+          ...prev,
+          currentPassword:
+            err?.message && /current password/i.test(err.message)
+              ? err.message
+              : prev.currentPassword,
+        }));
+      }
       setErrorMessage(err?.message || "Unable to update password.");
     } finally {
       setPasswordSaving(false);

@@ -10,6 +10,7 @@ import { getLoginHref } from "@/lib/auth-routes";
 import {
   employerPaths,
   insurancePaths,
+  outsiderPaths,
   patientPaths,
 } from "@/lib/portal-paths";
 
@@ -23,7 +24,9 @@ function normalizeRecipientRole(role) {
   const value = String(role || "")
     .trim()
     .toLowerCase();
-  if (value === "insurance" || value === "patient") return value;
+  if (value === "insurance" || value === "patient" || value === "outsider") {
+    return value;
+  }
   return "employer";
 }
 
@@ -102,6 +105,7 @@ export function getSecureShareScopedHref(roleOrSession) {
       : normalizeRecipientRole(roleOrSession?.recipientRole);
   if (role === "insurance") return insurancePaths.sharedDocumentsScoped;
   if (role === "patient") return patientPaths.sharedDocumentsScoped;
+  if (role === "outsider") return outsiderPaths.sharedDocumentsScoped;
   return employerPaths.sharedDocumentsScoped;
 }
 

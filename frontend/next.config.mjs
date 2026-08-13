@@ -22,6 +22,16 @@ const nextConfig = {
         destination: "/employerportal/authentication/login",
         permanent: false,
       },
+      {
+        source: "/outsiderportal",
+        destination: "/shareportal",
+        permanent: false,
+      },
+      {
+        source: "/outsiderportal/:path*",
+        destination: "/shareportal/:path*",
+        permanent: false,
+      },
     ];
   },
 };

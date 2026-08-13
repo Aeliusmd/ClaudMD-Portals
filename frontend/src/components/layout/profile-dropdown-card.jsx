@@ -44,6 +44,7 @@ export function ProfileDropdownCard({
   profileHref = patientPaths.profile,
   settingsHref,
   loginHref = LOGIN_PATH,
+  showAccountLinks = true,
   onClose,
 }) {
   const profileUser = user || patient;
@@ -64,20 +65,22 @@ export function ProfileDropdownCard({
         </p>
       </div>
 
-      <div className="border-t border-[#f0ebe3] py-1.5">
-        <ProfileMenuItem
-          href={profileHref}
-          icon={UserRound}
-          label="Profile"
-          onClick={onClose}
-        />
-        <ProfileMenuItem
-          href={resolvedSettingsHref}
-          icon={Settings}
-          label="Settings"
-          onClick={onClose}
-        />
-      </div>
+      {showAccountLinks ? (
+        <div className="border-t border-[#f0ebe3] py-1.5">
+          <ProfileMenuItem
+            href={profileHref}
+            icon={UserRound}
+            label="Profile"
+            onClick={onClose}
+          />
+          <ProfileMenuItem
+            href={resolvedSettingsHref}
+            icon={Settings}
+            label="Settings"
+            onClick={onClose}
+          />
+        </div>
+      ) : null}
 
       <div className="border-t border-[#f0ebe3] py-1.5">
         <ProfileMenuItem

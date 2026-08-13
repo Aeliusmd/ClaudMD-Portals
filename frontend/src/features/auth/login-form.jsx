@@ -11,6 +11,7 @@ import {
 import { loginWithCredentials, resolvePortalDestination } from "@/lib/api/auth";
 import { saveAuthSession } from "@/lib/auth-session";
 import {
+  outsiderPaths,
   resolvePortalFromPathname,
 } from "@/lib/portal-paths";
 import {
@@ -47,6 +48,7 @@ function LoginFormInner({ portal = "employer" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordUnlocked, setPasswordUnlocked] = useState(false);
   const [error, setError] = useState(
     hasActivationKey ? "" : ERROR_ACTIVATION
   );
@@ -124,8 +126,9 @@ function LoginFormInner({ portal = "employer" }) {
     if (isSigningIn) return;
 
     const normalizedEmail = email.trim();
+    const normalizedPassword = password.trim();
     const hasEmail = Boolean(normalizedEmail);
-    const hasPassword = Boolean(password);
+    const hasPassword = Boolean(normalizedPassword);
 
     if (!activationKey) {
       setError(ERROR_ACTIVATION);
@@ -143,7 +146,7 @@ function LoginFormInner({ portal = "employer" }) {
     try {
       const result = await loginWithCredentials({
         username: normalizedEmail,
-        password,
+        password: normalizedPassword,
         activationKey,
         portal: portalFromUrl,
       });
@@ -201,12 +204,34 @@ function LoginFormInner({ portal = "employer" }) {
         saveSecureShareSession(mockShare);
       }
 
+      const mustChangePassword = Boolean(
+        result.user?.must_change_password ?? result.user?.mustChangePassword
+      );
+      if (resolvedPortal === "outsider" && mustChangePassword) {
+        const nextParams = new URLSearchParams();
+        nextParams.set("next", destination);
+        if (activationKey) nextParams.set("activationkey", activationKey);
+        router.push(`${outsiderPaths.changePassword}?${nextParams.toString()}`);
+        return;
+      }
+
       router.push(destination);
     } catch (err) {
       setError(err?.message || ERROR_GENERIC);
       setIsSigningIn(false);
     }
   }
+
+  const forgotHref = (() => {
+    if (portalFromUrl !== "outsider") return "/forgot-password";
+    const forgotParams = new URLSearchParams();
+    if (activationKey) forgotParams.set("activationkey", activationKey);
+    if (sharedId) forgotParams.set("sharedid", sharedId);
+    const query = forgotParams.toString();
+    return query
+      ? `${outsiderPaths.forgotPassword}?${query}`
+      : outsiderPaths.forgotPassword;
+  })();
 
   const inputClassName =
     "w-full rounded-lg border border-[#d8dce3] bg-white px-3.5 py-2.5 text-[0.9375rem] text-ink outline-none transition placeholder:text-[#b0b6bf] focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:opacity-70 sm:py-3";
@@ -322,7 +347,7 @@ function LoginFormInner({ portal = "employer" }) {
                     Password
                   </label>
                   <Link
-                    href="/forgot-password"
+                    href={forgotHref}
                     className="shrink-0 font-sans text-sm font-semibold text-primary hover:text-primary-dark"
                   >
                     Forgot password?
@@ -334,11 +359,16 @@ function LoginFormInner({ portal = "employer" }) {
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     value={password}
+                    readOnly={!passwordUnlocked}
+                    onFocus={() => setPasswordUnlocked(true)}
                     onChange={(e) => {
                       setPassword(e.target.value);
                       clearError();
                     }}
-                    autoComplete="current-password"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                     disabled={isSigningIn}
                     className={`${inputClassName} pr-11`}
                   />

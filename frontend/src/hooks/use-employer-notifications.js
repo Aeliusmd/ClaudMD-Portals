@@ -14,6 +14,7 @@ import {
   getNotificationsLastOpenedAt,
   setNotificationsLastOpenedAt,
 } from "@/lib/notification-read-state";
+import { useVisiblePoll } from "@/hooks/use-visible-poll";
 
 let cachedToken = null;
 let cachedItems = null;
@@ -77,6 +78,61 @@ export function useEmployerNotifications({ enabled = true } = {}) {
     return () => listeners.delete(onChange);
   }, []);
 
+  const load = useCallback(
+    async ({ silent = false, force = false } = {}) => {
+      if (!enabled) return;
+
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(LOGIN_PATH);
+        return;
+      }
+
+      // On full page refresh module cache is empty; always fetch.
+      // Within SPA navigation, reuse cache for the same token.
+      if (!force && cachedItems && cachedToken === token) {
+        setItems(cachedItems);
+        setUnreadCount(cachedUnreadCount);
+        setTotal(cachedTotal);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+
+      if (!silent) setLoading(true);
+
+      try {
+        cachedToken = token;
+        inflightPromise = fetchEmployerNotifications(token, {
+          page: 1,
+          pageSize: 10,
+        });
+        const data = await inflightPromise;
+        const openedAt = getNotificationsLastOpenedAt();
+        applyAndStore(data.items || [], openedAt, token, {
+          total: data.total,
+          apiUnreadCount: data.unreadCount,
+        });
+        setError(null);
+      } catch (err) {
+        inflightPromise = null;
+        if (err?.status === 401) {
+          cachedItems = null;
+          cachedToken = null;
+          router.replace(LOGIN_PATH);
+          return;
+        }
+        if (!silent) {
+          setError(err?.message || "Unable to load notifications.");
+          setSharedState({ items: [], unreadCount: 0, total: 0 });
+        }
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [enabled, router]
+  );
+
   useEffect(() => {
     if (!enabled) {
       setItems([]);
@@ -87,67 +143,21 @@ export function useEmployerNotifications({ enabled = true } = {}) {
       return undefined;
     }
 
-    let cancelled = false;
+    load({ silent: false, force: false });
+    return undefined;
+  }, [enabled, load]);
 
-    async function load() {
-      const token = getAccessToken();
-      if (!token) {
-        router.replace(LOGIN_PATH);
-        return;
-      }
-
-      // On full page refresh module cache is empty; always fetch.
-      // Within SPA navigation, reuse cache for the same token.
-      if (cachedItems && cachedToken === token) {
-        if (!cancelled) {
-          setItems(cachedItems);
-          setUnreadCount(cachedUnreadCount);
-          setTotal(cachedTotal);
-          setLoading(false);
-          setError(null);
-        }
-        return;
-      }
-
-      if (!cancelled) setLoading(true);
-
-      try {
-        if (!inflightPromise || cachedToken !== token) {
-          cachedToken = token;
-          inflightPromise = fetchEmployerNotifications(token, {
-            page: 1,
-            pageSize: 10,
-          });
-        }
-        const data = await inflightPromise;
-        if (cancelled) return;
-        const openedAt = getNotificationsLastOpenedAt();
-        applyAndStore(data.items || [], openedAt, token, {
-          total: data.total,
-          apiUnreadCount: data.unreadCount,
-        });
-        setError(null);
-      } catch (err) {
-        inflightPromise = null;
-        if (cancelled) return;
-        if (err?.status === 401) {
-          cachedItems = null;
-          cachedToken = null;
-          router.replace(LOGIN_PATH);
-          return;
-        }
-        setError(err?.message || "Unable to load notifications.");
-        setSharedState({ items: [], unreadCount: 0, total: 0 });
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, router]);
+  useVisiblePoll(
+    useCallback(
+      async () => {
+        if (!enabled) return;
+        await load({ silent: true, force: true });
+      },
+      [enabled, load]
+    ),
+    undefined,
+    { immediate: false }
+  );
 
   const markAsRead = useCallback(async () => {
     if (!enabled) return;

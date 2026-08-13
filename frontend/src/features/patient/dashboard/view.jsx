@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FileText, Filter, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +42,7 @@ import {
   todayIso,
 } from "@/lib/date-range";
 import { searchQueryError } from "@/lib/text-validation";
+import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { cn } from "@/lib/utils";
 
 const emptySubscribe = () => () => {};
@@ -178,43 +179,38 @@ function PatientDashboardContent() {
 
   const [appointmentsReloadKey, setAppointmentsReloadKey] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSummary() {
+  const loadSummary = useCallback(
+    async ({ silent = false } = {}) => {
       const token = getAccessToken();
       if (!token) {
         router.replace(patientPaths.login);
         return;
       }
 
-      setLoadingSummary(true);
+      if (!silent) setLoadingSummary(true);
       try {
         const data = await fetchPatientDashboardSummary(token);
-        if (!cancelled) {
-          setSummary(data);
-          setSummaryError(null);
-        }
+        setSummary(data);
+        setSummaryError(null);
       } catch (err) {
-        if (cancelled) return;
         if (err?.status === 401) {
           router.replace(patientPaths.login);
           return;
         }
-        setSummaryError(
-          err?.message || "Unable to load dashboard counts."
-        );
-        setSummary(emptySummary);
+        if (!silent) {
+          setSummaryError(
+            err?.message || "Unable to load dashboard counts."
+          );
+          setSummary(emptySummary);
+        }
       } finally {
-        if (!cancelled) setLoadingSummary(false);
+        if (!silent) setLoadingSummary(false);
       }
-    }
+    },
+    [router]
+  );
 
-    loadSummary();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+  useVisiblePoll(loadSummary);
 
   useEffect(() => {
     let cancelled = false;

@@ -34,6 +34,7 @@ import {
   withReturnParams,
 } from "@/lib/dashboard-return-state";
 import { searchQueryError } from "@/lib/text-validation";
+import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { cn } from "@/lib/utils";
 
 const emptySubscribe = () => () => {};
@@ -198,41 +199,36 @@ function InsuranceDashboardContent() {
     tabDefs.find((item) => item.key === activeTab) || tabDefs[0];
   const isLiveTab = Boolean(activeTabDef.live);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSummary() {
+  const loadSummary = useCallback(
+    async ({ silent = false } = {}) => {
       const token = getAccessToken();
       if (!token) {
         router.replace(insurancePaths.login);
         return;
       }
 
-      setLoadingSummary(true);
+      if (!silent) setLoadingSummary(true);
       try {
         const data = await fetchInsuranceDashboardSummary(token);
-        if (!cancelled) {
-          setSummary(data);
-          setSummaryError(null);
-        }
+        setSummary(data);
+        setSummaryError(null);
       } catch (err) {
-        if (cancelled) return;
         if (err?.status === 401) {
           router.replace(insurancePaths.login);
           return;
         }
-        setSummaryError(err?.message || "Unable to load dashboard counts.");
-        setSummary(emptySummary);
+        if (!silent) {
+          setSummaryError(err?.message || "Unable to load dashboard counts.");
+          setSummary(emptySummary);
+        }
       } finally {
-        if (!cancelled) setLoadingSummary(false);
+        if (!silent) setLoadingSummary(false);
       }
-    }
+    },
+    [router]
+  );
 
-    loadSummary();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+  useVisiblePoll(loadSummary);
 
   const loadLivePatients = useCallback(async () => {
     if (!isLiveTab || !rangeReady || !activeTabDef.coverage) return;

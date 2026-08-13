@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserRound } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { DocumentNameText } from "@/components/ui/document-name-text";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";

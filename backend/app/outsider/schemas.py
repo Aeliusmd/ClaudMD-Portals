@@ -11,6 +11,7 @@ class OutsiderProfileResponse(BaseModel):
     title: str | None = None
     email: str | None = None
     login_id: str | None = None
+    phone: str | None = None
     type_id: int | None = None
     type_label: str | None = None
 

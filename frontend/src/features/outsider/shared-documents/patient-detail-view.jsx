@@ -36,6 +36,7 @@ function DocumentGallery({ documents, onPreview, unread = false }) {
           key={`${doc.sharedId}-${doc.id}`}
           doc={doc}
           onPreview={onPreview}
+          showSharedAt
           className={
             unread && !doc.isViewed
               ? "rounded-2xl ring-2 ring-primary-500 ring-offset-2 ring-offset-foreground-900"

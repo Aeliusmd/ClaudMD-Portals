@@ -33,6 +33,7 @@ function mapOutsiderSharedDetail(data) {
     visitLabel: data.visit_label || "Visit",
     checkInId: data.check_in_id ?? data.checkInId ?? null,
     reportId: data.report_id ?? data.reportId ?? null,
+    publishedAt: data.published_at || data.publishedAt || null,
     sharedAt: data.shared_at || data.sharedAt || null,
     isViewed: Boolean(data.is_viewed ?? data.isViewed),
     employee: {
@@ -64,6 +65,7 @@ function mapOutsiderSharedDetail(data) {
           : "DOC",
       visitDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
       reportDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
+      publishedAt: data.published_at || data.publishedAt || null,
       provider: null,
       url: fileUrl,
     },
@@ -86,6 +88,7 @@ export async function fetchOutsiderProfile(accessToken) {
     title: data.title || "",
     email: data.email || "",
     loginId: data.login_id || "",
+    phone: data.phone || "",
     userId: data.user_id,
     typeId: data.type_id,
     typeLabel: data.type_label,

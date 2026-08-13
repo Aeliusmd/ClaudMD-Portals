@@ -74,6 +74,14 @@ def list_shared_documents(current_user: CurrentUser) -> SharedDocumentListRespon
             sd.Email AS ShareEmail,
             sd.ShareWithUserId,
             CONVERT(varchar(33), sd.CreatedDateTime, 127) AS SharedAt,
+            (
+                SELECT TOP (1) CONVERT(varchar(33), dp.CreatedDateTime, 127)
+                FROM dbo.DocterPublishes dp
+                WHERE dp.CheckInId = ch.Id
+                  AND (du.ReportId IS NULL OR dp.ReportId = du.ReportId)
+                  AND (dp.IsDeleted = 0 OR dp.IsDeleted IS NULL)
+                ORDER BY dp.CreatedDateTime DESC, dp.Id DESC
+            ) AS PublishedAt,
             {_is_viewed_select(clinic)},
             du.FileName,
             du.FilePath,
@@ -220,6 +228,14 @@ def _load_shared_document_access(
             sd.Email AS ShareEmail,
             sd.ShareWithUserId,
             CONVERT(varchar(33), sd.CreatedDateTime, 127) AS SharedAt,
+            (
+                SELECT TOP (1) CONVERT(varchar(33), dp.CreatedDateTime, 127)
+                FROM dbo.DocterPublishes dp
+                WHERE dp.CheckInId = ch.Id
+                  AND (du.ReportId IS NULL OR dp.ReportId = du.ReportId)
+                  AND (dp.IsDeleted = 0 OR dp.IsDeleted IS NULL)
+                ORDER BY dp.CreatedDateTime DESC, dp.Id DESC
+            ) AS PublishedAt,
             {_is_viewed_select(clinic)},
             du.FileName,
             du.FilePath,
@@ -411,6 +427,7 @@ def _to_detail_response(row: dict[str, Any]) -> SharedDocumentDetailResponse:
         visit_label=visit_label,
         check_in_id=int(check_in_id) if check_in_id is not None else None,
         report_id=int(report_id) if report_id is not None else None,
+        published_at=(row.get("PublishedAt") or "").strip() or None,
         shared_at=(row.get("SharedAt") or "").strip() or None,
         is_viewed=_coerce_is_viewed(row.get("IsViewed")),
         employee=SharedDocumentEmployee(

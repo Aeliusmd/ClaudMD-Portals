@@ -139,7 +139,7 @@ def open_visit_document_thumbnail(
     except Exception as exc:  # noqa: BLE001 — surface as 404 for missing/unreadable PDF
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document preview is not available.",
+            detail="Document does not exist.",
         ) from exc
     return Response(content=png_bytes, media_type="image/png")
 
@@ -195,7 +195,7 @@ def _require_patient_publish_pdf(
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found for this visit.",
+            detail="Document does not exist.",
         )
 
     report_name = (
@@ -210,7 +210,7 @@ def _require_patient_publish_pdf(
     if pdf_path is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document file is not available.",
+            detail="Document does not exist.",
         )
     return pdf_path
 

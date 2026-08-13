@@ -176,8 +176,43 @@ export function visitDocumentThumbnailUrlFromFileUrl(fileUrl) {
   return `${String(fileUrl).slice(0, -"/file".length)}/thumbnail`;
 }
 
+/**
+ * Pull the DocterPublishes id from an API file/thumbnail URL.
+ * Employer/insurance: .../visit-documents/{id}/file
+ * Patient: .../documents/{id}/file
+ */
+export function visitDocumentIdFromUrl(url) {
+  if (!url) return null;
+  const value = String(url);
+  const match =
+    value.match(/\/visit-documents\/([^/]+)\/(?:file|thumbnail)/i) ||
+    value.match(/\/documents\/([^/]+)\/(?:file|thumbnail)/i);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 /** In-flight / resolved blob fetches keyed by API URL. */
 const blobUrlCache = new Map();
+
+const DOCUMENT_MISSING_MESSAGE = "Document does not exist.";
+
+async function messageFromDocumentResponse(response) {
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  const detail = data?.detail ?? data?.message;
+  if (typeof detail === "string" && detail.trim()) return detail.trim();
+  if (response.status === 404) return DOCUMENT_MISSING_MESSAGE;
+  if (response.status === 403) return "You do not have access to this document.";
+  return `Unable to load document (${response.status}).`;
+}
 
 /**
  * Fetch a document URL (Bearer for API streams) and return a browser object URL.
@@ -203,19 +238,29 @@ export async function resolveDocumentObjectUrl(url, { getToken } = {}) {
     }
     let response;
     try {
-      response = await fetch(url, {
-        headers: {
-          Accept: "application/pdf",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-    } catch {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      try {
+        response = await fetch(url, {
+          headers: {
+            Accept: "application/pdf",
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw new Error("Document does not exist.");
+      }
       throw new Error(
         "Unable to load document. The server appears to be unavailable. Please try again."
       );
     }
     if (!response.ok) {
-      throw new Error(`Unable to load document (${response.status}).`);
+      throw new Error(await messageFromDocumentResponse(response));
     }
     const blob = await response.blob();
     return URL.createObjectURL(blob);

@@ -46,7 +46,20 @@ function loadThumbnailObjectUrl(thumbUrl) {
       );
     }
     if (!response.ok) {
-      throw new Error(`Unable to load preview (${response.status}).`);
+      let message = "Document does not exist.";
+      if (response.status !== 404) {
+        message = `Unable to load preview (${response.status}).`;
+      }
+      try {
+        const data = await response.json();
+        const detail = data?.detail ?? data?.message;
+        if (typeof detail === "string" && detail.trim()) {
+          message = detail.trim();
+        }
+      } catch {
+        /* keep status-based message */
+      }
+      throw new Error(message);
     }
     const blob = await response.blob();
     return URL.createObjectURL(blob);
@@ -74,6 +87,7 @@ export function PdfThumbnail({
 }) {
   const [src, setSrc] = useState(null);
   const [status, setStatus] = useState("loading");
+  const [errorMessage, setErrorMessage] = useState("");
   const onLoadStatusChangeRef = useRef(onLoadStatusChange);
 
   useEffect(() => {
@@ -94,6 +108,7 @@ export function PdfThumbnail({
 
       if (!thumbUrl) {
         setStatus("error");
+        setErrorMessage("Document does not exist.");
         setSrc(null);
         return;
       }
@@ -101,30 +116,34 @@ export function PdfThumbnail({
       // Reuse cached preview immediately — no long loading flash on version switch.
       if (thumbCache.has(thumbUrl)) {
         setStatus("loading");
+        setErrorMessage("");
         try {
           const objectUrl = await thumbCache.get(thumbUrl);
           if (!alive) return;
           setSrc(objectUrl);
           setStatus("ready");
-        } catch {
+        } catch (error) {
           if (!alive) return;
           setSrc(null);
           setStatus("error");
+          setErrorMessage(error?.message || "Document does not exist.");
         }
         return;
       }
 
       setStatus("loading");
+      setErrorMessage("");
       setSrc(null);
       try {
         const objectUrl = await loadThumbnailObjectUrl(thumbUrl);
         if (!alive) return;
         setSrc(objectUrl);
         setStatus("ready");
-      } catch {
+      } catch (error) {
         if (!alive) return;
         setSrc(null);
         setStatus("error");
+        setErrorMessage(error?.message || "Document does not exist.");
       }
     }
 
@@ -161,10 +180,10 @@ export function PdfThumbnail({
       ) : null}
 
       {status === "error" ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white text-foreground-500">
-          <FileText className="h-10 w-10" />
-          <span className="text-xs font-semibold tracking-wide">
-            {badge || "PDF"}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white px-3 text-center text-foreground-500">
+          <FileText className="h-9 w-9" />
+          <span className="text-[11px] font-semibold leading-snug tracking-wide text-foreground-700 sm:text-xs">
+            {errorMessage || "Document does not exist."}
           </span>
         </div>
       ) : null}

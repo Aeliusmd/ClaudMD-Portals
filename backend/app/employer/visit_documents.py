@@ -116,7 +116,7 @@ def open_employee_visit_document_thumbnail(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document preview is not available.",
+            detail="Document does not exist.",
         ) from exc
     return Response(content=png_bytes, media_type="image/png")
 
@@ -296,12 +296,12 @@ def _require_employee_publish_pdf(
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found.",
+            detail="Document does not exist.",
         )
     if int(row.PatientId) != int(patient_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found for this employee.",
+            detail="Document does not exist.",
         )
     if int(row.EmployerId) != int(profile.employer_id):
         raise HTTPException(
@@ -333,7 +333,7 @@ def _require_employee_publish_pdf(
     if pdf_path is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document file is not available on the publish share.",
+            detail="Document does not exist.",
         )
     return pdf_path
 

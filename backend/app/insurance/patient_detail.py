@@ -421,12 +421,12 @@ def open_insurance_visit_document_file(
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found.",
+            detail="Document does not exist.",
         )
     if int(row.PatientId) != int(patient_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found for this patient.",
+            detail="Document does not exist.",
         )
     if row.InsuranceId is None or int(row.InsuranceId) != int(profile.insurance_id):
         raise HTTPException(
@@ -441,7 +441,7 @@ def open_insurance_visit_document_file(
     if pdf_path is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document file is not available on the publish share.",
+            detail="Document does not exist.",
         )
 
     return FileResponse(
@@ -467,7 +467,7 @@ def open_insurance_visit_document_thumbnail(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document preview is not available.",
+            detail="Document does not exist.",
         ) from exc
     return Response(content=png_bytes, media_type="image/png")
 

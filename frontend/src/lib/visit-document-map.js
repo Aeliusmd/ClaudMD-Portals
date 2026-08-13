@@ -59,8 +59,10 @@ export function buildVisitVersionLayers(doc) {
 
   for (const previous of doc?.previousVersions || []) {
     if (!previous?.url && previous?.id == null) continue;
+    const previousId = previous.id != null ? String(previous.id) : null;
     raw.push({
-      id: previous.id,
+      id: previousId,
+      documentId: previousId,
       url: previous.url || null,
       path: previous.path ?? null,
       publishedAt: previous.publishedAt ?? null,
@@ -70,8 +72,15 @@ export function buildVisitVersionLayers(doc) {
   }
 
   if (doc?.url || doc?.id != null) {
+    const currentId =
+      doc.id != null
+        ? String(doc.id)
+        : doc.documentId != null
+          ? String(doc.documentId)
+          : null;
     raw.push({
-      id: doc.id || doc.documentId,
+      id: currentId,
+      documentId: currentId,
       url: doc.url || null,
       path: doc.path ?? null,
       publishedAt: doc.publishedAt ?? null,

@@ -4,6 +4,7 @@ import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { DocumentNameText } from "@/components/ui/document-name-text";
 import { VisitDocumentPile } from "@/components/ui/visit-document-pile";
 import { documentDisplayName, shortDocumentBadge } from "@/lib/document-labels";
+import { visitDocumentIdFromUrl } from "@/lib/documents";
 import {
   visitDocumentReportName,
   visitDocumentTileLabel,
@@ -39,13 +40,22 @@ export function DocumentThumbTile({
     if (!onPreview) return;
     const openUrl = layer?.url || doc.url;
     if (!openUrl) return;
+    // Always use THIS version's DocterPublishes id (V1 vs V2 are different ids).
+    const versionId =
+      (layer?.id != null ? String(layer.id) : null) ||
+      (layer?.documentId != null ? String(layer.documentId) : null) ||
+      visitDocumentIdFromUrl(openUrl) ||
+      (doc.id != null ? String(doc.id) : null) ||
+      (doc.documentId != null ? String(doc.documentId) : null);
     onPreview({
       ...doc,
       ...layer,
-      id: layer?.id || doc.id,
-      documentId: layer?.id || doc.documentId || doc.id,
+      id: versionId,
+      documentId: versionId,
       url: openUrl,
       path: layer?.path || doc.path,
+      publishedAt: layer?.publishedAt ?? doc.publishedAt,
+      versionTag: layer?.versionTag ?? doc.versionTag,
       title: name,
       previewBadge: badge,
       isPreviousVersion,

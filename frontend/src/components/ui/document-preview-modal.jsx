@@ -16,6 +16,7 @@ import {
   downloadDocumentUrl,
   openDocumentInNewTab,
   resolveDocumentObjectUrl,
+  visitDocumentIdFromUrl,
 } from "@/lib/documents";
 import { formatDateMMDDYY } from "@/lib/dates";
 import { DocumentNameText } from "@/components/ui/document-name-text";
@@ -45,7 +46,7 @@ export function DocumentPreviewModal({ file, onClose, backLabel = "Back" }) {
   }, []);
 
   useEffect(() => {
-    if (!file) return undefined;
+    if (!file?.url) return undefined;
 
     let cancelled = false;
     let revoke = null;
@@ -75,7 +76,7 @@ export function DocumentPreviewModal({ file, onClose, backLabel = "Back" }) {
       cancelled = true;
       revoke?.();
     };
-  }, [file]);
+  }, [file?.url, file?.documentId, file?.id]);
 
   useEffect(() => {
     if (!file) return undefined;
@@ -96,9 +97,18 @@ export function DocumentPreviewModal({ file, onClose, backLabel = "Back" }) {
 
   if (!mounted || !file) return null;
 
-  const documentId = file.documentId || "N/A";
+  // Prefer the version id actually being loaded (from props or from the file URL).
+  const documentId =
+    file.documentId ||
+    file.id ||
+    visitDocumentIdFromUrl(file.url) ||
+    "N/A";
   const documentDate = formatDateMMDDYY(
-    file.reportDate || file.shareDate || file.visitDate || file.date
+    file.publishedAt ||
+      file.reportDate ||
+      file.shareDate ||
+      file.visitDate ||
+      file.date
   ) || "N/A";
   const displayTitle = file.title || "Clinical Document";
 
@@ -245,8 +255,23 @@ export function DocumentPreviewModal({ file, onClose, backLabel = "Back" }) {
             className="h-full w-full border-0 bg-[#323639]"
           />
         ) : (
-          <div className="flex h-full items-center justify-center px-4 text-center text-sm text-white/80">
-            {loadError || "Loading document…"}
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+            {loadError ? (
+              <>
+                <FileText className="h-12 w-12 text-white/40" />
+                <p className="text-base font-semibold text-white">
+                  {loadError}
+                </p>
+                {documentId && documentId !== "N/A" ? (
+                  <p className="text-sm text-white/70">
+                    Document ID:{" "}
+                    <span className="tabular-nums text-white">{documentId}</span>
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-white/80">Loading document…</p>
+            )}
           </div>
         )}
       </div>

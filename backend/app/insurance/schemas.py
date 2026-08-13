@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
 
+from app.employer.schemas import VisitDocumentPreviousVersion
+
 from app.validation.contact import email_error, phone_error
 from app.validation.text import unsafe_markup_error
 
@@ -165,6 +167,9 @@ class InsurancePatientVisitDocument(BaseModel):
     preview_badge: str
     preview_label: str
     is_completed: bool = False
+    published_at: str | None = None
+    version_tag: str | None = None
+    previous_versions: list[VisitDocumentPreviousVersion] = Field(default_factory=list)
 
 
 class InsurancePatientVisitRecord(BaseModel):

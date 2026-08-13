@@ -24,6 +24,7 @@ from app.employer.schemas import (
     SharedDocumentEmployee,
 )
 from app.employer.visit_documents import render_pdf_first_page_png
+from app.patient.notifications import _recipient_clause
 from app.patient.profile import PatientProfile, fetch_profile_from_clinic
 from app.patient.service import _format_display_date
 
@@ -139,9 +140,10 @@ def _load_shared_document_access(
             detail="Patient chart not found for this user.",
         )
 
-    # Patient portal: own chart only (not email recipient).
-    # Shares may be emailed to another address but still belong to this patient visit.
-    sql = """
+    email_norm = (profile.email or "").strip().lower() or None
+    recipient_sql, recipient_params = _recipient_clause(profile.user_id, email_norm)
+
+    sql = f"""
         SELECT TOP (1)
             CONVERT(varchar(36), sd.SharedId) AS SharedId,
             sd.Id AS ShareRowId,
@@ -186,12 +188,14 @@ def _load_shared_document_access(
         LEFT JOIN dbo.Patients p ON p.Id = ch.PatientId
         WHERE sd.SharedId = ?
           AND (sd.IsDeleted = 0 OR sd.IsDeleted IS NULL)
+          AND ({recipient_sql})
           AND ch.PatientId = ?
     """
     params: list[Any] = [
         _SHARED_DOC_UPLOAD_TYPE_ID,
         _CHECKIN_OBJECT_TYPE_ID,
         shared_uuid,
+        *recipient_params,
         int(profile.patient_id),
     ]
 
@@ -217,9 +221,15 @@ def _mark_shared_id_viewed(
         return 0
 
     shared_uuid = _parse_shared_id(shared_id)
+    email_norm = (profile.email or "").strip().lower() or None
+    recipient_sql, recipient_params = _recipient_clause(
+        profile.user_id, email_norm, alias=""
+    )
+    if recipient_sql == "1 = 0":
+        return 0
+
     actor_id = int(profile.user_id) if profile.user_id is not None else 0
-    # SharedId is unique; access already verified against this patient's chart.
-    sql = """
+    sql = f"""
         UPDATE dbo.SharedDocuments
         SET IsViewed = 1,
             UpdatedDateTime = SYSUTCDATETIME(),
@@ -227,8 +237,9 @@ def _mark_shared_id_viewed(
         WHERE SharedId = ?
           AND (IsDeleted = 0 OR IsDeleted IS NULL)
           AND (IsViewed = 0 OR IsViewed IS NULL)
+          AND ({recipient_sql})
     """
-    params: list[Any] = [actor_id, shared_uuid]
+    params: list[Any] = [actor_id, shared_uuid, *recipient_params]
 
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()

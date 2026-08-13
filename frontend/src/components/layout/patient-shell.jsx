@@ -14,7 +14,9 @@ import {
   clearAuthSession,
   getAccessToken,
   getAuthSession,
+  subscribeAuthSession,
 } from "@/lib/auth-session";
+import { displayFullName } from "@/lib/profile-display";
 import { portalAccessRedirect } from "@/lib/portal-access";
 import { patientPaths } from "@/lib/portal-paths";
 import {
@@ -35,20 +37,25 @@ function handleLogout() {
   clearSecureShareSession();
 }
 
+const serverSessionUser = { fullName: "Patient", title: "", role: null };
+let sessionUserSnapshot = serverSessionUser;
+let sessionUserRaw = null;
+
 function sessionProfileUser() {
   const session = getAuthSession();
   const user = session?.user;
+  const raw = user ? JSON.stringify(user) : null;
+  if (raw === sessionUserRaw) return sessionUserSnapshot;
+
+  sessionUserRaw = raw;
   if (!user) {
-    return {
-      fullName: "Patient",
-      title: "",
-      role: null,
-    };
+    sessionUserSnapshot = serverSessionUser;
+    return sessionUserSnapshot;
   }
 
   const fullName =
-    user.name ||
     [user.first_name, user.last_name].filter(Boolean).join(" ") ||
+    user.name ||
     user.email ||
     user.login_id ||
     "Patient";
@@ -56,11 +63,12 @@ function sessionProfileUser() {
     user.type_label ||
     (user.type_id != null ? userTypeLabel(user.type_id) : null);
 
-  return {
+  sessionUserSnapshot = {
     fullName,
     title: typeLabel || "",
     role: typeLabel,
   };
+  return sessionUserSnapshot;
 }
 
 export function PatientShell({ children }) {
@@ -68,7 +76,11 @@ export function PatientShell({ children }) {
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
   const [ready, setReady] = useState(false);
-  const [sessionUser, setSessionUser] = useState(() => sessionProfileUser());
+  const sessionUser = useSyncExternalStore(
+    subscribeAuthSession,
+    sessionProfileUser,
+    () => serverSessionUser
+  );
   const scopedSession = useSyncExternalStore(
     emptySubscribe,
     readScopedSessionActive,
@@ -95,7 +107,6 @@ export function PatientShell({ children }) {
       router.replace(patientPaths.login);
       return;
     }
-    setSessionUser(sessionProfileUser());
     setReady(true);
   }, [router]);
 
@@ -141,7 +152,8 @@ export function PatientShell({ children }) {
   const profileUser = useMemo(() => {
     if (!profile) return sessionUser;
     return {
-      fullName: profile.fullName || sessionUser.fullName,
+      fullName:
+        displayFullName(profile) || profile.fullName || sessionUser.fullName,
       title: profile.typeLabel || sessionUser.title || "",
       role: profile.typeLabel || sessionUser.role,
     };

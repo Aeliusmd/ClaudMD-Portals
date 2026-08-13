@@ -3,6 +3,8 @@ import {
   insuranceSharedDocumentFileUrl,
   insuranceVisitDocumentFileUrl,
 } from "@/lib/documents";
+import { formatDateMMDDYY, formatDateMMDDYYYY } from "@/lib/dates";
+import { mapPreviousVisitVersions } from "@/lib/visit-document-map";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -207,7 +209,7 @@ function mapInsurancePatientRow(row) {
     lastVisitValue: row.last_visit_value,
     workStatus: row.work_status || "—",
     disabilityStatus: row.disability_status,
-    dateOfBirth: row.date_of_birth,
+    dateOfBirth: formatDateMMDDYYYY(row.date_of_birth) || row.date_of_birth,
     gender: row.gender,
     phone: row.phone,
     email: row.email,
@@ -285,7 +287,7 @@ export async function fetchInsurancePatientDetail(
     coverage: data.coverage || "Workers Comp",
     patient: data.patient_name,
     accountNo: data.account_no != null ? String(data.account_no) : null,
-    dateOfBirth: data.date_of_birth,
+    dateOfBirth: formatDateMMDDYYYY(data.date_of_birth) || data.date_of_birth,
     gender: data.gender,
     phone: data.phone,
     email: data.email,
@@ -301,7 +303,7 @@ export async function fetchInsurancePatientDetail(
     visits: (data.visits || []).map((visit) => ({
       id: visit.visit_id || String(visit.check_in_id),
       checkInId: visit.check_in_id,
-      date: visit.check_in_date,
+      date: formatDateMMDDYY(visit.check_in_date) || visit.check_in_date,
       dateValue: visit.check_in_date_value,
       label: visit.visit_label || "Visit",
       category: visit.category,
@@ -330,9 +332,15 @@ export async function fetchInsurancePatientDetail(
             badgeLabel: doc.report_name,
             path: pathValue || null,
             url,
-            visitDate: visit.check_in_date,
-            reportDate: visit.check_in_date,
+            visitDate: formatDateMMDDYY(visit.check_in_date) || visit.check_in_date,
+            reportDate: formatDateMMDDYY(visit.check_in_date) || visit.check_in_date,
             isCompleted: doc.is_completed,
+            publishedAt: doc.published_at ?? null,
+            versionTag: doc.version_tag ?? null,
+            previousVersions: mapPreviousVisitVersions(
+              doc.previous_versions,
+              (previousId) => insuranceVisitDocumentFileUrl(data.patient_id, previousId)
+            ),
           };
         })
         .filter(Boolean),
@@ -359,13 +367,13 @@ export async function fetchInsuranceSharedDocumentBySharedId(
     documentType: data.document_type || data.report_title || "Shared document",
     reportTitle: data.report_title || data.document_type || "Shared document",
     fileName: data.file_name || null,
-    visitDate: data.visit_date || null,
+    visitDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
     visitLabel: data.visit_label || "Visit",
     employee: {
       patientId: employee.patient_id ?? null,
       name: employee.name || "Patient",
       accountNo: employee.account_no || null,
-      dateOfBirth: employee.date_of_birth || null,
+      dateOfBirth: formatDateMMDDYYYY(employee.date_of_birth) || employee.date_of_birth || null,
       gender: employee.gender || null,
       phone: employee.phone || null,
       address: employee.address || null,
@@ -385,8 +393,8 @@ export async function fetchInsuranceSharedDocumentBySharedId(
           .includes("first")
           ? "DFR"
           : "DOC",
-      visitDate: data.visit_date || null,
-      reportDate: data.visit_date || null,
+      visitDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
+      reportDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
       provider: null,
       url: fileUrl,
     },

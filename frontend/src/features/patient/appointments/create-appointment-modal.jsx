@@ -12,6 +12,7 @@ import {
   fetchPatientAppointmentVisitTypes,
 } from "@/lib/api/patient";
 import { getAccessToken } from "@/lib/auth-session";
+import { toDisplayDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 const DURATION_OPTIONS = [
@@ -65,17 +66,6 @@ function toDisplayTime(hhmmss) {
   const period = h >= 12 ? "PM" : "AM";
   const hour12 = h % 12 || 12;
   return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
-}
-
-function toDisplayDate(iso) {
-  if (!iso) return "—";
-  const parsed = new Date(`${iso}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-  });
 }
 
 export function CreatePatientAppointmentModal({ open, onClose, onCreate }) {

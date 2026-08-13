@@ -18,6 +18,7 @@ import {
   getSecureShareSession,
   hasLiveSharedIdSession,
 } from "@/lib/secure-share-session";
+import { displayFullName } from "@/lib/profile-display";
 import { userTypeLabel } from "@/lib/user-type";
 
 const emptySubscribe = () => () => {};
@@ -90,6 +91,7 @@ export function InsuranceShell({ children }) {
         (profile.typeId != null ? userTypeLabel(profile.typeId) : null);
       return {
         ...profile,
+        fullName: displayFullName(profile) || profile.fullName || "User",
         title: typeLabel || profile.jobTitle || profile.title || "",
         role: typeLabel,
       };

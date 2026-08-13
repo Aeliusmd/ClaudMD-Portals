@@ -153,10 +153,7 @@ export function useInsuranceNotifications({ enabled = true } = {}) {
     const token = getAccessToken();
     if (!token) return;
 
-    const openedAt = setNotificationsLastOpenedAt(
-      new Date().toISOString(),
-      PORTAL
-    );
+    setNotificationsLastOpenedAt(new Date().toISOString(), PORTAL);
     const cleared = (cachedItems || []).map((item) => ({
       ...item,
       unread: false,
@@ -170,15 +167,6 @@ export function useInsuranceNotifications({ enabled = true } = {}) {
 
     try {
       await markInsuranceNotificationsRead(token);
-      inflightPromise = null;
-      const data = await fetchInsuranceNotifications(token, {
-        page: 1,
-        pageSize: 10,
-      });
-      applyAndStore(data.items || [], openedAt, token, {
-        total: data.total,
-        apiUnreadCount: data.unreadCount,
-      });
     } catch (err) {
       if (err?.status === 401) {
         router.replace(insurancePaths.login);

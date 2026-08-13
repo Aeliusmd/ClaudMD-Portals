@@ -36,6 +36,7 @@ import {
   isInvalidDateRange,
 } from "@/lib/date-range";
 import { searchQueryError } from "@/lib/text-validation";
+import { formatDateMMDDYY } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 const emptySubscribe = () => () => {};
@@ -58,17 +59,7 @@ function daysAgoIso(today, days) {
 
 function formatVisitLabel(isoOrLabel) {
   if (!isoOrLabel) return "—";
-  if (/^\d{4}-\d{2}-\d{2}/.test(isoOrLabel)) {
-    const date = new Date(`${isoOrLabel.slice(0, 10)}T12:00:00`);
-    if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    }
-  }
-  return isoOrLabel;
+  return formatDateMMDDYY(isoOrLabel) || isoOrLabel;
 }
 
 function serverCategory(filter) {

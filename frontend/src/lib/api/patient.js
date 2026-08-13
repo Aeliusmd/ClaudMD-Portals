@@ -3,6 +3,8 @@ import {
   patientSharedDocumentFileUrl,
   patientVisitDocumentFileUrl,
 } from "@/lib/documents";
+import { formatDateMMDDYY, formatDateMMDDYYYY } from "@/lib/dates";
+import { mapPreviousVisitVersions } from "@/lib/visit-document-map";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -33,10 +35,18 @@ async function patientFetch(
 }
 
 function mapPatientProfile(data) {
+  let firstName = data.first_name || "";
+  let lastName = data.last_name || "";
+  if (!firstName && !lastName && data.full_name) {
+    const parts = String(data.full_name).trim().split(/\s+/).filter(Boolean);
+    firstName = parts[0] || "";
+    lastName = parts.slice(1).join(" ");
+  }
   return {
-    fullName: data.full_name || "",
-    firstName: data.first_name || "",
-    lastName: data.last_name || "",
+    fullName:
+      [firstName, lastName].filter(Boolean).join(" ") || data.full_name || "",
+    firstName,
+    lastName,
     dateOfBirth: data.date_of_birth || "",
     email: data.email || "",
     phone: data.phone || "",
@@ -79,20 +89,11 @@ export async function updatePatientProfile(accessToken, payload) {
 }
 
 function formatDisplayDate(isoOrDisplay) {
-  if (!isoOrDisplay) return "";
-  const text = String(isoOrDisplay).trim();
-  if (/^[A-Za-z]{3}\s+\d{1,2},\s+\d{4}$/.test(text)) return text;
-  const iso = text.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return text;
-  const [year, month, day] = iso.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (Number.isNaN(date.getTime())) return text;
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  return formatDateMMDDYY(isoOrDisplay);
+}
+
+function formatDobDisplay(isoOrDisplay) {
+  return formatDateMMDDYYYY(isoOrDisplay);
 }
 
 export async function fetchPatientMyInformation(accessToken) {
@@ -108,7 +109,7 @@ export async function fetchPatientMyInformation(accessToken) {
   return {
     patientId: data.patient_id,
     fullName: data.full_name || "",
-    dateOfBirth: formatDisplayDate(data.date_of_birth),
+    dateOfBirth: formatDobDisplay(data.date_of_birth),
     email: data.email || "",
     phone: data.phone || "",
     address: data.address || "",
@@ -219,7 +220,7 @@ export async function fetchPatientDashboardVisits(
     category: row.category || "",
     provider: row.provider || "—",
     location: row.location || "—",
-    date: row.date || null,
+    date: formatDateMMDDYY(row.date) || row.date || null,
     dateValue: row.date_value ?? row.dateValue ?? null,
     workStatus: row.work_status ?? row.workStatus ?? "—",
     documentCount: row.document_count ?? row.documentCount ?? 0,
@@ -257,7 +258,7 @@ export async function fetchPatientVisitDetail(accessToken, checkInId) {
     category: data.category || "Other",
     provider: data.provider || "—",
     location: data.location || "—",
-    date: data.date || null,
+    date: formatDateMMDDYY(data.date) || data.date || null,
     dateValue: data.date_value ?? data.dateValue ?? null,
     status: data.status || "Completed",
     workStatus: data.work_status ?? data.workStatus ?? "—",
@@ -271,6 +272,13 @@ export async function fetchPatientVisitDetail(accessToken, checkInId) {
     showWorkStatus: data.show_work_status ?? data.showWorkStatus ?? true,
     patient: {
       fullName: patient.full_name ?? patient.fullName ?? "Patient",
+      accountNo:
+        patient.account_no != null
+          ? String(patient.account_no)
+          : patient.accountNo != null
+            ? String(patient.accountNo)
+            : null,
+      gender: patient.gender || null,
       dateOfBirth: patient.date_of_birth ?? patient.dateOfBirth ?? null,
       phone: patient.phone || null,
       email: patient.email || null,
@@ -308,7 +316,13 @@ export async function fetchPatientVisitDetail(accessToken, checkInId) {
           previewBadge: doc.preview_badge ?? doc.previewBadge ?? "DOC",
           previewLabel: doc.preview_label ?? doc.previewLabel ?? "DOC",
           url: apiFileUrl,
-          visitDate: data.date || null,
+          visitDate: formatDateMMDDYY(data.date) || data.date || null,
+          publishedAt: doc.published_at ?? doc.publishedAt ?? null,
+          versionTag: doc.version_tag ?? doc.versionTag ?? null,
+          previousVersions: mapPreviousVisitVersions(
+            doc.previous_versions ?? doc.previousVersions,
+            (previousId) => patientVisitDocumentFileUrl(visitCheckInId, previousId)
+          ),
         };
       })
       .filter(Boolean),
@@ -318,7 +332,7 @@ export async function fetchPatientVisitDetail(accessToken, checkInId) {
       category: row.category || "Other",
       provider: row.provider || "—",
       location: row.location || "—",
-      date: row.date || null,
+      date: formatDateMMDDYY(row.date) || row.date || null,
       dateValue: row.date_value ?? row.dateValue ?? null,
       status: row.status || null,
     })),
@@ -367,7 +381,7 @@ export async function fetchPatientAppointments(
       type: row.type || "Appointment",
       category: row.category || null,
       location: row.location || "—",
-      date: row.date || null,
+      date: formatDateMMDDYY(row.date) || row.date || null,
       dateValue: row.date_value ?? row.dateValue ?? null,
       time: row.time || "—",
       status: row.status || "Scheduled",
@@ -509,7 +523,7 @@ export async function bookPatientAppointment(accessToken, payload) {
     scheduleId: data.schedule_id ?? data.scheduleId ?? null,
     locationId: data.location_id ?? data.locationId ?? null,
     resourceId: data.resource_id ?? data.resourceId ?? null,
-    date: data.date || null,
+    date: formatDateMMDDYY(data.date) || data.date || null,
     startTime: data.start_time ?? data.startTime ?? null,
     endTime: data.end_time ?? data.endTime ?? null,
     durationMinutes: data.duration_minutes ?? data.durationMinutes ?? null,
@@ -535,13 +549,13 @@ export async function fetchPatientSharedDocumentBySharedId(
     documentType: data.document_type || data.report_title || "Shared document",
     reportTitle: data.report_title || data.document_type || "Shared document",
     fileName: data.file_name || null,
-    visitDate: data.visit_date || null,
+    visitDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
     visitLabel: data.visit_label || "Visit",
     employee: {
       patientId: employee.patient_id ?? null,
       name: employee.name || "Patient",
       accountNo: employee.account_no || null,
-      dateOfBirth: employee.date_of_birth || null,
+      dateOfBirth: formatDateMMDDYYYY(employee.date_of_birth) || employee.date_of_birth || null,
       gender: employee.gender || null,
       phone: employee.phone || null,
       address: employee.address || null,
@@ -561,8 +575,8 @@ export async function fetchPatientSharedDocumentBySharedId(
           .includes("first")
           ? "DFR"
           : "DOC",
-      visitDate: data.visit_date || null,
-      reportDate: data.visit_date || null,
+      visitDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
+      reportDate: formatDateMMDDYY(data.visit_date) || data.visit_date || null,
       provider: null,
       url: fileUrl,
     },

@@ -170,6 +170,13 @@ class UpcomingAppointmentsResponse(BaseModel):
     employer_id: int | None = None
 
 
+class VisitDocumentPreviousVersion(BaseModel):
+    id: int
+    published_at: str | None = None
+    version_tag: str | None = None
+    path: str | None = None
+
+
 class EmployeeVisitDocument(BaseModel):
     id: int
     check_in_id: int
@@ -180,6 +187,9 @@ class EmployeeVisitDocument(BaseModel):
     preview_badge: str
     preview_label: str
     is_completed: bool = False
+    published_at: str | None = None
+    version_tag: str | None = None
+    previous_versions: list[VisitDocumentPreviousVersion] = Field(default_factory=list)
 
 
 class EmployeeVisitRecord(BaseModel):

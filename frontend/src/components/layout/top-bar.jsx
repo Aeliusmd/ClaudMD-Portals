@@ -21,6 +21,7 @@ export function TopBar({
   notificationsUnreadCount,
   showSearch = true,
   showNotifications = true,
+  showAccountLinks = true,
   className,
 }) {
   return (
@@ -83,6 +84,7 @@ export function TopBar({
           profileHref={profileHref}
           settingsHref={settingsHref}
           loginHref={loginHref}
+          showAccountLinks={showAccountLinks}
         />
       </div>
     </header>

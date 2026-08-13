@@ -113,6 +113,7 @@ export function PatientShell({ children }) {
   useEffect(() => {
     const session = getSecureShareSession();
     if (!hasLiveSharedIdSession(session)) return;
+    if (session.recipientRole !== "patient") return;
     if (pathname && !pathname.startsWith(patientPaths.sharedDocumentsScoped)) {
       router.replace(patientPaths.sharedDocumentsScoped);
     }

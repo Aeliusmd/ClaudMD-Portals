@@ -108,6 +108,7 @@ export function EmployerShell({ children }) {
     if (!session) return;
 
     if (hasLiveSharedIdSession(session)) {
+      if (session.recipientRole && session.recipientRole !== "employer") return;
       if (pathname && !pathname.startsWith(employerPaths.sharedDocumentsScoped)) {
         router.replace(employerPaths.sharedDocumentsScoped);
       }

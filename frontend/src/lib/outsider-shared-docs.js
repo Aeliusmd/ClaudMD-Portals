@@ -37,6 +37,7 @@ function toVisitDocument(versions) {
     url: item.document?.url || null,
     publishedAt: item.sharedAt || item.visitDate || null,
     sharedId: item.sharedId,
+    isViewed: Boolean(item.isViewed),
   }));
 
   return {
@@ -49,6 +50,7 @@ function toVisitDocument(versions) {
     visitDate: latest.visitDate,
     publishedAt: latest.sharedAt || latest.visitDate || null,
     url: latest.document?.url || null,
+    isViewed: versions.every((item) => item.isViewed),
     previousVersions,
   };
 }
@@ -58,11 +60,6 @@ function patientKeyOf(item) {
 }
 
 export function groupOutsiderSharedDocuments(items) {
-  const unreadPatientKeys = new Set();
-  for (const item of items || []) {
-    if (!item.isViewed) unreadPatientKeys.add(patientKeyOf(item));
-  }
-
   const unique = uniqueSharesByDocument(items);
   const patients = new Map();
 
@@ -92,13 +89,18 @@ export function groupOutsiderSharedDocuments(items) {
       const lastSharedItem = uniqueItems.find(
         (item) => shareTime(item) === lastSharedAt
       );
+      const unreadDocuments = documents.filter((doc) => !doc.isViewed);
+      const viewedDocuments = documents.filter((doc) => doc.isViewed);
       return {
         patientKey: patient.patientKey,
         name: patient.name,
         documents,
-        documentCount: uniqueItems.length,
+        unreadDocuments,
+        viewedDocuments,
+        unreadCount: unreadDocuments.length,
+        documentCount: documents.length,
         lastSharedAt: lastSharedItem?.sharedAt || null,
-        hasUnread: unreadPatientKeys.has(patient.patientKey),
+        hasUnread: unreadDocuments.length > 0,
       };
     })
     .sort(

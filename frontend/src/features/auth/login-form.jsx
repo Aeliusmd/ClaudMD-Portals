@@ -48,6 +48,7 @@ function LoginFormInner({ portal = "employer" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordUnlocked, setPasswordUnlocked] = useState(false);
   const [error, setError] = useState(
     hasActivationKey ? "" : ERROR_ACTIVATION
   );
@@ -125,8 +126,9 @@ function LoginFormInner({ portal = "employer" }) {
     if (isSigningIn) return;
 
     const normalizedEmail = email.trim();
+    const normalizedPassword = password.trim();
     const hasEmail = Boolean(normalizedEmail);
-    const hasPassword = Boolean(password);
+    const hasPassword = Boolean(normalizedPassword);
 
     if (!activationKey) {
       setError(ERROR_ACTIVATION);
@@ -144,7 +146,7 @@ function LoginFormInner({ portal = "employer" }) {
     try {
       const result = await loginWithCredentials({
         username: normalizedEmail,
-        password,
+        password: normalizedPassword,
         activationKey,
         portal: portalFromUrl,
       });
@@ -357,11 +359,16 @@ function LoginFormInner({ portal = "employer" }) {
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     value={password}
+                    readOnly={!passwordUnlocked}
+                    onFocus={() => setPasswordUnlocked(true)}
                     onChange={(e) => {
                       setPassword(e.target.value);
                       clearError();
                     }}
-                    autoComplete="current-password"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                     disabled={isSigningIn}
                     className={`${inputClassName} pr-11`}
                   />

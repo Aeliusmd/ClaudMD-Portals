@@ -151,6 +151,7 @@ export function OutsiderShell({ children }) {
           notifications={[]}
           showNotifications={false}
           showSearch={false}
+          showAccountLinks={false}
         />
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6">
           {children}

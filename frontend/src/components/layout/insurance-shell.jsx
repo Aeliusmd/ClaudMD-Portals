@@ -61,6 +61,7 @@ export function InsuranceShell({ children }) {
   useEffect(() => {
     const session = getSecureShareSession();
     if (!hasLiveSharedIdSession(session)) return;
+    if (session.recipientRole !== "insurance") return;
     if (pathname && !pathname.startsWith(insurancePaths.sharedDocumentsScoped)) {
       router.replace(insurancePaths.sharedDocumentsScoped);
     }

@@ -110,6 +110,30 @@ export async function updateEmployerProfile(accessToken, payload) {
   };
 }
 
+export async function fetchEmployerPaidBills(accessToken) {
+  const data = await employerFetch(
+    "/api/employer/billing/paid",
+    accessToken,
+    "Unable to load paid bills."
+  );
+
+  return {
+    items: (data.items || []).map((row) => ({
+      id: row.id,
+      invoiceNo: row.invoice_no,
+      patientName: row.patient_name || null,
+      description: row.description || "Invoice payment",
+      category: row.category || null,
+      paidOn: row.paid_on || null,
+      amount: Number(row.amount) || 0,
+      status: row.status || "Paid",
+    })),
+    total: data.total ?? 0,
+    totalPaid: Number(data.total_paid) || 0,
+    employerId: data.employer_id,
+  };
+}
+
 export async function fetchEmployerDashboardSummary(accessToken) {
   const data = await employerFetch(
     "/api/employer/dashboard/summary",

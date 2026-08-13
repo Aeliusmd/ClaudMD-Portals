@@ -31,6 +31,7 @@ from app.employer.notifications import (
     list_notifications,
     mark_notifications_read,
 )
+from app.employer.billing import list_paid_bills
 from app.employer.permissions import (
     get_organization_users,
     update_organization_user_access,
@@ -52,6 +53,7 @@ from app.employer.schemas import (
     OrganizationUserAccessUpdateRequest,
     OrganizationUserAccessUpdateResponse,
     OrganizationUsersResponse,
+    PaidBillsResponse,
     SharedDocumentDetailResponse,
     SupportClinicInfoResponse,
     SupportMessageDetail,
@@ -177,6 +179,17 @@ def employer_notifications_mark_read_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"mark-read failed: {type(exc).__name__}: {exc}",
         ) from exc
+
+
+@router.get("/billing/paid", response_model=PaidBillsResponse)
+def employer_paid_bills_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Paid invoices for the current employer (SELECT only).
+    Source: BillingOrderPayments + BillingHeadersHistory + order descriptions.
+    """
+    return list_paid_bills(current_user)
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummaryResponse)

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, Clock3, Download, FileText, Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,10 +9,11 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchInput } from "@/components/ui/search-input";
-import {
-  employerBillingBills,
-  employerPaidBills,
-} from "@/data/employer-billing";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { employerBillingBills } from "@/data/employer-billing";
+import { fetchEmployerPaidBills } from "@/lib/api/employer";
+import { LOGIN_PATH } from "@/lib/auth-routes";
+import { getAccessToken } from "@/lib/auth-session";
 import { cn } from "@/lib/utils";
 
 function formatMoney(amount) {
@@ -86,10 +88,15 @@ function OverviewCard({ label, value, detail, icon, iconWrap, featured = false }
 }
 
 export function EmployerBillingView() {
+  const router = useRouter();
   const [tab, setTab] = useState("review");
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState(() => new Set(["bill-001"]));
   const [message, setMessage] = useState("");
+  const [paidBills, setPaidBills] = useState([]);
+  const [paidTotal, setPaidTotal] = useState(0);
+  const [paidLoading, setPaidLoading] = useState(true);
+  const [paidError, setPaidError] = useState(null);
 
   const reviewBills = useMemo(
     () => employerBillingBills.filter((bill) => bill.status === "review"),
@@ -104,10 +111,43 @@ export function EmployerBillingView() {
     () => payableBills.reduce((sum, bill) => sum + bill.amount, 0),
     [payableBills]
   );
-  const paidTotal = useMemo(
-    () => employerPaidBills.reduce((sum, bill) => sum + bill.amount, 0),
-    []
-  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPaidBills() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(LOGIN_PATH);
+        return;
+      }
+
+      setPaidLoading(true);
+      try {
+        const data = await fetchEmployerPaidBills(token);
+        if (cancelled) return;
+        setPaidBills(data.items);
+        setPaidTotal(data.totalPaid);
+        setPaidError(null);
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(LOGIN_PATH);
+          return;
+        }
+        setPaidBills([]);
+        setPaidTotal(0);
+        setPaidError(err?.message || "Unable to load paid bills.");
+      } finally {
+        if (!cancelled) setPaidLoading(false);
+      }
+    }
+
+    loadPaidBills();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const filteredReview = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -117,9 +157,9 @@ export function EmployerBillingView() {
 
   const filteredPaid = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return employerPaidBills;
-    return employerPaidBills.filter((bill) => matchesPaidQuery(bill, normalized));
-  }, [query]);
+    if (!normalized) return paidBills;
+    return paidBills.filter((bill) => matchesPaidQuery(bill, normalized));
+  }, [paidBills, query]);
 
   const selectedBills = filteredReview.filter((bill) => selectedIds.has(bill.id));
   const selectedTotal = selectedBills.reduce((sum, bill) => sum + bill.amount, 0);
@@ -379,10 +419,35 @@ export function EmployerBillingView() {
         </Card>
       ) : (
         <Card className="overflow-hidden p-0">
-          {filteredPaid.length === 0 ? (
+          {paidLoading ? (
+            <TableSkeleton
+              columns={7}
+              rows={5}
+              minWidthClass="min-w-[56rem]"
+              headers={[
+                "Invoice #",
+                "Patient",
+                "Description",
+                "Paid On",
+                "Amount",
+                "Status",
+                "Invoice",
+              ]}
+            />
+          ) : paidError ? (
+            <EmptyState
+              title="Unable to load paid bills"
+              description={paidError}
+              className="min-h-64 rounded-none border-0"
+            />
+          ) : filteredPaid.length === 0 ? (
             <EmptyState
               title="No paid bills found"
-              description="Try another search, or switch back to Bill Review."
+              description={
+                query.trim()
+                  ? "Try another search, or switch back to Bill Review."
+                  : "No payments are on file for your organization yet."
+              }
               className="min-h-64 rounded-none border-0"
             />
           ) : (

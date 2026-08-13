@@ -507,3 +507,21 @@ class SupportSendResponse(BaseModel):
     message: SupportMessageDetail
     delivery_status: str
     delivery_note: str | None = None
+
+
+class PaidBillRow(BaseModel):
+    id: str
+    invoice_no: str
+    patient_name: str | None = None
+    description: str
+    category: str | None = None
+    paid_on: str | None = None
+    amount: float = 0
+    status: str = "Paid"
+
+
+class PaidBillsResponse(BaseModel):
+    items: list[PaidBillRow] = []
+    total: int = 0
+    total_paid: float = 0
+    employer_id: int | None = None

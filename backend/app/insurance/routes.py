@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from app.auth.dependencies import CurrentUser, get_current_user
@@ -21,18 +21,30 @@ from app.insurance.patients import (
     default_search_date_range,
     search_patients,
 )
-from app.insurance.permissions import get_organization_users
+from app.insurance.permissions import (
+    get_organization_users,
+    update_organization_user_access,
+)
 from app.insurance.schemas import (
     InsuranceDashboardSummaryResponse,
     InsuranceMarkNotificationsReadResponse,
     InsuranceNotificationsResponse,
+    InsuranceOrganizationUserAccessUpdateRequest,
+    InsuranceOrganizationUserAccessUpdateResponse,
     InsuranceOrganizationUsersResponse,
     InsurancePatientDetailResponse,
     InsurancePatientSearchResponse,
     InsuranceProfileResponse,
     InsuranceProfileUpdateRequest,
 )
-from app.employer.schemas import SharedDocumentDetailResponse
+from app.employer.schemas import (
+    SharedDocumentDetailResponse,
+    SupportClinicInfoResponse,
+    SupportMessageDetail,
+    SupportMessagesResponse,
+    SupportRecipientsResponse,
+    SupportSendResponse,
+)
 from app.insurance.service import (
     get_dashboard_summary,
     get_insurance_profile,
@@ -42,6 +54,13 @@ from app.insurance.shared_documents import (
     get_shared_document_detail,
     open_shared_document_file,
     open_shared_document_thumbnail,
+)
+from app.insurance.support import (
+    get_support_clinic_info,
+    get_support_message,
+    list_support_messages,
+    list_support_recipients,
+    send_support_message,
 )
 
 router = APIRouter(prefix="/api/insurance", tags=["insurance"])
@@ -86,10 +105,30 @@ def insurance_organization_users_endpoint(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ):
     """
-    Insurance organization contacts for the Permissions tab (read-only).
-    Source: dbo.InsuranceContacts for the logged-in user's InsuranceId.
+    Insurance organization contacts for the Permissions tab.
+    Admin only (UserGroupId = 11). Roles from TypeId + UserGroupId.
     """
     return get_organization_users(current_user)
+
+
+@router.patch(
+    "/organization-users/{contact_id}/access",
+    response_model=InsuranceOrganizationUserAccessUpdateResponse,
+)
+def insurance_organization_user_access_endpoint(
+    contact_id: int,
+    payload: InsuranceOrganizationUserAccessUpdateRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Grant / modify / revoke portal access for an insurance contact.
+    Admin only. Updates InsuranceContacts.IsAllowPortalAccess (existing column).
+    """
+    return update_organization_user_access(
+        current_user,
+        contact_id,
+        payload.access_level,
+    )
 
 
 @router.get("/notifications", response_model=InsuranceNotificationsResponse)
@@ -240,3 +279,73 @@ def insurance_shared_document_thumbnail_endpoint(
 ):
     """PNG of page 1 for a SharedId document tile."""
     return open_shared_document_thumbnail(current_user, shared_id)
+
+
+@router.get("/support/clinic", response_model=SupportClinicInfoResponse)
+def insurance_support_clinic_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """Support compose context (logged-in user as From)."""
+    return get_support_clinic_info(current_user)
+
+
+@router.get("/support/recipients", response_model=SupportRecipientsResponse)
+def insurance_support_recipients_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    search: str | None = Query(default=None),
+):
+    """Clinic staff users available for To / CC (internal messaging)."""
+    return list_support_recipients(current_user, search=search)
+
+
+@router.get("/support/messages", response_model=SupportMessagesResponse)
+def insurance_support_messages_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=50, alias="pageSize"),
+):
+    """Inbox of MailInboxes rows for the logged-in insurance user."""
+    return list_support_messages(current_user, page=page, page_size=page_size)
+
+
+@router.get("/support/messages/{message_id}", response_model=SupportMessageDetail)
+def insurance_support_message_detail_endpoint(
+    message_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    return get_support_message(current_user, message_id)
+
+
+@router.post("/support/messages", response_model=SupportSendResponse)
+async def insurance_support_send_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    to_user_id: Annotated[int, Form(alias="toUserId")],
+    subject: Annotated[str, Form()],
+    body: Annotated[str, Form()],
+    cc_user_ids: Annotated[str | None, Form(alias="ccUserIds")] = None,
+    files: Annotated[list[UploadFile] | None, File()] = None,
+):
+    """
+    Compose an internal support message into dbo.MailInboxes (+ attachments).
+    Mother-style CC: one MailInboxes row per recipient (To = that user).
+    No schema changes.
+    """
+    parsed_ccs: list[int] = []
+    if cc_user_ids:
+        for part in str(cc_user_ids).split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                parsed_ccs.append(int(part))
+            except ValueError:
+                continue
+
+    return await send_support_message(
+        current_user,
+        to_user_id=to_user_id,
+        cc_user_ids=parsed_ccs,
+        subject=subject,
+        body=body,
+        files=list(files or []),
+    )

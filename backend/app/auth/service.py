@@ -18,6 +18,8 @@ from app.auth.schemas import (
 )
 from app.auth.user_profile_type import (
     UserType,
+    is_employer_admin,
+    is_insurance_admin,
     resolve_login_portal,
     user_type_label,
 )
@@ -52,7 +54,8 @@ def resolve_clinic(activation_key: str) -> ClinicConnectionInfo:
 def authenticate_user(payload: LoginRequest) -> LoginResponse:
     """
     Authenticate via ClaudMD IdentityServer password grant.
-    Then resolve UserProfiles.TypeId (SELECT only) to choose employer/patient/insurance portal.
+    Then resolve UserProfiles.TypeId (portal) and UserGroupId (admin role)
+    with SELECT only.
     """
     settings = get_settings()
     activation_key = (payload.activation_key or settings.default_activation_key).strip()
@@ -82,6 +85,7 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
     )
 
     type_id = profile.get("type_id") if profile else None
+    user_group_id = profile.get("user_group_id") if profile else None
     try:
         portal = resolve_login_portal(type_id, payload.portal)
     except ValueError as exc:
@@ -128,6 +132,14 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
             portal=portal,
             type_id=type_id,
             type_label=user_type_label(type_id),
+            user_group_id=user_group_id,
+            is_admin=(
+                is_employer_admin(user_group_id)
+                if portal == "employer"
+                else is_insurance_admin(user_group_id)
+                if portal == "insurance"
+                else False
+            ),
             activation_key=key_from_token,
         ),
         clinic=_clinic_info(clinic, key_from_token),
@@ -353,7 +365,7 @@ def _fetch_user_profile_type(
     login_id: str,
     email: str,
 ) -> dict | None:
-    """Read-only UserProfiles lookup for TypeId + basic identity fields."""
+    """Read-only UserProfiles lookup for TypeId, UserGroupId + basic identity fields."""
     if not clinic:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -368,7 +380,7 @@ def _fetch_user_profile_type(
             cursor.execute(
                 """
                 SELECT TOP 1
-                    Id, LoginId, Email, FirstName, LastName, TypeId
+                    Id, LoginId, Email, FirstName, LastName, TypeId, UserGroupId
                 FROM dbo.UserProfiles
                 WHERE Id = ?
                   AND (IsDeleted = 0 OR IsDeleted IS NULL)
@@ -382,7 +394,7 @@ def _fetch_user_profile_type(
             cursor.execute(
                 """
                 SELECT TOP 1
-                    Id, LoginId, Email, FirstName, LastName, TypeId
+                    Id, LoginId, Email, FirstName, LastName, TypeId, UserGroupId
                 FROM dbo.UserProfiles
                 WHERE (IsDeleted = 0 OR IsDeleted IS NULL)
                   AND RecordStatusId = 1
@@ -418,6 +430,13 @@ def _fetch_user_profile_type(
         except (TypeError, ValueError):
             type_id = None
 
+    user_group_id = None
+    if row.UserGroupId is not None:
+        try:
+            user_group_id = int(row.UserGroupId)
+        except (TypeError, ValueError):
+            user_group_id = None
+
     return {
         "id": int(row.Id),
         "login_id": (row.LoginId or "").strip() or login_id,
@@ -425,4 +444,5 @@ def _fetch_user_profile_type(
         "first_name": (row.FirstName or "").strip() or None,
         "last_name": (row.LastName or "").strip() or None,
         "type_id": type_id,
+        "user_group_id": user_group_id,
     }

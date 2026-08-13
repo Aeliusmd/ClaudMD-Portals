@@ -98,6 +98,8 @@ def _to_response(profile) -> InsuranceProfileResponse:
         login_id=profile.login_id,
         type_id=profile.type_id,
         type_label=profile.type_label,
+        user_group_id=getattr(profile, "user_group_id", None),
+        is_admin=bool(getattr(profile, "is_admin", False)),
     )
 
 

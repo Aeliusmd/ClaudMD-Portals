@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
-from app.auth.user_profile_type import UserType, is_super_admin, user_type_label
+from app.auth.user_profile_type import (
+    UserType,
+    is_insurance_admin,
+    is_super_admin,
+    user_type_label,
+)
 from app.db.clinic import get_clinic_connection
 from app.validation.contact import email_error, phone_error
 from app.validation.text import unsafe_markup_error
@@ -33,6 +38,8 @@ class InsuranceProfile:
     login_id: str | None
     type_id: int | None = None
     type_label: str | None = None
+    user_group_id: int | None = None
+    is_admin: bool = False
 
 
 def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsuranceProfile:
@@ -49,7 +56,7 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsurancePro
             cursor.execute(
                 """
                 SELECT TOP 1
-                    Id, LoginId, Email, FirstName, LastName, Title, Phone, CellPhone, TypeId
+                    Id, LoginId, Email, FirstName, LastName, Title, Phone, CellPhone, TypeId, UserGroupId
                 FROM dbo.UserProfiles
                 WHERE Id = ?
                   AND (IsDeleted = 0 OR IsDeleted IS NULL)
@@ -63,7 +70,7 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsurancePro
             cursor.execute(
                 """
                 SELECT TOP 1
-                    Id, LoginId, Email, FirstName, LastName, Title, Phone, CellPhone, TypeId
+                    Id, LoginId, Email, FirstName, LastName, Title, Phone, CellPhone, TypeId, UserGroupId
                 FROM dbo.UserProfiles
                 WHERE (IsDeleted = 0 OR IsDeleted IS NULL)
                   AND RecordStatusId = 1
@@ -95,6 +102,13 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsurancePro
                 type_id = int(user_row.TypeId)
             except (TypeError, ValueError):
                 type_id = None
+
+        user_group_id = None
+        if getattr(user_row, "UserGroupId", None) is not None:
+            try:
+                user_group_id = int(user_row.UserGroupId)
+            except (TypeError, ValueError):
+                user_group_id = None
 
         if type_id not in _INSURANCE_PORTAL_TYPES:
             raise HTTPException(
@@ -254,6 +268,8 @@ def fetch_profile_from_clinic(clinic, current_user: CurrentUser) -> InsurancePro
             login_id=login_id,
             type_id=type_id,
             type_label=user_type_label(type_id),
+            user_group_id=user_group_id,
+            is_admin=is_insurance_admin(user_group_id),
         )
 
 

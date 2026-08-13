@@ -9,6 +9,7 @@ import {
   FileText,
   HeartPulse,
   LayoutDashboard,
+  LifeBuoy,
   LogOut,
   Share2,
   Shield,
@@ -30,6 +31,7 @@ const icons = {
   Share2,
   FileText,
   Shield,
+  LifeBuoy,
 };
 
 export function Sidebar({

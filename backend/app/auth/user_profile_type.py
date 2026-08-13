@@ -103,6 +103,82 @@ def can_access_portal(type_id: int | None, portal: str | None) -> bool:
 # Back-compat alias used by earlier branch code.
 portals_for_type_id = portals_allowed_for_type_id
 
+# Portal admin role (UserProfiles.UserGroupId).
+# Portal membership stays on TypeId; admin/manage-users role uses UserGroupId.
+# Same group id is used for employer and insurance portal admins.
+PORTAL_ADMIN_USER_GROUP_ID = 11
+EMPLOYER_ADMIN_USER_GROUP_ID = PORTAL_ADMIN_USER_GROUP_ID
+
+
+def is_portal_admin(user_group_id: int | None) -> bool:
+    """True when UserProfiles.UserGroupId identifies a portal admin (group 11)."""
+    if user_group_id is None:
+        return False
+    try:
+        return int(user_group_id) == PORTAL_ADMIN_USER_GROUP_ID
+    except (TypeError, ValueError):
+        return False
+
+
+def is_employer_admin(user_group_id: int | None) -> bool:
+    """True when UserProfiles.UserGroupId identifies an employer portal admin."""
+    return is_portal_admin(user_group_id)
+
+
+def is_insurance_admin(user_group_id: int | None) -> bool:
+    """True when UserProfiles.UserGroupId identifies an insurance portal admin."""
+    return is_portal_admin(user_group_id)
+
+
+# Permissions-tab org roles (display). Admin is UserGroupId-based; others are User.
+ORG_PERMISSION_ROLE_ADMIN = "Admin"
+ORG_PERMISSION_ROLE_USER = "User"
+EMPLOYER_PORTAL_TYPE_IDS = frozenset(
+    {int(UserType.SuperAdmin), int(UserType.EmployerUser)}
+)
+INSURANCE_PORTAL_TYPE_IDS = frozenset({int(UserType.InsuranceUser)})
+
+
+def is_employer_portal_type(type_id: int | None) -> bool:
+    """True when TypeId is an employer-portal user type (Super Admin / Employer User)."""
+    if type_id is None:
+        return False
+    try:
+        return int(type_id) in EMPLOYER_PORTAL_TYPE_IDS
+    except (TypeError, ValueError):
+        return False
+
+
+def is_insurance_portal_type(type_id: int | None) -> bool:
+    """True when TypeId is an insurance-portal user type (Insurance User)."""
+    if type_id is None:
+        return False
+    try:
+        return int(type_id) in INSURANCE_PORTAL_TYPE_IDS
+    except (TypeError, ValueError):
+        return False
+
+
+def organization_permission_role(
+    type_id: int | None,
+    user_group_id: int | None,
+) -> tuple[str, bool]:
+    """
+    Resolve Permissions-tab role from TypeId + UserGroupId (display only).
+
+    - Admin when UserGroupId == 11.
+    - User for other org contacts (employer or insurance).
+    """
+    if is_portal_admin(user_group_id):
+        return ORG_PERMISSION_ROLE_ADMIN, True
+    if (
+        type_id is None
+        or is_employer_portal_type(type_id)
+        or is_insurance_portal_type(type_id)
+    ):
+        return ORG_PERMISSION_ROLE_USER, False
+    return ORG_PERMISSION_ROLE_USER, False
+
 
 def resolve_login_portal(type_id: int | None, requested_portal: str | None) -> str:
     """

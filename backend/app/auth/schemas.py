@@ -26,6 +26,8 @@ class UserInfo(BaseModel):
     portal: str = "employer"
     type_id: int | None = None
     type_label: str | None = None
+    user_group_id: int | None = None
+    is_admin: bool = False
     activation_key: str | None = None
 
 

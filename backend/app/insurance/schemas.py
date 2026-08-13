@@ -19,6 +19,8 @@ class InsuranceProfileResponse(BaseModel):
     login_id: str | None = None
     type_id: int | None = None
     type_label: str | None = None
+    user_group_id: int | None = None
+    is_admin: bool = False
 
 
 class InsuranceProfileUpdateRequest(BaseModel):
@@ -71,6 +73,8 @@ class InsuranceOrganizationUserRow(BaseModel):
     login_id: str | None = None
     type_id: int | None = None
     type_label: str | None = None
+    user_group_id: int | None = None
+    is_admin: bool = False
     role: str
     access_level: str
     active: bool = True
@@ -82,6 +86,20 @@ class InsuranceOrganizationUsersResponse(BaseModel):
     organization: str | None = None
     items: list[InsuranceOrganizationUserRow] = []
     total: int = 0
+    can_manage_access: bool = False
+
+
+class InsuranceOrganizationUserAccessUpdateRequest(BaseModel):
+    """Grant / modify / revoke portal access for an insurance contact."""
+
+    access_level: str = Field(
+        ...,
+        description="Portal Access or No Access",
+    )
+
+
+class InsuranceOrganizationUserAccessUpdateResponse(BaseModel):
+    item: InsuranceOrganizationUserRow
     can_manage_access: bool = False
 
 

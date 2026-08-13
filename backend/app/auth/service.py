@@ -7,7 +7,7 @@ from app.auth.identity import (
     decode_access_token_claims,
     request_password_token,
 )
-from app.auth.password_hasher import hash_password, verify_password
+from app.auth.password_hasher import hash_password
 from app.auth.schemas import (
     ChangePasswordRequest,
     ChangePasswordResponse,
@@ -131,8 +131,60 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
             type_id=type_id,
             type_label=user_type_label(type_id),
             activation_key=key_from_token,
+            must_change_password=bool((profile or {}).get("must_change_password")),
         ),
         clinic=_clinic_info(clinic, key_from_token),
+    )
+
+
+def _identity_usernames(*values: str | None) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for raw in values:
+        value = (raw or "").strip()
+        if not value:
+            continue
+        key = value.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(value)
+    return ordered
+
+
+def _confirm_identity_password(
+    *,
+    usernames: list[str],
+    password: str,
+    activation_key: str,
+    invalid_message: str,
+) -> str:
+    """Return the username IdentityServer accepted for this password."""
+    last_error: HTTPException | None = None
+    for username in usernames:
+        try:
+            request_password_token(
+                username=username,
+                password=password,
+                activation_key=activation_key,
+            )
+            return username
+        except HTTPException as exc:
+            last_error = exc
+            if exc.status_code in {
+                status.HTTP_401_UNAUTHORIZED,
+                status.HTTP_400_BAD_REQUEST,
+            }:
+                continue
+            raise
+    if last_error and last_error.status_code not in {
+        status.HTTP_401_UNAUTHORIZED,
+        status.HTTP_400_BAD_REQUEST,
+    }:
+        raise last_error
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=invalid_message,
     )
 
 
@@ -141,11 +193,12 @@ def change_password(
     payload: ChangePasswordRequest,
 ) -> ChangePasswordResponse:
     """
-    Change password using existing dbo.UserProfiles.Password / IsPasswordChanged only.
+    Same flow as Profile → Security on employer / patient / insurance:
 
-    1) Confirm current password via IdentityServer password grant (login source of truth).
-    2) Write new ASP.NET Identity V3 hash into UserProfiles.Password.
-    No new tables/columns.
+    1) Confirm current password with IdentityServer password grant.
+    2) Write ASP.NET Identity V3 hash to UserProfiles.Password.
+    3) Set IsPasswordChanged = 1.
+    4) Confirm the new password with IdentityServer before returning success.
     """
     current_password = payload.current_password or ""
     new_password = payload.new_password or ""
@@ -175,13 +228,6 @@ def change_password(
             detail="Authentication required.",
         )
 
-    # Prove the current password is valid for Identity login.
-    request_password_token(
-        username=login_id,
-        password=current_password,
-        activation_key=activation_key,
-    )
-
     clinic = get_clinic_by_activation_key(activation_key)
     if not clinic:
         raise HTTPException(
@@ -200,7 +246,7 @@ def change_password(
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT TOP 1 Id, Password
+            SELECT TOP 1 Id, LoginId, Email, Password
             FROM dbo.UserProfiles
             WHERE Id = ?
               AND (IsDeleted = 0 OR IsDeleted IS NULL)
@@ -214,15 +260,25 @@ def change_password(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User profile not found.",
             )
-
         stored = row.Password
-        # Prefer Identity grant as source of truth; also reject obvious local mismatch.
-        if stored and not verify_password(str(stored), current_password):
-            # Some legacy rows may not verify locally but still authenticate via Identity.
-            # Identity grant already succeeded above, so continue.
-            pass
+        profile_login_id = (row.LoginId or "").strip() or None
+        profile_email = (row.Email or "").strip() or None
 
-        new_hash = hash_password(new_password)
+    identity_username = _confirm_identity_password(
+        usernames=_identity_usernames(
+            login_id,
+            current_user.email,
+            profile_login_id,
+            profile_email,
+        ),
+        password=current_password,
+        activation_key=activation_key,
+        invalid_message="Current password is incorrect.",
+    )
+
+    new_hash = hash_password(new_password)
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
         cursor.execute(
             """
             UPDATE dbo.UserProfiles
@@ -241,15 +297,14 @@ def change_password(
                 detail="Password could not be updated.",
             )
 
-    # Confirm the new password works with Identity before returning success.
     try:
-        request_password_token(
-            username=login_id,
+        _confirm_identity_password(
+            usernames=[identity_username],
             password=new_password,
             activation_key=activation_key,
+            invalid_message="IdentityServer rejected the new password.",
         )
-    except HTTPException:
-        # Roll back to previous hash if Identity still rejects the new password.
+    except HTTPException as exc:
         with get_clinic_connection(clinic) as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -263,13 +318,15 @@ def change_password(
                 """,
                 (stored, profile_id, profile_id),
             )
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Password was written locally but IdentityServer still rejects the "
-                "new password. Previous password was restored. Contact support."
-            ),
-        )
+        if exc.status_code == status.HTTP_400_BAD_REQUEST:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=(
+                    "Password was written locally but IdentityServer still rejects the "
+                    "new password. Previous password was restored. Contact support."
+                ),
+            ) from exc
+        raise
 
     return ChangePasswordResponse(
         message="Password updated successfully.",
@@ -386,7 +443,7 @@ def _fetch_user_profile_type(
             cursor.execute(
                 """
                 SELECT TOP 1
-                    Id, LoginId, Email, FirstName, LastName, TypeId
+                    Id, LoginId, Email, FirstName, LastName, TypeId, IsPasswordChanged
                 FROM dbo.UserProfiles
                 WHERE Id = ?
                   AND (IsDeleted = 0 OR IsDeleted IS NULL)
@@ -410,7 +467,7 @@ def _fetch_user_profile_type(
                 cursor.execute(
                     """
                     SELECT TOP 1
-                        Id, LoginId, Email, FirstName, LastName, TypeId
+                        Id, LoginId, Email, FirstName, LastName, TypeId, IsPasswordChanged
                     FROM dbo.UserProfiles
                     WHERE (IsDeleted = 0 OR IsDeleted IS NULL)
                       AND RecordStatusId = 1
@@ -432,7 +489,7 @@ def _fetch_user_profile_type(
                 cursor.execute(
                     """
                     SELECT TOP 1
-                        Id, LoginId, Email, FirstName, LastName, TypeId
+                        Id, LoginId, Email, FirstName, LastName, TypeId, IsPasswordChanged
                     FROM dbo.UserProfiles
                     WHERE (IsDeleted = 0 OR IsDeleted IS NULL)
                       AND RecordStatusId = 1
@@ -468,6 +525,9 @@ def _fetch_user_profile_type(
         except (TypeError, ValueError):
             type_id = None
 
+    changed = getattr(row, "IsPasswordChanged", None)
+    must_change = changed is None or not bool(changed)
+
     return {
         "id": int(row.Id),
         "login_id": (row.LoginId or "").strip() or login_id,
@@ -475,4 +535,5 @@ def _fetch_user_profile_type(
         "first_name": (row.FirstName or "").strip() or None,
         "last_name": (row.LastName or "").strip() or None,
         "type_id": type_id,
+        "must_change_password": must_change,
     }

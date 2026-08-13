@@ -375,6 +375,10 @@ class SharedDocumentDetailResponse(BaseModel):
     file_name: str | None = None
     visit_date: str | None = None
     visit_label: str | None = None
+    check_in_id: int | None = None
+    report_id: int | None = None
+    shared_at: str | None = None
+    is_viewed: bool = False
     employee: SharedDocumentEmployee
 
 

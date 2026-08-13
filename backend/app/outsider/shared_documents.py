@@ -24,12 +24,19 @@ from app.employer.schemas import (
     SharedDocumentDetailResponse,
     SharedDocumentEmployee,
 )
+from app.outsider.schemas import SharedDocumentListResponse
 from app.employer.visit_documents import render_pdf_first_page_png
 from app.insurance.patients import _format_display_date, _gender_label
 from app.outsider.profile import OutsiderProfile, fetch_profile_from_clinic
 
 _CHECKIN_OBJECT_TYPE_ID = 53
 _SHARED_DOC_UPLOAD_TYPE_ID = 2
+
+
+def _is_viewed_select(clinic) -> str:
+    if shared_documents_has_is_viewed(clinic):
+        return "sd.IsViewed"
+    return "CAST(0 AS bit) AS IsViewed"
 
 
 def get_shared_document_detail(
@@ -39,6 +46,86 @@ def get_shared_document_detail(
     clinic, profile, row = _load_shared_document_access(current_user, shared_id)
     _mark_shared_id_viewed(clinic, profile, str(row.get("SharedId") or shared_id))
     return _to_detail_response(row)
+
+
+def list_shared_documents(current_user: CurrentUser) -> SharedDocumentListResponse:
+    """All non-deleted shares addressed to this external user."""
+    clinic = get_clinic_by_activation_key(current_user.activation_key)
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found for this session.",
+        )
+
+    profile = fetch_profile_from_clinic(clinic, current_user)
+    email_norm = (profile.email or "").strip().lower() or None
+    recipient_sql, recipient_params = _recipient_clause(profile.user_id, email_norm)
+    if recipient_sql == "1 = 0":
+        return SharedDocumentListResponse(items=[], total=0)
+
+    sql = f"""
+        SELECT
+            CONVERT(varchar(36), sd.SharedId) AS SharedId,
+            sd.Id AS ShareRowId,
+            sd.DocumentId,
+            sd.Email AS ShareEmail,
+            sd.ShareWithUserId,
+            CONVERT(varchar(33), sd.CreatedDateTime, 127) AS SharedAt,
+            {_is_viewed_select(clinic)},
+            du.FileName,
+            du.FilePath,
+            du.FileExtention,
+            du.ReportId,
+            r.Name AS ReportName,
+            r.ReportTitle,
+            ch.Id AS CheckInId,
+            ch.PatientId,
+            CONVERT(varchar(10), ch.CheckInDate, 23) AS VisitDate,
+            vt.Description AS VisitTypeDescription,
+            vt.Code AS VisitTypeCode,
+            p.FirstName,
+            p.LastName,
+            p.AccountNumber,
+            p.GenderId,
+            CONVERT(varchar(10), p.DateOfBirth, 23) AS DateOfBirth,
+            p.CellPhone,
+            p.HomePhone,
+            p.WorkPhone,
+            p.Address1,
+            p.Address2,
+            p.City,
+            p.State,
+            p.ZipCode
+        FROM dbo.SharedDocuments sd
+        INNER JOIN dbo.DocumentUploads du
+            ON du.Id = sd.DocumentId
+           AND sd.DocumentTypeId = ?
+           AND (du.IsDeleted = 0 OR du.IsDeleted IS NULL)
+        LEFT JOIN dbo.Reports r ON r.Id = du.ReportId
+        LEFT JOIN dbo.CheckInsHeader ch
+            ON ch.Id = du.HeaderObjectId
+           AND du.ObjectTypeId = ?
+           AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+        LEFT JOIN dbo.VisitTypes vt ON vt.Id = ch.VisitTypeId
+        LEFT JOIN dbo.Patients p ON p.Id = ch.PatientId
+        WHERE (sd.IsDeleted = 0 OR sd.IsDeleted IS NULL)
+          AND ({recipient_sql})
+        ORDER BY sd.CreatedDateTime DESC, sd.Id DESC
+    """
+    params: list[Any] = [
+        _SHARED_DOC_UPLOAD_TYPE_ID,
+        _CHECKIN_OBJECT_TYPE_ID,
+        *recipient_params,
+    ]
+
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(sql, tuple(params))
+        columns = [col[0] for col in cursor.description]
+        rows = [dict(zip(columns, fetched)) for fetched in cursor.fetchall()]
+
+    items = [_to_detail_response(row) for row in rows if row.get("DocumentId") is not None]
+    return SharedDocumentListResponse(items=items, total=len(items))
 
 
 def open_shared_document_file(
@@ -129,6 +216,8 @@ def _load_shared_document_access(
             sd.DocumentId,
             sd.Email AS ShareEmail,
             sd.ShareWithUserId,
+            CONVERT(varchar(33), sd.CreatedDateTime, 127) AS SharedAt,
+            {_is_viewed_select(clinic)},
             du.FileName,
             du.FilePath,
             du.FileExtention,
@@ -286,6 +375,8 @@ def _to_detail_response(row: dict[str, Any]) -> SharedDocumentDetailResponse:
     account = row.get("AccountNumber")
     account_no = str(account).strip() if account is not None else None
 
+    check_in_id = row.get("CheckInId")
+    report_id = row.get("ReportId")
     return SharedDocumentDetailResponse(
         shared_id=str(row.get("SharedId") or "").strip(),
         document_id=int(row["DocumentId"]),
@@ -294,6 +385,10 @@ def _to_detail_response(row: dict[str, Any]) -> SharedDocumentDetailResponse:
         file_name=(row.get("FileName") or "").strip() or None,
         visit_date=_format_display_date(row.get("VisitDate")),
         visit_label=visit_label,
+        check_in_id=int(check_in_id) if check_in_id is not None else None,
+        report_id=int(report_id) if report_id is not None else None,
+        shared_at=(row.get("SharedAt") or "").strip() or None,
+        is_viewed=bool(row.get("IsViewed")),
         employee=SharedDocumentEmployee(
             patient_id=int(patient_id) if patient_id is not None else None,
             name=_patient_display_name(row.get("FirstName"), row.get("LastName")),

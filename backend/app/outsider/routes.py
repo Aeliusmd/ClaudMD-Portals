@@ -1,17 +1,53 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 
 from app.auth.dependencies import CurrentUser, get_current_user
+from app.db.clinic import get_clinic_by_activation_key
 from app.employer.schemas import SharedDocumentDetailResponse
+from app.outsider.profile import fetch_profile_from_clinic
+from app.outsider.schemas import OutsiderProfileResponse, SharedDocumentListResponse
 from app.outsider.shared_documents import (
     get_shared_document_detail,
+    list_shared_documents,
     open_shared_document_file,
     open_shared_document_thumbnail,
 )
 
 router = APIRouter(prefix="/api/outsider", tags=["outsider"])
+
+
+@router.get("/me", response_model=OutsiderProfileResponse)
+def outsider_profile_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    clinic = get_clinic_by_activation_key(current_user.activation_key)
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found for this session.",
+        )
+    profile = fetch_profile_from_clinic(clinic, current_user)
+    return OutsiderProfileResponse(
+        user_id=profile.user_id,
+        full_name=profile.full_name,
+        first_name=profile.first_name,
+        last_name=profile.last_name,
+        title=profile.title,
+        email=profile.email,
+        login_id=profile.login_id,
+        type_id=profile.type_id,
+        type_label=profile.type_label,
+    )
+
+
+@router.get("/shared-documents", response_model=SharedDocumentListResponse)
+def outsider_shared_documents_list_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """Documents shared with this external contact (family/other)."""
+    return list_shared_documents(current_user)
 
 
 @router.get(

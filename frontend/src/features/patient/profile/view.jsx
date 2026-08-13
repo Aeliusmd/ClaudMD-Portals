@@ -525,6 +525,12 @@ export function PatientProfileView() {
         router.replace(patientPaths.login);
         return;
       }
+      if (err?.status === 400 && err?.message && /current password/i.test(err.message)) {
+        setPasswordErrors((prev) => ({
+          ...prev,
+          currentPassword: err.message,
+        }));
+      }
       setErrorMessage(err?.message || "Unable to update password.");
     } finally {
       setPasswordSaving(false);

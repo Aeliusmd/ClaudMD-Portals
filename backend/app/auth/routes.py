@@ -43,7 +43,8 @@ def change_password_endpoint(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ):
     """
-    Update UserProfiles.Password / IsPasswordChanged only (no new schema).
-    Verifies current password with IdentityServer first.
+    Profile → Security and first-login change password.
+    Verifies current password with IdentityServer, then updates
+    UserProfiles.Password / IsPasswordChanged (no new schema).
     """
     return change_password(current_user, payload)

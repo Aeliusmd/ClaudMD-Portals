@@ -1,4 +1,5 @@
 import { fetchJson } from "@/lib/api/http";
+import { withAuthHeaders } from "@/lib/auth-session";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -62,10 +63,9 @@ export function createSupportApi(apiPrefix) {
       `${API_BASE_URL}${base}${path}`,
       {
         method: "GET",
-        headers: {
+        headers: withAuthHeaders(accessToken, {
           Accept: "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
+        }),
       },
       fallbackMessage
     );
@@ -162,10 +162,9 @@ export function createSupportApi(apiPrefix) {
         `${API_BASE_URL}${base}/support/messages`,
         {
           method: "POST",
-          headers: {
+          headers: withAuthHeaders(accessToken, {
             Accept: "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
+          }),
           body: form,
         },
         "Unable to send support message."

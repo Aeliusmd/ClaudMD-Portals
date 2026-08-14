@@ -82,9 +82,41 @@ export function getAccessToken() {
   return getAuthSession()?.accessToken || null;
 }
 
+export function getSessionActivationKey() {
+  const session = getAuthSession();
+  if (!session) return null;
+  const key = (
+    session.user?.activation_key ||
+    session.user?.activationKey ||
+    session.clinic?.activation_key ||
+    session.clinic?.activationKey ||
+    ""
+  ).trim();
+  return key || null;
+}
+
 export function getAuthHeader() {
   const session = getAuthSession();
   if (!session?.accessToken) return {};
   const type = session.tokenType || "Bearer";
-  return { Authorization: `${type} ${session.accessToken}` };
+  const headers = { Authorization: `${type} ${session.accessToken}` };
+  const activationKey = getSessionActivationKey();
+  if (activationKey) {
+    headers["X-Activation-Key"] = activationKey;
+  }
+  return headers;
+}
+
+/** Merge Authorization + clinic activation key for portal API calls. */
+export function withAuthHeaders(accessToken, headers = {}) {
+  const next = { ...headers };
+  if (accessToken) {
+    const type = getAuthSession()?.tokenType || "Bearer";
+    next.Authorization = `${type} ${accessToken}`;
+  }
+  const activationKey = getSessionActivationKey();
+  if (activationKey) {
+    next["X-Activation-Key"] = activationKey;
+  }
+  return next;
 }

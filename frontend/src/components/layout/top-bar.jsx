@@ -16,7 +16,6 @@ export function TopBar({
   loginHref,
   notifications,
   notificationsViewAllHref,
-  onNotificationsOpen,
   notificationsTotalCount,
   notificationsUnreadCount,
   showSearch = true,
@@ -73,7 +72,6 @@ export function TopBar({
             items={notifications}
             variant={showSearch ? "soft" : "ghost"}
             viewAllHref={notificationsViewAllHref}
-            onOpen={onNotificationsOpen}
             totalCount={notificationsTotalCount}
             unreadCount={notificationsUnreadCount}
           />

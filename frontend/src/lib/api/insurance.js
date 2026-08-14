@@ -1,4 +1,5 @@
 import { fetchJson } from "@/lib/api/http";
+import { withAuthHeaders } from "@/lib/auth-session";
 import {
   insuranceSharedDocumentFileUrl,
   insuranceVisitDocumentFileUrl,
@@ -10,10 +11,9 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 async function insuranceFetch(path, accessToken, fallbackMessage, options = {}) {
-  const headers = {
+  const headers = withAuthHeaders(accessToken, {
     Accept: "application/json",
-    Authorization: `Bearer ${accessToken}`,
-  };
+  });
   if (options.body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
@@ -133,16 +133,13 @@ export async function updateInsuranceOrganizationUserAccess(
   accessLevel
 ) {
   const data = await fetchJson(
-    `${API_BASE_URL}/api/insurance/organization-users/${encodeURIComponent(
-      contactId
-    )}/access`,
+    `${API_BASE_URL}/api/insurance/organization-users/${encodeURIComponent(contactId)}/access`,
     {
       method: "PATCH",
-      headers: {
+      headers: withAuthHeaders(accessToken, {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
+      }),
       body: JSON.stringify({ access_level: accessLevel }),
     },
     "Unable to update portal access."

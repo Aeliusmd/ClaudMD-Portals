@@ -1,4 +1,5 @@
 import { fetchJson } from "@/lib/api/http";
+import { withAuthHeaders } from "@/lib/auth-session";
 import {
   patientSharedDocumentFileUrl,
   patientVisitDocumentFileUrl,
@@ -15,10 +16,9 @@ async function patientFetch(
   fallbackMessage,
   { method = "GET", body } = {}
 ) {
-  const headers = {
+  const headers = withAuthHeaders(accessToken, {
     Accept: "application/json",
-    Authorization: `Bearer ${accessToken}`,
-  };
+  });
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }

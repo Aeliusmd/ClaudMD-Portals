@@ -1,6 +1,6 @@
 import { clearAuthSession, getAuthSession } from "@/lib/auth-session";
 import { canAccessPortal, portalsAllowedForTypeId } from "@/lib/user-type";
-import { getLoginHref } from "@/lib/portal-paths";
+import { getLoginHref, readActivationKeyFromLocation } from "@/lib/portal-paths";
 
 /**
  * Ensure the saved session is allowed on this portal shell.
@@ -13,9 +13,13 @@ export function portalAccessRedirect(expectedPortal) {
   const expected = String(expectedPortal || "")
     .trim()
     .toLowerCase();
+  const activationFromUrl = readActivationKeyFromLocation() || undefined;
   const session = getAuthSession();
   if (!session?.accessToken) {
-    return getLoginHref({ portal: expected });
+    return getLoginHref({
+      portal: expected,
+      activationKey: activationFromUrl,
+    });
   }
 
   const user = session.user || {};
@@ -23,6 +27,8 @@ export function portalAccessRedirect(expectedPortal) {
   const sessionPortal = String(user.portal || "")
     .trim()
     .toLowerCase();
+  const activationKey =
+    user.activation_key || activationFromUrl || undefined;
 
   if (!canAccessPortal(typeId, expected)) {
     clearAuthSession();
@@ -30,7 +36,7 @@ export function portalAccessRedirect(expectedPortal) {
     const home = allowed[0] || sessionPortal || expected;
     return getLoginHref({
       portal: home,
-      activationKey: user.activation_key || undefined,
+      activationKey,
     });
   }
 
@@ -39,7 +45,7 @@ export function portalAccessRedirect(expectedPortal) {
     clearAuthSession();
     return getLoginHref({
       portal: sessionPortal,
-      activationKey: user.activation_key || undefined,
+      activationKey,
     });
   }
 

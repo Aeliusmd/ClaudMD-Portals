@@ -21,6 +21,8 @@ class EmployerProfileResponse(BaseModel):
     type_label: str | None = None
     user_group_id: int | None = None
     is_admin: bool = False
+    activation_key: str | None = None
+    database_name: str | None = None
 
 
 class EmployerProfileUpdateRequest(BaseModel):

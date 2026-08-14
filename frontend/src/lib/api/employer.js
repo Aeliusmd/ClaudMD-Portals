@@ -1,4 +1,5 @@
 import { fetchJson } from "@/lib/api/http";
+import { withAuthHeaders } from "@/lib/auth-session";
 import {
   employerSharedDocumentFileUrl,
   employerVisitDocumentFileUrl,
@@ -15,10 +16,9 @@ async function employerFetch(
   fallbackMessage,
   { method = "GET", body } = {}
 ) {
-  const headers = {
+  const headers = withAuthHeaders(accessToken, {
     Accept: "application/json",
-    Authorization: `Bearer ${accessToken}`,
-  };
+  });
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
@@ -67,6 +67,8 @@ export async function fetchEmployerProfile(accessToken) {
     typeLabel: data.type_label,
     userGroupId: data.user_group_id ?? null,
     isAdmin: Boolean(data.is_admin),
+    activationKey: data.activation_key || null,
+    databaseName: data.database_name || null,
   };
 }
 
@@ -725,16 +727,13 @@ export async function updateEmployerOrganizationUserAccess(
   accessLevel
 ) {
   const data = await fetchJson(
-    `${API_BASE_URL}/api/employer/organization-users/${encodeURIComponent(
-      contactId
-    )}/access`,
+    `${API_BASE_URL}/api/employer/organization-users/${encodeURIComponent(contactId)}/access`,
     {
       method: "PATCH",
-      headers: {
+      headers: withAuthHeaders(accessToken, {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
+      }),
       body: JSON.stringify({ access_level: accessLevel }),
     },
     "Unable to update portal access."
@@ -930,10 +929,9 @@ export async function sendEmployerSupportMessage(accessToken, payload) {
     `${API_BASE_URL}/api/employer/support/messages`,
     {
       method: "POST",
-      headers: {
+      headers: withAuthHeaders(accessToken, {
         Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
+      }),
       body: form,
     },
     "Unable to send support message."

@@ -89,7 +89,6 @@ export function PatientShell({ children }) {
   const { profile } = usePatientProfile();
   const {
     items: notificationItems,
-    markAsRead,
     total: notificationTotal,
     unreadCount: notificationUnread,
   } = usePatientNotifications({
@@ -192,7 +191,6 @@ export function PatientShell({ children }) {
           notificationsViewAllHref={
             scopedSession ? undefined : patientPaths.notifications
           }
-          onNotificationsOpen={scopedSession ? undefined : markAsRead}
           notificationsTotalCount={scopedSession ? 0 : notificationTotal}
           notificationsUnreadCount={scopedSession ? 0 : notificationUnread}
           showSearch={false}

@@ -57,9 +57,11 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
     Authenticate via ClaudMD IdentityServer password grant.
     Then resolve UserProfiles.TypeId (portal) and UserGroupId (admin role)
     with SELECT only.
+
+    Clinic DB is selected from the login activation key (URL / request body),
+    not from a possibly stale ActivationKey claim in the Identity token.
     """
-    settings = get_settings()
-    activation_key = (payload.activation_key or settings.default_activation_key).strip()
+    activation_key = (payload.activation_key or "").strip()
     if not activation_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -75,9 +77,13 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
     access_token = token_payload["access_token"]
     claims = decode_access_token_claims(access_token)
     user_fields = claims_to_user_fields(claims, payload.username.strip())
-    key_from_token = user_fields.get("activation_key") or activation_key
-
-    clinic = _try_resolve_clinic(key_from_token)
+    # URL / request key wins for clinic DB selection.
+    clinic = _try_resolve_clinic(activation_key)
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid activation key. Clinic was not found.",
+        )
     profile = _fetch_user_profile_type(
         clinic=clinic,
         user_id=user_fields.get("id"),
@@ -142,10 +148,10 @@ def authenticate_user(payload: LoginRequest) -> LoginResponse:
                 if portal == "insurance"
                 else False
             ),
-            activation_key=key_from_token,
+            activation_key=activation_key,
             must_change_password=bool((profile or {}).get("must_change_password")),
         ),
-        clinic=_clinic_info(clinic, key_from_token),
+        clinic=_clinic_info(clinic, activation_key),
     )
 
 

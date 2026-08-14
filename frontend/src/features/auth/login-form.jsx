@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ArrowRight, Eye, EyeOff, HeartPulse, Info } from "lucide-react";
 import {
@@ -9,9 +14,11 @@ import {
   isSecureShareExpired,
 } from "@/data/secure-shares";
 import { loginWithCredentials, resolvePortalDestination } from "@/lib/api/auth";
-import { saveAuthSession } from "@/lib/auth-session";
+import { clearAuthSession, saveAuthSession } from "@/lib/auth-session";
+import { clearEmployerProfileCache } from "@/hooks/use-employer-profile";
 import {
   outsiderPaths,
+  resolveActivationKey,
   resolvePortalFromPathname,
 } from "@/lib/portal-paths";
 import {
@@ -29,6 +36,7 @@ const ERROR_GENERIC = "Unable to sign in. Please check your credentials.";
 function LoginFormInner({ portal = "employer" }) {
   const router = useRouter();
   const pathname = usePathname();
+  const params = useParams();
   const searchParams = useSearchParams();
   // URL path is source of truth: /employerportal | /patientportal | /insuranceportal
   const portalFromUrl = resolvePortalFromPathname(pathname) || portal;
@@ -38,11 +46,14 @@ function LoginFormInner({ portal = "employer" }) {
     searchParams.get("sharedId") ||
     ""
   ).trim();
-  const activationKey = (
-    searchParams.get("activationkey") ||
-    searchParams.get("activationKey") ||
-    ""
-  ).trim();
+  const pathActivationKey = Array.isArray(params?.activationKey)
+    ? params.activationKey[0]
+    : params?.activationKey;
+  const activationKey = resolveActivationKey({
+    searchParams,
+    pathname,
+    pathKey: pathActivationKey,
+  });
   const hasActivationKey = Boolean(activationKey);
 
   const [email, setEmail] = useState("");
@@ -58,7 +69,9 @@ function LoginFormInner({ portal = "employer" }) {
   useEffect(() => {
     if (!hasActivationKey) {
       setError(ERROR_ACTIVATION);
+      return;
     }
+    setError((prev) => (prev === ERROR_ACTIVATION ? "" : prev));
   }, [hasActivationKey]);
 
   useEffect(() => {
@@ -154,9 +167,15 @@ function LoginFormInner({ portal = "employer" }) {
       // API already validates portal access; prefer returned portal, else login URL.
       const resolvedPortal = result.user?.portal || portalFromUrl;
 
+      // Drop any previous clinic session so the URL activation key wins.
+      clearAuthSession();
+      clearEmployerProfileCache();
+
       const sessionUser = {
         ...result.user,
         portal: resolvedPortal,
+        // Keep the URL activation key as the clinic selector for later API calls.
+        activation_key: activationKey,
       };
 
       saveAuthSession({
@@ -166,8 +185,23 @@ function LoginFormInner({ portal = "employer" }) {
         expiresIn: result.expires_in || null,
         scope: result.scope || null,
         user: sessionUser,
-        clinic: result.clinic,
+        clinic: {
+          ...(result.clinic || {}),
+          activation_key: activationKey,
+          database_name:
+            result.clinic?.database_name ||
+            result.clinic?.databaseName ||
+            null,
+        },
       });
+
+      if (typeof window !== "undefined") {
+        console.info(
+          "[ClaudMD] login clinic",
+          activationKey,
+          result.clinic?.database_name || result.clinic?.databaseName || null
+        );
+      }
 
       const defaultDestination = resolvePortalDestination(resolvedPortal);
       // Only honor sharedid from the current login URL (not a leftover session).
@@ -210,7 +244,6 @@ function LoginFormInner({ portal = "employer" }) {
       if (resolvedPortal === "outsider" && mustChangePassword) {
         const nextParams = new URLSearchParams();
         nextParams.set("next", destination);
-        if (activationKey) nextParams.set("activationkey", activationKey);
         router.push(`${outsiderPaths.changePassword}?${nextParams.toString()}`);
         return;
       }

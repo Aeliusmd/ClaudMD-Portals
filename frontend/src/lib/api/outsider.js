@@ -1,4 +1,5 @@
 import { fetchJson } from "@/lib/api/http";
+import { withAuthHeaders } from "@/lib/auth-session";
 import { outsiderSharedDocumentFileUrl } from "@/lib/documents";
 import { formatDateMMDDYY, formatDateMMDDYYYY } from "@/lib/dates";
 
@@ -10,10 +11,9 @@ async function outsiderFetch(path, accessToken, fallbackMessage) {
     `${API_BASE_URL}${path}`,
     {
       method: "GET",
-      headers: {
+      headers: withAuthHeaders(accessToken, {
         Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
+      }),
     },
     fallbackMessage
   );
@@ -128,10 +128,9 @@ export async function markOutsiderSharedDocumentViewed(accessToken, sharedId) {
     )}/viewed`,
     {
       method: "POST",
-      headers: {
+      headers: withAuthHeaders(accessToken, {
         Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
+      }),
     },
     "Unable to mark document as viewed."
   );

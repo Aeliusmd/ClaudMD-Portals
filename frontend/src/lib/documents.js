@@ -1,3 +1,5 @@
+import { withAuthHeaders } from "@/lib/auth-session";
+
 export const SAMPLE_DOCUMENT_URL = "/sample.pdf";
 
 const API_BASE_URL =
@@ -242,10 +244,9 @@ export async function resolveDocumentObjectUrl(url, { getToken } = {}) {
       const timeoutId = setTimeout(() => controller.abort(), 20000);
       try {
         response = await fetch(url, {
-          headers: {
+          headers: withAuthHeaders(token, {
             Accept: "application/pdf",
-            Authorization: `Bearer ${token}`,
-          },
+          }),
           signal: controller.signal,
         });
       } finally {

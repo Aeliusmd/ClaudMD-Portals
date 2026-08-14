@@ -1,19 +1,24 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Info } from "lucide-react";
 import { AuthSplitShell } from "@/features/auth/auth-split-shell";
-import { getLoginHref } from "@/lib/portal-paths";
+import { getLoginHref, resolveActivationKey } from "@/lib/portal-paths";
 
 function ForgotPasswordFormInner() {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useParams();
   const searchParams = useSearchParams();
-  const activationKey = (
-    searchParams.get("activationkey") ||
-    searchParams.get("activationKey") ||
-    ""
-  ).trim();
+  const pathActivationKey = Array.isArray(params?.activationKey)
+    ? params.activationKey[0]
+    : params?.activationKey;
+  const activationKey = resolveActivationKey({
+    searchParams,
+    pathname,
+    pathKey: pathActivationKey,
+  });
   const sharedId = (
     searchParams.get("sharedid") ||
     searchParams.get("sharedId") ||

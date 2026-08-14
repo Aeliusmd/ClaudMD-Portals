@@ -18,7 +18,7 @@ from app.employer.booking import (
     list_booking_visit_types,
     list_providers_for_date,
 )
-from app.employer.billing import list_bill_review
+from app.employer.billing import get_bill_invoice, list_bill_review
 from app.employer.employee_search import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -44,6 +44,7 @@ from app.employer.schemas import (
     AppointmentProviderOption,
     AppointmentSlotsResponse,
     AppointmentVisitTypeOption,
+    BillInvoiceDetail,
     BillReviewResponse,
     DashboardSummaryResponse,
     EmployeeSearchResponse,
@@ -204,6 +205,21 @@ def employer_billing_review_endpoint(
     SELECT-only. No schema changes.
     """
     return list_bill_review(current_user)
+
+
+@router.get(
+    "/billing/review/{billing_header_id}/invoice",
+    response_model=BillInvoiceDetail,
+)
+def employer_billing_invoice_endpoint(
+    billing_header_id: int,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Client Services invoice detail for one bill (SELECT-only).
+    Scoped to the logged-in employer.
+    """
+    return get_bill_invoice(current_user, billing_header_id)
 
 
 @router.get(

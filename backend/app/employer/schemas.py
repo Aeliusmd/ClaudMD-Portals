@@ -527,3 +527,44 @@ class BillReviewResponse(BaseModel):
     payable_count: int = 0
     outstanding_total: float = 0
     employer_id: int | None = None
+
+
+class BillInvoiceLine(BaseModel):
+    id: int
+    exam_date: str | None = None
+    code: str | None = None
+    description: str | None = None
+    quantity: float = 1
+    unit_price: float = 0
+    charges: float = 0
+    payment: float = 0
+    adjust: float = 0
+    balance: float = 0
+
+
+class BillInvoiceDetail(BaseModel):
+    billing_header_id: int
+    history_id: int | None = None
+    title: str = "CLIENT SERVICES BILLING"
+    page_label: str = "Page 1 of 1"
+    invoice_date: str | None = None
+    invoice_number: str | None = None
+    tax_id: str | None = None
+    amount_due: float = 0
+    due_date: str | None = None
+    clinic_name: str | None = None
+    clinic_address: str | None = None
+    clinic_phone: str | None = None
+    clinic_fax: str | None = None
+    employer_name: str | None = None
+    employer_address: str | None = None
+    employer_phone: str | None = None
+    patient_name: str | None = None
+    patient_ssn: str | None = None
+    account_no: str | None = None
+    occupation: str | None = None
+    diagnosis: list[str] = []
+    provider_name: str | None = None
+    lines: list[BillInvoiceLine] = []
+    total_due: float = 0
+    employer_id: int | None = None

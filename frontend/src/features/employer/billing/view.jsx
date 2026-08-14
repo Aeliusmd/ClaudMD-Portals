@@ -11,7 +11,12 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SearchInput } from "@/components/ui/search-input";
 import { SkeletonBlock, TableSkeleton } from "@/components/ui/skeleton";
 import { employerPaidBills } from "@/data/employer-billing";
-import { fetchEmployerBillReview } from "@/lib/api/employer";
+import { ClientServicesInvoiceModal } from "@/features/employer/billing/client-services-invoice-modal";
+import { MakePaymentModal } from "@/features/employer/billing/make-payment-modal";
+import {
+  fetchEmployerBillInvoice,
+  fetchEmployerBillReview,
+} from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { EMPLOYER_LOGIN_PATH } from "@/lib/portal-paths";
 import { cn } from "@/lib/utils";
@@ -93,6 +98,11 @@ export function EmployerBillingView() {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [message, setMessage] = useState("");
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState(null);
+  const [invoice, setInvoice] = useState(null);
 
   const [reviewBills, setReviewBills] = useState([]);
   const [payableCount, setPayableCount] = useState(0);
@@ -191,24 +201,54 @@ export function EmployerBillingView() {
     setQuery("");
     setSelectedIds(new Set());
     setMessage("");
+    setPaymentOpen(false);
+    setInvoiceOpen(false);
+    setInvoice(null);
+    setInvoiceError(null);
   }
 
   function handlePay() {
     if (!selectedBills.length) return;
+    setMessage("");
+    setPaymentOpen(true);
+  }
+
+  function handlePaymentSubmit({ method, total, bills }) {
+    const methodLabel = method === "bank" ? "bank account" : "card";
+    setPaymentOpen(false);
+    setSelectedIds(new Set());
     setMessage(
-      `Demo only — ${selectedBills.length} bill${
-        selectedBills.length === 1 ? "" : "s"
-      } totaling ${formatMoney(selectedTotal)} would be submitted for payment.`
+      `Payment submitted for ${bills.length} bill${
+        bills.length === 1 ? "" : "s"
+      } totaling ${formatMoney(total)} via ${methodLabel}. (Checkout UI only — not charged yet.)`
     );
   }
 
-  function handleInvoice(bill) {
-    const invoicePart = bill.invoiceNumber
-      ? `Invoice ${bill.invoiceNumber}`
-      : "No invoice number yet";
-    setMessage(
-      `${invoicePart} · ${bill.patientName} · Acct ${bill.accountNo} · ${formatMoney(bill.amount)}.`
-    );
+  async function handleInvoice(bill) {
+    if (!bill?.billingHeaderId) return;
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(EMPLOYER_LOGIN_PATH);
+      return;
+    }
+
+    setMessage("");
+    setInvoiceOpen(true);
+    setInvoiceLoading(true);
+    setInvoiceError(null);
+    setInvoice(null);
+    try {
+      const detail = await fetchEmployerBillInvoice(token, bill.billingHeaderId);
+      setInvoice(detail);
+    } catch (err) {
+      if (err?.status === 401) {
+        router.replace(EMPLOYER_LOGIN_PATH);
+        return;
+      }
+      setInvoiceError(err?.message || "Unable to load invoice.");
+    } finally {
+      setInvoiceLoading(false);
+    }
   }
 
   function handleDownload(bill) {
@@ -217,6 +257,23 @@ export function EmployerBillingView() {
 
   return (
     <div className="space-y-5">
+      <MakePaymentModal
+        open={paymentOpen}
+        bills={selectedBills}
+        onClose={() => setPaymentOpen(false)}
+        onSubmit={handlePaymentSubmit}
+      />
+      <ClientServicesInvoiceModal
+        open={invoiceOpen}
+        invoice={invoice}
+        loading={invoiceLoading}
+        error={invoiceError}
+        onClose={() => {
+          setInvoiceOpen(false);
+          setInvoice(null);
+          setInvoiceError(null);
+        }}
+      />
       <PageHeader
         title="Billing"
         className="mb-0"

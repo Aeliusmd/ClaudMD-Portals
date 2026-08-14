@@ -14,6 +14,11 @@ export const patientNavItems = [
     icon: "User",
   },
   {
+    href: patientPaths.billing,
+    label: "Billing",
+    icon: "Receipt",
+  },
+  {
     href: patientPaths.support,
     label: "Support",
     icon: "LifeBuoy",

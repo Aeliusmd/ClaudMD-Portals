@@ -36,6 +36,7 @@ export const patientPaths = {
   login: PATIENT_LOGIN_PATH,
   dashboard: `${PATIENT_PORTAL_BASE}/dashboard`,
   myInformation: `${PATIENT_PORTAL_BASE}/my-information`,
+  billing: `${PATIENT_PORTAL_BASE}/billing`,
   visits: `${PATIENT_PORTAL_BASE}/visits`,
   appointments: `${PATIENT_PORTAL_BASE}/appointments`,
   documentShare: `${PATIENT_PORTAL_BASE}/document-share`,

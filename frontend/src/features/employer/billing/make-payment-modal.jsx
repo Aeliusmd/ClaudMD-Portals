@@ -107,9 +107,13 @@ function formatExpiry(value) {
 }
 
 function billLineLabel(bill) {
-  const name = bill.patientName || "Patient";
-  const visit = bill.visit && bill.visit !== "—" ? bill.visit : null;
-  return visit ? `${name} — ${visit}` : name;
+  if (bill.patientName) {
+    const visit = bill.visit && bill.visit !== "—" ? bill.visit : null;
+    return visit ? `${bill.patientName} — ${visit}` : bill.patientName;
+  }
+  const left = bill.provider || bill.incidentNo || "Bill";
+  const right = bill.visit || bill.incident || null;
+  return right ? `${left} — ${right}` : left;
 }
 
 const EMPTY_CARD = {

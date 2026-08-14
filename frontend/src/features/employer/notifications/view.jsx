@@ -11,15 +11,15 @@ import { SkeletonBlock } from "@/components/ui/skeleton";
 import { NotificationItem } from "@/components/layout/notification-item";
 import {
   fetchEmployerNotifications,
-  markEmployerNotificationsRead,
 } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { LOGIN_PATH } from "@/lib/auth-routes";
+import { employerPaths } from "@/lib/portal-paths";
 import {
-  applyNotificationReadState,
-  getNotificationsLastOpenedAt,
-  setNotificationsLastOpenedAt,
-} from "@/lib/notification-read-state";
+  markAllEmployerNotificationsRead,
+  markEmployerNotificationItemRead,
+} from "@/hooks/use-employer-notifications";
+import { applyNotificationReadState } from "@/lib/notification-read-state";
 import { cn } from "@/lib/utils";
 
 function NotificationRowSkeleton({ wide = false }) {
@@ -61,22 +61,25 @@ export function EmployerNotificationsView() {
   const [page, setPage] = useState(1);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState(null);
+  const [markingAll, setMarkingAll] = useState(false);
   const hasLoadedRef = useRef(false);
 
-  useEffect(() => {
-    const token = getAccessToken();
-    if (!token) return;
-    setNotificationsLastOpenedAt();
-    void markEmployerNotificationsRead(token).catch((err) => {
-      if (err?.status === 401) router.replace(LOGIN_PATH);
-    });
-    // Mark once when landing on the full list page.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount-only
+  const markItemAsRead = useCallback((notification) => {
+    const id = notification?.id;
+    if (id == null || notification.unread === false) return;
+    markEmployerNotificationItemRead(notification);
+    setItems((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(id) ? { ...item, unread: false } : item
+      )
+    );
+    setUnreadCount((prev) => Math.max(0, prev - 1));
   }, []);
 
   const loadPage = useCallback(
@@ -93,12 +96,13 @@ export function EmployerNotificationsView() {
           page: nextPage,
           pageSize: PAGE_SIZE,
         });
-        const openedAt = getNotificationsLastOpenedAt();
-        const mapped = applyNotificationReadState(data.items || [], openedAt).map(
-          (item) => ({ ...item, unread: false })
+        const mapped = applyNotificationReadState(
+          data.items || [],
+          "employer"
         );
         setItems(mapped);
         setTotal(data.total ?? 0);
+        setUnreadCount(data.unreadCount ?? 0);
         setTotalPages(data.totalPages ?? 1);
         setDays(data.days ?? 30);
         setPage(data.page ?? nextPage);
@@ -127,6 +131,19 @@ export function EmployerNotificationsView() {
     void loadPage(page);
   }, [loadPage, page]);
 
+  const markAllAsRead = useCallback(async () => {
+    setMarkingAll(true);
+    try {
+      await markAllEmployerNotificationsRead();
+      setItems((prev) =>
+        prev.map((item) => (item.unread ? { ...item, unread: false } : item))
+      );
+      setUnreadCount(0);
+    } finally {
+      setMarkingAll(false);
+    }
+  }, []);
+
   const start = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const end = Math.min(page * PAGE_SIZE, total);
   const showInitialSkeleton = loading && !hasLoaded;
@@ -134,12 +151,32 @@ export function EmployerNotificationsView() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
+      <button
+        type="button"
+        onClick={() => router.push(employerPaths.dashboard)}
+        className="cursor-pointer text-sm font-semibold text-primary-500 transition hover:text-primary-600"
+      >
+        ← Back to dashboard
+      </button>
+
       <PageHeader
         title="Notifications"
         description={
           showInitialSkeleton
             ? "Loading recent activity…"
-            : `Activity from the last ${days} days`
+            : `Activity from the last ${days} days · ${unreadCount} unread`
+        }
+        actions={
+          hasLoaded && unreadCount > 0 ? (
+            <button
+              type="button"
+              onClick={markAllAsRead}
+              disabled={markingAll}
+              className="shrink-0 cursor-pointer rounded-xl border border-[#ece7df] bg-white px-4 py-2.5 font-sans text-sm font-semibold text-[#8B6D4F] transition hover:border-[#ddd6cb] hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {markingAll ? "Marking…" : "Mark all as read"}
+            </button>
+          ) : null
         }
       />
 
@@ -206,6 +243,7 @@ export function EmployerNotificationsView() {
                   <NotificationItem
                     key={notification.id}
                     notification={notification}
+                    onMarkRead={markItemAsRead}
                   />
                 ))}
               </div>

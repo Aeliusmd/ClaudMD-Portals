@@ -118,3 +118,63 @@ export function resolvePortalFromPathname(pathname) {
   if (path.includes("/employerportal")) return "employer";
   return null;
 }
+
+const ACTIVATION_QUERY_KEYS = new Set([
+  "activationkey",
+  "activation_key",
+  "key",
+]);
+
+/**
+ * Read activation key from query string (case-insensitive) and/or path.
+ * Supports:
+ *   ?activationkey=20000002
+ *   ?ActivationKey=20000002
+ *   ?Key=20000002
+ *   /authentication/login/20000002
+ */
+export function resolveActivationKey({
+  searchParams,
+  pathname,
+  pathKey,
+} = {}) {
+  const fromPathParam = String(pathKey || "").trim();
+  if (fromPathParam) return fromPathParam;
+
+  if (searchParams) {
+    for (const [rawKey, rawValue] of searchParams.entries()) {
+      const key = String(rawKey || "").trim().toLowerCase();
+      if (!ACTIVATION_QUERY_KEYS.has(key)) continue;
+      const value = String(rawValue || "").trim();
+      if (value) return value;
+    }
+  }
+
+  const path = String(pathname || "");
+  const match = path.match(
+    /\/authentication\/login\/([^/?#]+)(?:\/)?(?:\?|$|#)/i
+  );
+  if (match?.[1]) {
+    try {
+      return decodeURIComponent(match[1]).trim();
+    } catch {
+      return match[1].trim();
+    }
+  }
+
+  return "";
+}
+
+/** Browser-only: keep activation key across redirects to login. */
+export function readActivationKeyFromLocation() {
+  if (typeof window === "undefined") return "";
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return resolveActivationKey({
+      searchParams: params,
+      pathname: window.location.pathname || "",
+    });
+  } catch {
+    return "";
+  }
+}

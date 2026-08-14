@@ -1,4 +1,5 @@
 import { fetchJson } from "@/lib/api/http";
+import { withAuthHeaders } from "@/lib/auth-session";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -38,11 +39,10 @@ export async function changePassword({
     `${API_BASE_URL}/api/auth/change-password`,
     {
       method: "POST",
-      headers: {
+      headers: withAuthHeaders(accessToken, {
         "Content-Type": "application/json",
         Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
+      }),
       body: JSON.stringify({
         currentPassword,
         newPassword,

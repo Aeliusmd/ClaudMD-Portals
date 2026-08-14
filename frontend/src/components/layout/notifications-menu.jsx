@@ -14,7 +14,6 @@ export function NotificationsMenu({
   items,
   variant = "soft",
   viewAllHref,
-  onOpen,
   previewLimit = PREVIEW_LIMIT,
   totalCount,
   unreadCount: unreadCountProp,
@@ -24,7 +23,6 @@ export function NotificationsMenu({
   const [panelStyle, setPanelStyle] = useState(null);
   const rootRef = useRef(null);
   const panelRef = useRef(null);
-  const markedOnOpenRef = useRef(false);
   const list = items ?? defaultNotifications;
   const unreadCount =
     unreadCountProp != null
@@ -88,25 +86,8 @@ export function NotificationsMenu({
     };
   }, []);
 
-  useEffect(() => {
-    if (!open) {
-      markedOnOpenRef.current = false;
-      return;
-    }
-    if (markedOnOpenRef.current) return;
-    markedOnOpenRef.current = true;
-    onOpen?.();
-  }, [open, onOpen]);
-
   function handleToggle() {
-    setOpen((prev) => {
-      const next = !prev;
-      if (next && !markedOnOpenRef.current) {
-        markedOnOpenRef.current = true;
-        onOpen?.();
-      }
-      return next;
-    });
+    setOpen((prev) => !prev);
   }
 
   return (
@@ -140,6 +121,7 @@ export function NotificationsMenu({
                 previewLimit={previewLimit}
                 viewAllHref={viewAllHref}
                 totalCount={totalCount}
+                unreadCount={unreadCount}
                 onNavigate={() => setOpen(false)}
                 className="w-full"
               />

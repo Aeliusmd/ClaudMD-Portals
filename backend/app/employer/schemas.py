@@ -21,6 +21,8 @@ class EmployerProfileResponse(BaseModel):
     type_label: str | None = None
     user_group_id: int | None = None
     is_admin: bool = False
+    activation_key: str | None = None
+    database_name: str | None = None
 
 
 class EmployerProfileUpdateRequest(BaseModel):
@@ -507,6 +509,35 @@ class SupportSendResponse(BaseModel):
     message: SupportMessageDetail
     delivery_status: str
     delivery_note: str | None = None
+
+
+class PaidBillRow(BaseModel):
+    id: str
+    billing_header_id: int
+    history_id: int
+    invoice_no: str
+    invoice_number: str | None = None
+    dos: str | None = None
+    account_no: str | None = None
+    patient_name: str | None = None
+    visit: str = "—"
+    description: str
+    category: str | None = None
+    paid_on: str | None = None
+    amount: float = 0
+    status: str = "Paid"
+
+
+class PaidBillsResponse(BaseModel):
+    items: list[PaidBillRow] = []
+    total: int = 0
+    total_paid: float = 0
+    employer_id: int | None = None
+    # False when no Physical payments existed and all visit categories were returned.
+    physical_only: bool = True
+    page: int = 1
+    page_size: int = 10
+    total_pages: int = 1
 
 
 class BillReviewRow(BaseModel):

@@ -10,6 +10,7 @@ export function NotificationsCard({
   previewLimit = 3,
   viewAllHref,
   onNavigate,
+  unreadCount = 0,
   totalCount,
   className,
 }) {
@@ -34,7 +35,9 @@ export function NotificationsCard({
           Notifications
         </h2>
         <p className="mt-1 font-sans text-[0.8rem] text-[#9aa0a8]">
-          Showing your latest updates
+          {unreadCount > 0
+            ? `${unreadCount} unread`
+            : "Showing your latest updates"}
         </p>
       </div>
 

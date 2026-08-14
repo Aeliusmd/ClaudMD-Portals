@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Clock3, Download, FileText, Receipt } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Download,
+  FileText,
+  Receipt,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,12 +17,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchInput } from "@/components/ui/search-input";
 import { SkeletonBlock, TableSkeleton } from "@/components/ui/skeleton";
-import { employerPaidBills } from "@/data/employer-billing";
 import { ClientServicesInvoiceModal } from "@/features/employer/billing/client-services-invoice-modal";
 import { MakePaymentModal } from "@/features/employer/billing/make-payment-modal";
 import {
   fetchEmployerBillInvoice,
   fetchEmployerBillReview,
+  fetchEmployerPaidBills,
 } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { EMPLOYER_LOGIN_PATH } from "@/lib/portal-paths";
@@ -30,20 +37,6 @@ function formatMoney(amount) {
 
 function matchesReviewQuery(bill, query) {
   const haystack = [bill.patientName, bill.accountNo, bill.visit, bill.dos]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(query);
-}
-
-function matchesPaidQuery(bill, query) {
-  const haystack = [
-    bill.invoiceNo,
-    bill.patientName,
-    bill.description,
-    bill.category,
-    bill.paidOn,
-  ]
-    .filter(Boolean)
     .join(" ")
     .toLowerCase();
   return haystack.includes(query);
@@ -98,11 +91,21 @@ export function EmployerBillingView() {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [message, setMessage] = useState("");
+  const [transientMessageId, setTransientMessageId] = useState(0);
+  const [paidBills, setPaidBills] = useState([]);
+  const [paidTotal, setPaidTotal] = useState(0);
+  const [paidCount, setPaidCount] = useState(0);
+  const [paidPage, setPaidPage] = useState(1);
+  const [paidTotalPages, setPaidTotalPages] = useState(1);
+  const [paidLoading, setPaidLoading] = useState(false);
+  const [paidError, setPaidError] = useState(null);
+  const [paidPhysicalOnly, setPaidPhysicalOnly] = useState(true);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState(null);
   const [invoice, setInvoice] = useState(null);
+  const [invoiceDownloadRequested, setInvoiceDownloadRequested] = useState(false);
 
   const [reviewBills, setReviewBills] = useState([]);
   const [payableCount, setPayableCount] = useState(0);
@@ -110,10 +113,59 @@ export function EmployerBillingView() {
   const [reviewLoading, setReviewLoading] = useState(true);
   const [reviewError, setReviewError] = useState(null);
 
-  const paidTotal = useMemo(
-    () => employerPaidBills.reduce((sum, bill) => sum + bill.amount, 0),
-    []
-  );
+  useEffect(() => {
+    if (!transientMessageId) return undefined;
+    const timer = window.setTimeout(() => setMessage(""), 10000);
+    return () => window.clearTimeout(timer);
+  }, [transientMessageId]);
+
+  useEffect(() => {
+    if (tab !== "paid") return undefined;
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(EMPLOYER_LOGIN_PATH);
+        return;
+      }
+
+      setPaidLoading(true);
+      try {
+        const data = await fetchEmployerPaidBills(token, {
+          page: paidPage,
+          pageSize: 10,
+          search: query,
+        });
+        if (cancelled) return;
+        setPaidBills(data.items);
+        setPaidTotal(data.totalPaid);
+        setPaidCount(data.total);
+        setPaidTotalPages(data.totalPages);
+        setPaidPhysicalOnly(data.physicalOnly);
+        setPaidError(null);
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(EMPLOYER_LOGIN_PATH);
+          return;
+        }
+        setPaidBills([]);
+        setPaidTotal(0);
+        setPaidCount(0);
+        setPaidTotalPages(1);
+        setPaidPhysicalOnly(true);
+        setPaidError(err?.message || "Unable to load paid bills.");
+      } finally {
+        if (!cancelled) setPaidLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [paidPage, query, router, tab]);
 
   useEffect(() => {
     if (tab !== "review") return undefined;
@@ -163,12 +215,6 @@ export function EmployerBillingView() {
     return reviewBills.filter((bill) => matchesReviewQuery(bill, normalized));
   }, [reviewBills, query]);
 
-  const filteredPaid = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return employerPaidBills;
-    return employerPaidBills.filter((bill) => matchesPaidQuery(bill, normalized));
-  }, [query]);
-
   const selectedBills = filteredReview.filter((bill) => selectedIds.has(bill.id));
   const selectedTotal = selectedBills.reduce((sum, bill) => sum + bill.amount, 0);
   const allVisibleSelected =
@@ -200,11 +246,13 @@ export function EmployerBillingView() {
     setTab(nextTab);
     setQuery("");
     setSelectedIds(new Set());
+    setPaidPage(1);
     setMessage("");
     setPaymentOpen(false);
     setInvoiceOpen(false);
     setInvoice(null);
     setInvoiceError(null);
+    setInvoiceDownloadRequested(false);
   }
 
   function handlePay() {
@@ -224,7 +272,7 @@ export function EmployerBillingView() {
     );
   }
 
-  async function handleInvoice(bill) {
+  async function handleInvoice(bill, { download = false } = {}) {
     if (!bill?.billingHeaderId) return;
     const token = getAccessToken();
     if (!token) {
@@ -233,26 +281,32 @@ export function EmployerBillingView() {
     }
 
     setMessage("");
-    setInvoiceOpen(true);
+    setInvoiceOpen(!download);
     setInvoiceLoading(true);
     setInvoiceError(null);
     setInvoice(null);
+    setInvoiceDownloadRequested(download);
     try {
-      const detail = await fetchEmployerBillInvoice(token, bill.billingHeaderId);
+      const detail = await fetchEmployerBillInvoice(
+        token,
+        bill.billingHeaderId,
+        download ? bill.historyId : null
+      );
       setInvoice(detail);
     } catch (err) {
       if (err?.status === 401) {
         router.replace(EMPLOYER_LOGIN_PATH);
         return;
       }
-      setInvoiceError(err?.message || "Unable to load invoice.");
+      const errorMessage = err?.message || "Unable to load invoice.";
+      setInvoiceError(errorMessage);
+      if (download) {
+        setInvoiceDownloadRequested(false);
+        setMessage(errorMessage);
+      }
     } finally {
       setInvoiceLoading(false);
     }
-  }
-
-  function handleDownload(bill) {
-    setMessage(`Demo download — ${bill.invoiceNo}.`);
   }
 
   return (
@@ -264,14 +318,26 @@ export function EmployerBillingView() {
         onSubmit={handlePaymentSubmit}
       />
       <ClientServicesInvoiceModal
-        open={invoiceOpen}
+        open={invoiceOpen || invoiceDownloadRequested}
         invoice={invoice}
         loading={invoiceLoading}
         error={invoiceError}
+        downloadOnLoad={invoiceDownloadRequested}
+        onDownloadComplete={(downloadError) => {
+          setInvoiceDownloadRequested(false);
+          setInvoice(null);
+          if (downloadError) {
+            setMessage(downloadError.message || "Unable to download invoice.");
+            return;
+          }
+          setMessage("Invoice PDF downloaded.");
+          setTransientMessageId((id) => id + 1);
+        }}
         onClose={() => {
           setInvoiceOpen(false);
           setInvoice(null);
           setInvoiceError(null);
+          setInvoiceDownloadRequested(false);
         }}
       />
       <PageHeader
@@ -373,17 +439,22 @@ export function EmployerBillingView() {
         <div>
           <h2 className="text-lg font-semibold text-ink">Paid Bills</h2>
           <p className="mt-1 text-sm text-muted">
-            Complete payment history for your organization.
+            {paidPhysicalOnly
+              ? "Physical-category payment history for your organization."
+              : "No Physical payments on file yet — showing all visit types for now."}
           </p>
         </div>
       )}
 
       <SearchInput
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          if (tab === "paid") setPaidPage(1);
+        }}
         placeholder={
           tab === "paid"
-            ? "Search by patient, invoice, or description..."
+            ? "Search by name, acct #, visit, or invoice..."
             : "Search by name, acct #, or visit..."
         }
         ariaLabel={tab === "paid" ? "Search paid bills" : "Search bills"}
@@ -504,56 +575,76 @@ export function EmployerBillingView() {
         </Card>
       ) : (
         <Card className="overflow-hidden p-0">
-          {filteredPaid.length === 0 ? (
+          {paidLoading ? (
+            <TableSkeleton
+              columns={6}
+              rows={5}
+              minWidthClass="min-w-[48rem]"
+              headers={[
+                "DOS",
+                "Acct. #",
+                "Patient Name",
+                "Visit",
+                "Amount",
+                "Invoice",
+              ]}
+            />
+          ) : paidError ? (
+            <EmptyState
+              title="Unable to load paid bills"
+              description={paidError}
+              className="min-h-64 rounded-none border-0"
+            />
+          ) : paidBills.length === 0 ? (
             <EmptyState
               title="No paid bills found"
-              description="Try another search, or switch back to Bill Review."
+              description={
+                query.trim()
+                  ? "Try another search, or switch back to Bill Review."
+                  : "No payments are on file for your organization yet."
+              }
               className="min-h-64 rounded-none border-0"
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-[56rem] w-full text-left text-sm">
+              <table className="min-w-[48rem] w-full text-left text-sm">
                 <thead className="border-y border-border/70 bg-cream/50 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
                   <tr>
-                    <th className="px-4 py-3 sm:px-5">Invoice #</th>
-                    <th className="px-4 py-3 sm:px-5">Patient</th>
-                    <th className="px-4 py-3 sm:px-5">Description</th>
-                    <th className="px-4 py-3 sm:px-5">Paid On</th>
+                    <th className="px-4 py-3 sm:px-5">DOS</th>
+                    <th className="px-4 py-3 sm:px-5">Acct. #</th>
+                    <th className="px-4 py-3 sm:px-5">Patient Name</th>
+                    <th className="px-4 py-3 sm:px-5">Visit</th>
                     <th className="px-4 py-3 text-right sm:px-5">Amount</th>
-                    <th className="px-4 py-3 sm:px-5">Status</th>
                     <th className="px-4 py-3 text-center sm:px-5">Invoice</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filteredPaid.map((bill) => (
+                  {paidBills.map((bill) => (
                     <tr key={bill.id} className="bg-white transition hover:bg-cream/40">
-                      <td className="px-4 py-3.5 font-semibold tabular-nums text-ink sm:px-5 sm:py-4">
-                        {bill.invoiceNo}
+                      <td className="px-4 py-3.5 tabular-nums text-ink sm:px-5 sm:py-4">
+                        {bill.dos}
                       </td>
-                      <td className="px-4 py-3.5 text-ink sm:px-5 sm:py-4">
-                        {bill.patientName || "—"}
+                      <td className="px-4 py-3.5 tabular-nums text-muted sm:px-5 sm:py-4">
+                        {bill.accountNo}
+                      </td>
+                      <td className="px-4 py-3.5 font-semibold text-ink sm:px-5 sm:py-4">
+                        {bill.patientName || "Patient"}
                       </td>
                       <td className="px-4 py-3.5 sm:px-5 sm:py-4">
-                        <p className="font-semibold text-ink">{bill.description}</p>
-                        <p className="mt-0.5 text-xs text-muted">{bill.category}</p>
-                      </td>
-                      <td className="px-4 py-3.5 text-ink sm:px-5 sm:py-4">
-                        {bill.paidOn}
+                        <Badge className="bg-secondary-100 text-secondary-700">
+                          {bill.visit}
+                        </Badge>
                       </td>
                       <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-ink sm:px-5 sm:py-4">
                         {formatMoney(bill.amount)}
                       </td>
-                      <td className="px-4 py-3.5 sm:px-5 sm:py-4">
-                        <Badge className="gap-1 bg-secondary-100 text-secondary-700">
-                          <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                          Paid
-                        </Badge>
-                      </td>
                       <td className="px-4 py-3.5 text-center sm:px-5 sm:py-4">
                         <button
                           type="button"
-                          onClick={() => handleDownload(bill)}
-                          aria-label={`Download ${bill.invoiceNo}`}
+                          onClick={() => handleInvoice(bill, { download: true })}
+                          aria-label={`Download invoice for ${
+                            bill.patientName || "patient"
+                          }`}
                           className="inline-flex cursor-pointer rounded-lg p-1.5 text-primary hover:bg-primary-50"
                         >
                           <Download className="h-4 w-4" />
@@ -565,6 +656,41 @@ export function EmployerBillingView() {
               </table>
             </div>
           )}
+          {!paidLoading && !paidError && paidCount > 0 ? (
+            <div className="flex flex-col gap-3 border-t border-border/70 bg-cream/40 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <p className="text-sm text-muted">
+                Showing {(paidPage - 1) * 10 + 1}–
+                {Math.min(paidPage * 10, paidCount)} of {paidCount}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={paidPage <= 1}
+                  onClick={() => setPaidPage((page) => Math.max(1, page - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <span className="min-w-20 text-center text-sm font-medium text-ink">
+                  Page {paidPage} of {paidTotalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={paidPage >= paidTotalPages}
+                  onClick={() =>
+                    setPaidPage((page) => Math.min(paidTotalPages, page + 1))
+                  }
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </Card>
       )}
     </div>

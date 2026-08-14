@@ -5,6 +5,9 @@ import { useEffect, useRef } from "react";
 /** How often dashboard KPI counts (including Unread Reports) refresh while the tab is open. */
 export const DASHBOARD_SUMMARY_POLL_MS = 20_000;
 
+/** How often the notification bell re-checks for new items / unread count. */
+export const NOTIFICATIONS_POLL_MS = 15_000;
+
 /**
  * Run `load({ silent })` on mount (unless `immediate` is false), then every
  * `intervalMs` while the browser tab is visible, and again when the user

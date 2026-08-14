@@ -1,6 +1,9 @@
 import { cn } from "@/lib/utils";
 
-export function NotificationItem({ notification, className }) {
+export function NotificationItem({ notification, className, onMarkRead }) {
+  const unread = Boolean(notification.unread);
+  const canMark = unread && typeof onMarkRead === "function";
+
   return (
     <div
       className={cn(
@@ -11,11 +14,11 @@ export function NotificationItem({ notification, className }) {
       <span
         className={cn(
           "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-          notification.unread ? "bg-[#e11d48]" : "bg-[#d1d5db]"
+          unread ? "bg-[#e11d48]" : "bg-[#d1d5db]"
         )}
         aria-hidden="true"
       />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="font-sans text-[0.9rem] leading-snug font-medium text-[#1c1917]">
           {notification.message}
         </p>
@@ -23,6 +26,15 @@ export function NotificationItem({ notification, className }) {
           {notification.timeAgo}
         </p>
       </div>
+      {canMark ? (
+        <button
+          type="button"
+          onClick={() => onMarkRead(notification)}
+          className="mt-0.5 shrink-0 cursor-pointer rounded-lg border border-[#ece7df] bg-white px-2.5 py-1 font-sans text-[0.75rem] font-semibold text-[#8B6D4F] transition hover:border-[#ddd6cb] hover:text-ink"
+        >
+          Mark as read
+        </button>
+      ) : null}
     </div>
   );
 }

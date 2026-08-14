@@ -14,12 +14,15 @@ import {
   saveSecureShareSession,
 } from "@/lib/secure-share-session";
 import { LOGIN_PATH } from "@/lib/auth-routes";
+import { getLoginHref, readActivationKeyFromLocation } from "@/lib/portal-paths";
 
 export default function SecureShareLandingPage() {
   const params = useParams();
   const router = useRouter();
   const token = typeof params?.token === "string" ? params.token : "";
   const [status, setStatus] = useState("checking");
+  const activationKey = readActivationKeyFromLocation();
+  const fallbackLoginHref = getLoginHref({ activationKey }) || LOGIN_PATH;
 
   useEffect(() => {
     if (!token) {
@@ -42,8 +45,13 @@ export default function SecureShareLandingPage() {
 
     saveSecureShareSession(share);
     setStatus("redirecting");
-    router.replace(getSecureShareLoginHref(share.token));
-  }, [router, token]);
+    router.replace(
+      getSecureShareLoginHref(share.token, {
+        activationKey: activationKey || undefined,
+        portal: share.recipientRole,
+      })
+    );
+  }, [activationKey, router, token]);
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-cream px-4 py-10">
@@ -74,7 +82,7 @@ export default function SecureShareLandingPage() {
               period. Request a new share or sign in to the portal normally.
             </p>
             <Link
-              href={LOGIN_PATH}
+              href={fallbackLoginHref}
               className="mt-6 inline-flex cursor-pointer rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
             >
               Go to login
@@ -94,7 +102,7 @@ export default function SecureShareLandingPage() {
               This secure link is invalid or no longer available.
             </p>
             <Link
-              href={LOGIN_PATH}
+              href={fallbackLoginHref}
               className="mt-6 inline-flex cursor-pointer rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
             >
               Go to login

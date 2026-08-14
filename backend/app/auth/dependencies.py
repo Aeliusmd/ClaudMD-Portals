@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Query, status
 
 from app.auth.identity import CLAIM_NAME, CLAIM_NAME_ID, decode_access_token_claims
 
@@ -43,6 +43,12 @@ def get_bearer_token(authorization: Annotated[str | None, Header()] = None) -> s
 
 def get_current_user(
     authorization: Annotated[str | None, Header()] = None,
+    x_activation_key: Annotated[
+        str | None, Header(alias="X-Activation-Key")
+    ] = None,
+    activation_key_query: Annotated[
+        str | None, Query(alias="activationKey")
+    ] = None,
 ) -> CurrentUser:
     token = get_bearer_token(authorization)
     claims = decode_access_token_claims(token)
@@ -65,7 +71,12 @@ def get_current_user(
         or claims.get("preferred_username")
         or ""
     )
-    activation_key = str(claims.get("ActivationKey") or "").strip()
+    # Prefer login-URL key (header or query) over JWT claim so clinic DB
+    # matches the activation key the user opened.
+    header_key = str(x_activation_key or "").strip()
+    query_key = str(activation_key_query or "").strip()
+    claim_key = str(claims.get("ActivationKey") or "").strip()
+    activation_key = header_key or query_key or claim_key
     if not activation_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

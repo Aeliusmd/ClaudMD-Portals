@@ -72,7 +72,6 @@ export function EmployerShell({ children }) {
   const { profile, loading: profileLoading } = useEmployerProfile();
   const {
     items: notificationItems,
-    markAsRead,
     total: notificationTotal,
     unreadCount: notificationUnread,
   } = useEmployerNotifications({
@@ -183,7 +182,6 @@ export function EmployerShell({ children }) {
           notificationsViewAllHref={
             scopedSession ? undefined : employerPaths.notifications
           }
-          onNotificationsOpen={scopedSession ? undefined : markAsRead}
           notificationsTotalCount={scopedSession ? 0 : notificationTotal}
           notificationsUnreadCount={scopedSession ? 0 : notificationUnread}
           showSearch={false}

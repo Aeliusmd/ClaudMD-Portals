@@ -14,7 +14,12 @@ from app.employer.schemas import (
 )
 
 
-def _to_profile_response(profile) -> EmployerProfileResponse:
+def _to_profile_response(
+    profile,
+    *,
+    activation_key: str | None = None,
+    database_name: str | None = None,
+) -> EmployerProfileResponse:
     return EmployerProfileResponse(
         user_id=profile.user_id,
         employer_id=profile.employer_id,
@@ -32,6 +37,8 @@ def _to_profile_response(profile) -> EmployerProfileResponse:
         type_label=profile.type_label,
         user_group_id=profile.user_group_id,
         is_admin=bool(profile.is_admin),
+        activation_key=activation_key,
+        database_name=database_name,
     )
 
 
@@ -44,7 +51,11 @@ def get_employer_profile(current_user: CurrentUser) -> EmployerProfileResponse:
         )
 
     profile = fetch_profile_from_clinic(clinic, current_user)
-    return _to_profile_response(profile)
+    return _to_profile_response(
+        profile,
+        activation_key=clinic.activation_key,
+        database_name=clinic.database_name,
+    )
 
 
 def update_employer_profile(
@@ -67,7 +78,11 @@ def update_employer_profile(
         email=payload.email,
         phone=payload.phone,
     )
-    return _to_profile_response(profile)
+    return _to_profile_response(
+        profile,
+        activation_key=clinic.activation_key,
+        database_name=clinic.database_name,
+    )
 
 
 def get_dashboard_summary(current_user: CurrentUser) -> DashboardSummaryResponse:

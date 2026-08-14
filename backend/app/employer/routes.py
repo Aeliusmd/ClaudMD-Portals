@@ -32,6 +32,7 @@ from app.employer.notifications import (
     list_notifications,
     mark_notifications_read,
 )
+from app.employer.billing import list_paid_bills
 from app.employer.permissions import (
     get_organization_users,
     update_organization_user_access,
@@ -55,6 +56,7 @@ from app.employer.schemas import (
     OrganizationUserAccessUpdateRequest,
     OrganizationUserAccessUpdateResponse,
     OrganizationUsersResponse,
+    PaidBillsResponse,
     SharedDocumentDetailResponse,
     SupportClinicInfoResponse,
     SupportMessageDetail,
@@ -182,6 +184,25 @@ def employer_notifications_mark_read_endpoint(
         ) from exc
 
 
+@router.get("/billing/paid", response_model=PaidBillsResponse)
+def employer_paid_bills_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(alias="pageSize", ge=1, le=50)] = 10,
+    search: Annotated[str | None, Query(max_length=100)] = None,
+):
+    """
+    Paid invoices for the current employer (SELECT only).
+    Source: BillingOrderPayments + BillingHeadersHistory + order descriptions.
+    """
+    return list_paid_bills(
+        current_user,
+        page=page,
+        page_size=page_size,
+        search=(search or "").strip(),
+    )
+
+
 @router.get("/dashboard/summary", response_model=DashboardSummaryResponse)
 def employer_dashboard_summary_endpoint(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -214,12 +235,13 @@ def employer_billing_review_endpoint(
 def employer_billing_invoice_endpoint(
     billing_header_id: int,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    history_id: Annotated[int | None, Query(alias="historyId", gt=0)] = None,
 ):
     """
     Client Services invoice detail for one bill (SELECT-only).
     Scoped to the logged-in employer.
     """
-    return get_bill_invoice(current_user, billing_header_id)
+    return get_bill_invoice(current_user, billing_header_id, history_id=history_id)
 
 
 @router.get(

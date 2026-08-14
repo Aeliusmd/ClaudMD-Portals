@@ -44,7 +44,6 @@ export function InsuranceShell({ children }) {
   const { profile, loading: profileLoading } = useInsuranceProfile();
   const {
     items: notificationItems,
-    markAsRead,
     total: notificationTotal,
     unreadCount: notificationUnread,
   } = useInsuranceNotifications({
@@ -143,7 +142,6 @@ export function InsuranceShell({ children }) {
           notificationsViewAllHref={
             scopedSession ? undefined : insurancePaths.notifications
           }
-          onNotificationsOpen={scopedSession ? undefined : markAsRead}
           notificationsTotalCount={scopedSession ? 0 : notificationTotal}
           notificationsUnreadCount={scopedSession ? 0 : notificationUnread}
           showSearch={false}

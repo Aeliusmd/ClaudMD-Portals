@@ -11,15 +11,27 @@ import { LOGIN_PATH } from "@/lib/auth-routes";
 import {
   applyNotificationReadState,
   countUnreadNotifications,
-  getNotificationsLastOpenedAt,
-  setNotificationsLastOpenedAt,
+  getNotificationReadIds,
+  markNotificationIdRead,
+  pruneNotificationReadIds,
+  unreadBeyondLoaded,
 } from "@/lib/notification-read-state";
-import { useVisiblePoll } from "@/hooks/use-visible-poll";
+import {
+  NOTIFICATIONS_POLL_MS,
+  useVisiblePoll,
+} from "@/hooks/use-visible-poll";
+
+const PORTAL = "employer";
+const BELL_PAGE_SIZE = 50;
+// Safety stop when walking pages to clear every unread item.
+const MAX_MARK_ALL_PAGES = 20;
 
 let cachedToken = null;
 let cachedItems = null;
 let cachedUnreadCount = 0;
 let cachedTotal = 0;
+// Unread items counted by the API that are not in the fetched page.
+let cachedBeyondUnread = 0;
 let inflightPromise = null;
 const listeners = new Set();
 
@@ -35,25 +47,101 @@ function setSharedState({ items, unreadCount, total, token }) {
   emit();
 }
 
-function applyAndStore(rawItems, openedAt, token, { total, apiUnreadCount } = {}) {
-  const next = applyNotificationReadState(rawItems || [], openedAt);
-  // Prefer API unread_count (all pages) until the user has opened the bell;
-  // after that, derive from applied items so lastOpenedAt clears the badge.
-  const computedUnread = openedAt
-    ? countUnreadNotifications(next)
-    : typeof apiUnreadCount === "number"
-      ? apiUnreadCount
-      : countUnreadNotifications(next);
+function applyAndStore(rawItems, token, { total, apiUnreadCount } = {}) {
+  const raw = rawItems || [];
+  if (typeof total === "number" && raw.length >= total) {
+    pruneNotificationReadIds(raw, PORTAL);
+  }
+
+  const next = applyNotificationReadState(raw, PORTAL);
+  cachedBeyondUnread = unreadBeyondLoaded(raw, apiUnreadCount);
   setSharedState({
     items: next,
-    unreadCount: computedUnread,
+    unreadCount: countUnreadNotifications(next) + cachedBeyondUnread,
     total: total ?? next.length,
     token,
   });
   return next;
 }
 
-/** Bell dropdown: loads first page (10) for preview of 3 + unread badge. */
+export function markEmployerNotificationItemRead(notification) {
+  const id = notification?.id;
+  if (id == null) return;
+
+  const alreadyStored = getNotificationReadIds(PORTAL).has(String(id));
+  markNotificationIdRead(id, PORTAL);
+
+  const wasLoaded = (cachedItems || []).some(
+    (item) => String(item.id) === String(id)
+  );
+  const next = (cachedItems || []).map((item) =>
+    String(item.id) === String(id) ? { ...item, unread: false } : item
+  );
+  // Rows from later pages are only reflected in the API total, never in items.
+  if (!alreadyStored && !wasLoaded && notification.unread !== false) {
+    cachedBeyondUnread = Math.max(0, cachedBeyondUnread - 1);
+  }
+
+  setSharedState({
+    items: next,
+    unreadCount: countUnreadNotifications(next) + cachedBeyondUnread,
+    total: cachedTotal,
+    token: getAccessToken(),
+  });
+}
+
+/**
+ * Clear the badge in one action. Unread ids live on later pages too, so walk
+ * the list instead of only clearing what the bell has cached.
+ */
+export async function markAllEmployerNotificationsRead() {
+  const token = getAccessToken();
+  if (!token) return;
+
+  const unreadIds = new Set();
+  for (const item of cachedItems || []) {
+    if (item.unread && item.id != null) unreadIds.add(String(item.id));
+  }
+
+  try {
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const data = await fetchEmployerNotifications(token, {
+        page,
+        pageSize: BELL_PAGE_SIZE,
+      });
+      for (const item of data.items || []) {
+        if (item.unread && item.id != null) unreadIds.add(String(item.id));
+      }
+      totalPages = data.totalPages ?? 1;
+      page += 1;
+    } while (page <= totalPages && page <= MAX_MARK_ALL_PAGES);
+  } catch {
+    // Keep going with the ids already known from the bell cache.
+  }
+
+  for (const id of unreadIds) markNotificationIdRead(id, PORTAL);
+
+  try {
+    // Durable IsViewed for shared documents; appointments have no read flag.
+    await markEmployerNotificationsRead(token);
+  } catch {
+    // Client-side read state still hides them.
+  }
+
+  const next = (cachedItems || []).map((item) =>
+    item.unread ? { ...item, unread: false } : item
+  );
+  cachedBeyondUnread = 0;
+  setSharedState({
+    items: next,
+    unreadCount: 0,
+    total: cachedTotal,
+    token,
+  });
+}
+
 export function useEmployerNotifications({ enabled = true } = {}) {
   const router = useRouter();
   const [items, setItems] = useState(() =>
@@ -88,8 +176,6 @@ export function useEmployerNotifications({ enabled = true } = {}) {
         return;
       }
 
-      // On full page refresh module cache is empty; always fetch.
-      // Within SPA navigation, reuse cache for the same token.
       if (!force && cachedItems && cachedToken === token) {
         setItems(cachedItems);
         setUnreadCount(cachedUnreadCount);
@@ -105,11 +191,10 @@ export function useEmployerNotifications({ enabled = true } = {}) {
         cachedToken = token;
         inflightPromise = fetchEmployerNotifications(token, {
           page: 1,
-          pageSize: 10,
+          pageSize: BELL_PAGE_SIZE,
         });
         const data = await inflightPromise;
-        const openedAt = getNotificationsLastOpenedAt();
-        applyAndStore(data.items || [], openedAt, token, {
+        applyAndStore(data.items || [], token, {
           total: data.total,
           apiUnreadCount: data.unreadCount,
         });
@@ -155,36 +240,9 @@ export function useEmployerNotifications({ enabled = true } = {}) {
       },
       [enabled, load]
     ),
-    undefined,
+    NOTIFICATIONS_POLL_MS,
     { immediate: false }
   );
-
-  const markAsRead = useCallback(async () => {
-    if (!enabled) return;
-    const token = getAccessToken();
-    if (!token) return;
-
-    setNotificationsLastOpenedAt(new Date().toISOString(), "employer");
-    const cleared = (cachedItems || []).map((item) => ({
-      ...item,
-      unread: false,
-    }));
-    setSharedState({
-      items: cleared,
-      unreadCount: 0,
-      total: cachedTotal,
-      token,
-    });
-
-    try {
-      await markEmployerNotificationsRead(token);
-    } catch (err) {
-      if (err?.status === 401) {
-        router.replace(LOGIN_PATH);
-      }
-      // Keep optimistic clear + lastOpenedAt even if mark-read API fails.
-    }
-  }, [enabled, router]);
 
   return {
     items,
@@ -192,6 +250,5 @@ export function useEmployerNotifications({ enabled = true } = {}) {
     total,
     loading,
     error,
-    markAsRead,
   };
 }

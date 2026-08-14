@@ -1,4 +1,5 @@
 import { fetchJson } from "@/lib/api/http";
+import { withAuthHeaders } from "@/lib/auth-session";
 import {
   employerSharedDocumentFileUrl,
   employerVisitDocumentFileUrl,
@@ -15,10 +16,9 @@ async function employerFetch(
   fallbackMessage,
   { method = "GET", body } = {}
 ) {
-  const headers = {
+  const headers = withAuthHeaders(accessToken, {
     Accept: "application/json",
-    Authorization: `Bearer ${accessToken}`,
-  };
+  });
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
@@ -67,6 +67,8 @@ export async function fetchEmployerProfile(accessToken) {
     typeLabel: data.type_label,
     userGroupId: data.user_group_id ?? null,
     isAdmin: Boolean(data.is_admin),
+    activationKey: data.activation_key || null,
+    databaseName: data.database_name || null,
   };
 }
 
@@ -107,6 +109,48 @@ export async function updateEmployerProfile(accessToken, payload) {
     typeLabel: data.type_label,
     userGroupId: data.user_group_id ?? null,
     isAdmin: Boolean(data.is_admin),
+  };
+}
+
+export async function fetchEmployerPaidBills(
+  accessToken,
+  { page = 1, pageSize = 10, search = "" } = {}
+) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  if (search.trim()) params.set("search", search.trim());
+  const data = await employerFetch(
+    `/api/employer/billing/paid?${params.toString()}`,
+    accessToken,
+    "Unable to load paid bills."
+  );
+
+  return {
+    items: (data.items || []).map((row) => ({
+      id: row.id,
+      billingHeaderId: row.billing_header_id,
+      historyId: row.history_id,
+      invoiceNo: row.invoice_no,
+      invoiceNumber: row.invoice_number || row.invoice_no || null,
+      dos: row.dos || "—",
+      accountNo: row.account_no || "—",
+      patientName: row.patient_name || null,
+      visit: row.visit || "—",
+      description: row.description || "Invoice payment",
+      category: row.category || null,
+      paidOn: row.paid_on || null,
+      amount: Number(row.amount) || 0,
+      status: row.status || "Paid",
+    })),
+    total: data.total ?? 0,
+    totalPaid: Number(data.total_paid) || 0,
+    employerId: data.employer_id,
+    physicalOnly: data.physical_only !== false,
+    page: data.page ?? page,
+    pageSize: data.page_size ?? pageSize,
+    totalPages: data.total_pages ?? 1,
   };
 }
 
@@ -154,9 +198,18 @@ export async function fetchEmployerBillReview(accessToken) {
   };
 }
 
-export async function fetchEmployerBillInvoice(accessToken, billingHeaderId) {
+export async function fetchEmployerBillInvoice(
+  accessToken,
+  billingHeaderId,
+  historyId = null
+) {
+  const historyQuery = historyId
+    ? `?historyId=${encodeURIComponent(historyId)}`
+    : "";
   const data = await employerFetch(
-    `/api/employer/billing/review/${encodeURIComponent(billingHeaderId)}/invoice`,
+    `/api/employer/billing/review/${encodeURIComponent(
+      billingHeaderId
+    )}/invoice${historyQuery}`,
     accessToken,
     "Unable to load invoice."
   );
@@ -774,16 +827,13 @@ export async function updateEmployerOrganizationUserAccess(
   accessLevel
 ) {
   const data = await fetchJson(
-    `${API_BASE_URL}/api/employer/organization-users/${encodeURIComponent(
-      contactId
-    )}/access`,
+    `${API_BASE_URL}/api/employer/organization-users/${encodeURIComponent(contactId)}/access`,
     {
       method: "PATCH",
-      headers: {
+      headers: withAuthHeaders(accessToken, {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
+      }),
       body: JSON.stringify({ access_level: accessLevel }),
     },
     "Unable to update portal access."
@@ -979,10 +1029,9 @@ export async function sendEmployerSupportMessage(accessToken, payload) {
     `${API_BASE_URL}/api/employer/support/messages`,
     {
       method: "POST",
-      headers: {
+      headers: withAuthHeaders(accessToken, {
         Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
+      }),
       body: form,
     },
     "Unable to send support message."

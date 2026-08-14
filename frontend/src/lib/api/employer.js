@@ -112,9 +112,17 @@ export async function updateEmployerProfile(accessToken, payload) {
   };
 }
 
-export async function fetchEmployerPaidBills(accessToken) {
+export async function fetchEmployerPaidBills(
+  accessToken,
+  { page = 1, pageSize = 10, search = "" } = {}
+) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  if (search.trim()) params.set("search", search.trim());
   const data = await employerFetch(
-    "/api/employer/billing/paid",
+    `/api/employer/billing/paid?${params.toString()}`,
     accessToken,
     "Unable to load paid bills."
   );
@@ -122,8 +130,14 @@ export async function fetchEmployerPaidBills(accessToken) {
   return {
     items: (data.items || []).map((row) => ({
       id: row.id,
+      billingHeaderId: row.billing_header_id,
+      historyId: row.history_id,
       invoiceNo: row.invoice_no,
+      invoiceNumber: row.invoice_number || row.invoice_no || null,
+      dos: row.dos || "—",
+      accountNo: row.account_no || "—",
       patientName: row.patient_name || null,
+      visit: row.visit || "—",
       description: row.description || "Invoice payment",
       category: row.category || null,
       paidOn: row.paid_on || null,
@@ -133,6 +147,10 @@ export async function fetchEmployerPaidBills(accessToken) {
     total: data.total ?? 0,
     totalPaid: Number(data.total_paid) || 0,
     employerId: data.employer_id,
+    physicalOnly: data.physical_only !== false,
+    page: data.page ?? page,
+    pageSize: data.page_size ?? pageSize,
+    totalPages: data.total_pages ?? 1,
   };
 }
 
@@ -151,6 +169,88 @@ export async function fetchEmployerDashboardSummary(accessToken) {
     unreadReports: data.unread_reports ?? 0,
     days: data.days ?? 30,
     employerId: data.employer_id,
+  };
+}
+
+export async function fetchEmployerBillReview(accessToken) {
+  const data = await employerFetch(
+    "/api/employer/billing/review",
+    accessToken,
+    "Unable to load bill review."
+  );
+
+  return {
+    employerId: data.employer_id ?? null,
+    total: data.total ?? 0,
+    payableCount: data.payable_count ?? 0,
+    outstandingTotal: Number(data.outstanding_total ?? 0),
+    items: (data.items || []).map((row) => ({
+      id: row.id,
+      billingHeaderId: row.billing_header_id,
+      historyId: row.history_id ?? null,
+      dos: row.dos || "—",
+      accountNo: row.account_no || "—",
+      patientName: row.patient_name || "Patient",
+      visit: row.visit || "—",
+      amount: Number(row.amount ?? 0),
+      invoiceNumber: row.invoice_number || null,
+    })),
+  };
+}
+
+export async function fetchEmployerBillInvoice(
+  accessToken,
+  billingHeaderId,
+  historyId = null
+) {
+  const historyQuery = historyId
+    ? `?historyId=${encodeURIComponent(historyId)}`
+    : "";
+  const data = await employerFetch(
+    `/api/employer/billing/review/${encodeURIComponent(
+      billingHeaderId
+    )}/invoice${historyQuery}`,
+    accessToken,
+    "Unable to load invoice."
+  );
+
+  return {
+    billingHeaderId: data.billing_header_id,
+    historyId: data.history_id ?? null,
+    title: data.title || "CLIENT SERVICES BILLING",
+    pageLabel: data.page_label || "Page 1 of 1",
+    invoiceDate: data.invoice_date || null,
+    invoiceNumber: data.invoice_number || null,
+    taxId: data.tax_id || null,
+    amountDue: Number(data.amount_due ?? 0),
+    dueDate: data.due_date || null,
+    clinicName: data.clinic_name || null,
+    clinicAddress: data.clinic_address || null,
+    clinicPhone: data.clinic_phone || null,
+    clinicFax: data.clinic_fax || null,
+    employerName: data.employer_name || null,
+    employerAddress: data.employer_address || null,
+    employerPhone: data.employer_phone || null,
+    patientName: data.patient_name || null,
+    patientSsn: data.patient_ssn || null,
+    accountNo: data.account_no || null,
+    occupation: data.occupation || null,
+    diagnosis: data.diagnosis || [],
+    providerName: data.provider_name || null,
+    lines: (data.lines || []).map((line) => ({
+      id: line.id,
+      examDate: line.exam_date || null,
+      code: line.code || null,
+      description: line.description || null,
+      quantity: Number(line.quantity ?? 1),
+      unitPrice: Number(line.unit_price ?? 0),
+      charges: Number(line.charges ?? 0),
+      payment: Number(line.payment ?? 0),
+      adjust: Number(line.adjust ?? 0),
+      balance: Number(line.balance ?? 0),
+    })),
+    totalDue: Number(data.total_due ?? 0),
+    employerId: data.employer_id ?? null,
   };
 }
 

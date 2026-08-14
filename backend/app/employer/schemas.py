@@ -513,8 +513,14 @@ class SupportSendResponse(BaseModel):
 
 class PaidBillRow(BaseModel):
     id: str
+    billing_header_id: int
+    history_id: int
     invoice_no: str
+    invoice_number: str | None = None
+    dos: str | None = None
+    account_no: str | None = None
     patient_name: str | None = None
+    visit: str = "—"
     description: str
     category: str | None = None
     paid_on: str | None = None
@@ -526,4 +532,70 @@ class PaidBillsResponse(BaseModel):
     items: list[PaidBillRow] = []
     total: int = 0
     total_paid: float = 0
+    employer_id: int | None = None
+    # False when no Physical payments existed and all visit categories were returned.
+    physical_only: bool = True
+    page: int = 1
+    page_size: int = 10
+    total_pages: int = 1
+
+
+class BillReviewRow(BaseModel):
+    id: str
+    billing_header_id: int
+    history_id: int | None = None
+    dos: str | None = None
+    account_no: str | None = None
+    patient_name: str
+    visit: str
+    amount: float = 0
+    invoice_number: str | None = None
+
+
+class BillReviewResponse(BaseModel):
+    items: list[BillReviewRow] = []
+    total: int = 0
+    payable_count: int = 0
+    outstanding_total: float = 0
+    employer_id: int | None = None
+
+
+class BillInvoiceLine(BaseModel):
+    id: int
+    exam_date: str | None = None
+    code: str | None = None
+    description: str | None = None
+    quantity: float = 1
+    unit_price: float = 0
+    charges: float = 0
+    payment: float = 0
+    adjust: float = 0
+    balance: float = 0
+
+
+class BillInvoiceDetail(BaseModel):
+    billing_header_id: int
+    history_id: int | None = None
+    title: str = "CLIENT SERVICES BILLING"
+    page_label: str = "Page 1 of 1"
+    invoice_date: str | None = None
+    invoice_number: str | None = None
+    tax_id: str | None = None
+    amount_due: float = 0
+    due_date: str | None = None
+    clinic_name: str | None = None
+    clinic_address: str | None = None
+    clinic_phone: str | None = None
+    clinic_fax: str | None = None
+    employer_name: str | None = None
+    employer_address: str | None = None
+    employer_phone: str | None = None
+    patient_name: str | None = None
+    patient_ssn: str | None = None
+    account_no: str | None = None
+    occupation: str | None = None
+    diagnosis: list[str] = []
+    provider_name: str | None = None
+    lines: list[BillInvoiceLine] = []
+    total_due: float = 0
     employer_id: int | None = None

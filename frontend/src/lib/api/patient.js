@@ -585,3 +585,74 @@ export async function fetchPatientSharedDocumentBySharedId(
     },
   };
 }
+
+export async function fetchPatientBillReview(accessToken) {
+  const data = await patientFetch(
+    "/api/patient/billing/review",
+    accessToken,
+    "Unable to load bill review."
+  );
+
+  return {
+    patientId: data.patient_id ?? null,
+    total: data.total ?? 0,
+    payableCount: data.payable_count ?? 0,
+    outstandingTotal: Number(data.outstanding_total ?? 0),
+    urgentCareCount: data.urgent_care_count ?? 0,
+    urgentCareTotal: Number(data.urgent_care_total ?? 0),
+    personalInjuryCount: data.personal_injury_count ?? 0,
+    personalInjuryTotal: Number(data.personal_injury_total ?? 0),
+    items: (data.items || []).map((row) => ({
+      id: row.id,
+      billingHeaderId: row.billing_header_id,
+      historyId: row.history_id ?? null,
+      incidentNo: row.incident_no || "—",
+      incident: row.incident || "—",
+      provider: row.provider || "—",
+      insurance: row.insurance || "—",
+      visit: row.visit || "—",
+      category: row.category || "urgentCare",
+      categoryLabel: row.category_label || "Urgent Care",
+      doi: row.doi || "—",
+      amount: Number(row.amount) || 0,
+      invoiceNumber: row.invoice_number || null,
+    })),
+  };
+}
+
+export async function fetchPatientPaidBills(
+  accessToken,
+  { page = 1, pageSize = 10, search = "" } = {}
+) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  if (search.trim()) params.set("search", search.trim());
+
+  const data = await patientFetch(
+    `/api/patient/billing/paid?${params.toString()}`,
+    accessToken,
+    "Unable to load paid bills."
+  );
+
+  return {
+    items: (data.items || []).map((row) => ({
+      id: row.id,
+      billingHeaderId: row.billing_header_id,
+      historyId: row.history_id,
+      invoiceNo: row.invoice_no,
+      provider: row.provider || "—",
+      incident: row.incident || "—",
+      type: row.type || "—",
+      doi: row.doi || "—",
+      amount: Number(row.amount) || 0,
+    })),
+    total: data.total ?? 0,
+    totalPaid: Number(data.total_paid) || 0,
+    patientId: data.patient_id ?? null,
+    page: data.page ?? page,
+    pageSize: data.page_size ?? pageSize,
+    totalPages: data.total_pages ?? 1,
+  };
+}

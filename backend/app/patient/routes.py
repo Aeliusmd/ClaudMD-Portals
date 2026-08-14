@@ -27,6 +27,7 @@ from app.patient.appointments import (
     list_appointments,
     list_upcoming_appointments,
 )
+from app.patient.billing import list_bill_review, list_paid_bills
 from app.patient.booking import (
     book_appointment,
     list_available_slots,
@@ -42,10 +43,12 @@ from app.patient.notifications import (
 )
 from app.patient.schemas import (
     PatientAppointmentBookRequest,
+    PatientBillReviewResponse,
     PatientDashboardSummaryResponse,
     PatientInformationResponse,
     PatientMarkNotificationsReadResponse,
     PatientNotificationsResponse,
+    PatientPaidBillsResponse,
     PatientProfileResponse,
     PatientProfileUpdateRequest,
     PatientUpcomingAppointmentsResponse,
@@ -110,6 +113,36 @@ def patient_my_information_endpoint(
     Does not write to the clinic database.
     """
     return get_my_information(current_user)
+
+
+@router.get("/billing/review", response_model=PatientBillReviewResponse)
+def patient_billing_review_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Outstanding Urgent Care (CategoryId=3) and Personal Injury (CategoryId=4)
+    bills for the logged-in patient. SELECT-only.
+    """
+    return list_bill_review(current_user)
+
+
+@router.get("/billing/paid", response_model=PatientPaidBillsResponse)
+def patient_billing_paid_endpoint(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    pageSize: Annotated[int, Query(ge=1, le=50)] = 10,
+    search: Annotated[str | None, Query()] = None,
+):
+    """
+    Paid Urgent Care / Personal Injury history for the logged-in patient.
+    SELECT-only on BillingOrderPayments + BillingHeadersHistory.
+    """
+    return list_paid_bills(
+        current_user,
+        page=page,
+        page_size=pageSize,
+        search=sanitize_search_query(search) or "",
+    )
 
 
 @router.get("/notifications", response_model=PatientNotificationsResponse)

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, Clock3, Download, FileText, Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,10 +9,16 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchInput } from "@/components/ui/search-input";
+import { SkeletonBlock, TableSkeleton } from "@/components/ui/skeleton";
+import { employerPaidBills } from "@/data/employer-billing";
+import { ClientServicesInvoiceModal } from "@/features/employer/billing/client-services-invoice-modal";
+import { MakePaymentModal } from "@/features/employer/billing/make-payment-modal";
 import {
-  employerBillingBills,
-  employerPaidBills,
-} from "@/data/employer-billing";
+  fetchEmployerBillInvoice,
+  fetchEmployerBillReview,
+} from "@/lib/api/employer";
+import { getAccessToken } from "@/lib/auth-session";
+import { EMPLOYER_LOGIN_PATH } from "@/lib/portal-paths";
 import { cn } from "@/lib/utils";
 
 function formatMoney(amount) {
@@ -86,28 +93,69 @@ function OverviewCard({ label, value, detail, icon, iconWrap, featured = false }
 }
 
 export function EmployerBillingView() {
+  const router = useRouter();
   const [tab, setTab] = useState("review");
   const [query, setQuery] = useState("");
-  const [selectedIds, setSelectedIds] = useState(() => new Set(["bill-001"]));
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [message, setMessage] = useState("");
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState(null);
+  const [invoice, setInvoice] = useState(null);
 
-  const reviewBills = useMemo(
-    () => employerBillingBills.filter((bill) => bill.status === "review"),
-    []
-  );
+  const [reviewBills, setReviewBills] = useState([]);
+  const [payableCount, setPayableCount] = useState(0);
+  const [outstandingTotal, setOutstandingTotal] = useState(0);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewError, setReviewError] = useState(null);
 
-  const payableBills = useMemo(
-    () => reviewBills.filter((bill) => bill.amount > 0),
-    [reviewBills]
-  );
-  const outstandingTotal = useMemo(
-    () => payableBills.reduce((sum, bill) => sum + bill.amount, 0),
-    [payableBills]
-  );
   const paidTotal = useMemo(
     () => employerPaidBills.reduce((sum, bill) => sum + bill.amount, 0),
     []
   );
+
+  useEffect(() => {
+    if (tab !== "review") return undefined;
+
+    let cancelled = false;
+
+    async function loadReview() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(EMPLOYER_LOGIN_PATH);
+        return;
+      }
+
+      setReviewLoading(true);
+      try {
+        const data = await fetchEmployerBillReview(token);
+        if (cancelled) return;
+        setReviewBills(data.items);
+        setPayableCount(data.payableCount);
+        setOutstandingTotal(data.outstandingTotal);
+        setReviewError(null);
+        setSelectedIds(new Set());
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(EMPLOYER_LOGIN_PATH);
+          return;
+        }
+        setReviewError(err?.message || "Unable to load bill review.");
+        setReviewBills([]);
+        setPayableCount(0);
+        setOutstandingTotal(0);
+      } finally {
+        if (!cancelled) setReviewLoading(false);
+      }
+    }
+
+    loadReview();
+    return () => {
+      cancelled = true;
+    };
+  }, [router, tab]);
 
   const filteredReview = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -153,21 +201,54 @@ export function EmployerBillingView() {
     setQuery("");
     setSelectedIds(new Set());
     setMessage("");
+    setPaymentOpen(false);
+    setInvoiceOpen(false);
+    setInvoice(null);
+    setInvoiceError(null);
   }
 
   function handlePay() {
     if (!selectedBills.length) return;
+    setMessage("");
+    setPaymentOpen(true);
+  }
+
+  function handlePaymentSubmit({ method, total, bills }) {
+    const methodLabel = method === "bank" ? "bank account" : "card";
+    setPaymentOpen(false);
+    setSelectedIds(new Set());
     setMessage(
-      `Demo only — ${selectedBills.length} bill${
-        selectedBills.length === 1 ? "" : "s"
-      } totaling ${formatMoney(selectedTotal)} would be submitted for payment.`
+      `Payment submitted for ${bills.length} bill${
+        bills.length === 1 ? "" : "s"
+      } totaling ${formatMoney(total)} via ${methodLabel}. (Checkout UI only — not charged yet.)`
     );
   }
 
-  function handleInvoice(bill) {
-    setMessage(
-      `Demo invoice for ${bill.patientName} · Acct ${bill.accountNo} · ${formatMoney(bill.amount)}.`
-    );
+  async function handleInvoice(bill) {
+    if (!bill?.billingHeaderId) return;
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(EMPLOYER_LOGIN_PATH);
+      return;
+    }
+
+    setMessage("");
+    setInvoiceOpen(true);
+    setInvoiceLoading(true);
+    setInvoiceError(null);
+    setInvoice(null);
+    try {
+      const detail = await fetchEmployerBillInvoice(token, bill.billingHeaderId);
+      setInvoice(detail);
+    } catch (err) {
+      if (err?.status === 401) {
+        router.replace(EMPLOYER_LOGIN_PATH);
+        return;
+      }
+      setInvoiceError(err?.message || "Unable to load invoice.");
+    } finally {
+      setInvoiceLoading(false);
+    }
   }
 
   function handleDownload(bill) {
@@ -176,6 +257,23 @@ export function EmployerBillingView() {
 
   return (
     <div className="space-y-5">
+      <MakePaymentModal
+        open={paymentOpen}
+        bills={selectedBills}
+        onClose={() => setPaymentOpen(false)}
+        onSubmit={handlePaymentSubmit}
+      />
+      <ClientServicesInvoiceModal
+        open={invoiceOpen}
+        invoice={invoice}
+        loading={invoiceLoading}
+        error={invoiceError}
+        onClose={() => {
+          setInvoiceOpen(false);
+          setInvoice(null);
+          setInvoiceError(null);
+        }}
+      />
       <PageHeader
         title="Billing"
         className="mb-0"
@@ -227,34 +325,49 @@ export function EmployerBillingView() {
           <div>
             <h2 className="text-lg font-semibold text-ink">Billing Overview</h2>
             <p className="mt-1 text-sm text-muted">
-              A quick summary of your current bill review queue.
+              Physical-category bills for your organization with an open balance.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <OverviewCard
-              featured
-              label="Total Outstanding"
-              value={formatMoney(outstandingTotal)}
-              detail={`${payableBills.length} bills with a balance`}
-              iconWrap="bg-white/15 text-white"
-              icon={<Receipt className="h-5 w-5" />}
-            />
-            <OverviewCard
-              label="Payable bills"
-              value={payableBills.length}
-              detail="Ready for payment"
-              iconWrap="bg-primary-50 text-primary"
-              icon={<FileText className="h-5 w-5" />}
-            />
-            <OverviewCard
-              label="Total bills"
-              value={reviewBills.length}
-              detail="In bill review"
-              iconWrap="bg-cream-deep text-foreground-700"
-              icon={<Clock3 className="h-5 w-5" />}
-            />
-          </div>
+          {reviewLoading ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3" aria-busy="true">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="rounded-2xl border border-border/70 bg-white p-5"
+                >
+                  <SkeletonBlock className="h-3 w-24" />
+                  <SkeletonBlock className="mt-3 h-9 w-32" />
+                  <SkeletonBlock className="mt-3 h-3 w-40" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <OverviewCard
+                featured
+                label="Total Outstanding"
+                value={formatMoney(outstandingTotal)}
+                detail={`${payableCount} bills with a balance`}
+                iconWrap="bg-white/15 text-white"
+                icon={<Receipt className="h-5 w-5" />}
+              />
+              <OverviewCard
+                label="Payable bills"
+                value={payableCount}
+                detail="Ready for payment"
+                iconWrap="bg-primary-50 text-primary"
+                icon={<FileText className="h-5 w-5" />}
+              />
+              <OverviewCard
+                label="Total bills"
+                value={reviewBills.length}
+                detail="In bill review"
+                iconWrap="bg-cream-deep text-foreground-700"
+                icon={<Clock3 className="h-5 w-5" />}
+              />
+            </div>
+          )}
         </>
       ) : (
         <div>
@@ -284,85 +397,97 @@ export function EmployerBillingView() {
 
       {tab === "review" ? (
         <Card className="overflow-hidden p-0">
-          {filteredReview.length === 0 ? (
+          {reviewLoading ? (
+            <div className="px-5 py-5">
+              <TableSkeleton rows={5} columns={6} />
+            </div>
+          ) : reviewError ? (
+            <div className="px-5 py-8 text-sm font-medium text-rose-700">
+              {reviewError}
+            </div>
+          ) : filteredReview.length === 0 ? (
             <EmptyState
               title="No bills found"
-              description="Try another search or switch between Bill Review and Paid Bills."
+              description={
+                query.trim()
+                  ? "Try another search or clear the filter."
+                  : "No Physical-category bills with an open balance for your organization."
+              }
               className="min-h-64 rounded-none border-0"
             />
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-[48rem] w-full text-left text-sm">
-                  <thead className="border-y border-border/70 bg-cream/50 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
-                    <tr>
-                      <th className="w-12 px-4 py-3 sm:px-5">
-                        <input
-                          type="checkbox"
-                          checked={allVisibleSelected}
-                          onChange={toggleAllVisible}
-                          aria-label="Select all visible bills"
-                          className="h-4 w-4 cursor-pointer accent-primary"
-                        />
-                      </th>
-                      <th className="px-4 py-3 sm:px-5">DOS</th>
-                      <th className="px-4 py-3 sm:px-5">Acct. #</th>
-                      <th className="px-4 py-3 sm:px-5">Patient Name</th>
-                      <th className="px-4 py-3 sm:px-5">Visit</th>
-                      <th className="px-4 py-3 text-right sm:px-5">Amount</th>
-                      <th className="px-4 py-3 text-center sm:px-5">Invoice</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {filteredReview.map((bill) => {
-                      const checked = selectedIds.has(bill.id);
-                      return (
-                        <tr
-                          key={bill.id}
-                          className={cn(
-                            "bg-white transition",
-                            checked ? "bg-primary-50" : "hover:bg-cream/40"
-                          )}
-                        >
-                          <td className="px-4 py-3.5 sm:px-5 sm:py-4">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleRow(bill.id)}
-                              aria-label={`Select ${bill.patientName}`}
-                              className="h-4 w-4 cursor-pointer accent-primary"
-                            />
-                          </td>
-                          <td className="px-4 py-3.5 tabular-nums text-ink sm:px-5 sm:py-4">
-                            {bill.dos}
-                          </td>
-                          <td className="px-4 py-3.5 tabular-nums text-muted sm:px-5 sm:py-4">
-                            {bill.accountNo}
-                          </td>
-                          <td className="px-4 py-3.5 font-semibold text-ink sm:px-5 sm:py-4">
-                            {bill.patientName}
-                          </td>
-                          <td className="px-4 py-3.5 sm:px-5 sm:py-4">
-                            <Badge className="bg-secondary-100 text-secondary-700">
-                              {bill.visit}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-ink sm:px-5 sm:py-4">
-                            {formatMoney(bill.amount)}
-                          </td>
-                          <td className="px-4 py-3.5 text-center sm:px-5 sm:py-4">
-                            <button
-                              type="button"
-                              onClick={() => handleInvoice(bill)}
-                              aria-label={`Open invoice for ${bill.patientName}`}
-                              className="inline-flex cursor-pointer rounded-lg p-1.5 text-primary hover:bg-primary-50"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
+                <thead className="border-y border-border/70 bg-cream/50 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
+                  <tr>
+                    <th className="w-12 px-4 py-3 sm:px-5">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleAllVisible}
+                        aria-label="Select all visible bills"
+                        className="h-4 w-4 cursor-pointer accent-primary"
+                      />
+                    </th>
+                    <th className="px-4 py-3 sm:px-5">DOS</th>
+                    <th className="px-4 py-3 sm:px-5">Acct. #</th>
+                    <th className="px-4 py-3 sm:px-5">Patient Name</th>
+                    <th className="px-4 py-3 sm:px-5">Visit</th>
+                    <th className="px-4 py-3 text-right sm:px-5">Amount</th>
+                    <th className="px-4 py-3 text-center sm:px-5">Invoice</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filteredReview.map((bill) => {
+                    const checked = selectedIds.has(bill.id);
+                    return (
+                      <tr
+                        key={bill.id}
+                        className={cn(
+                          "bg-white transition",
+                          checked ? "bg-primary-50" : "hover:bg-cream/40"
+                        )}
+                      >
+                        <td className="px-4 py-3.5 sm:px-5 sm:py-4">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleRow(bill.id)}
+                            aria-label={`Select ${bill.patientName}`}
+                            className="h-4 w-4 cursor-pointer accent-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3.5 tabular-nums text-ink sm:px-5 sm:py-4">
+                          {bill.dos}
+                        </td>
+                        <td className="px-4 py-3.5 tabular-nums text-muted sm:px-5 sm:py-4">
+                          {bill.accountNo}
+                        </td>
+                        <td className="px-4 py-3.5 font-semibold text-ink sm:px-5 sm:py-4">
+                          {bill.patientName}
+                        </td>
+                        <td className="px-4 py-3.5 sm:px-5 sm:py-4">
+                          <Badge className="bg-secondary-100 text-secondary-700">
+                            {bill.visit}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-ink sm:px-5 sm:py-4">
+                          {formatMoney(bill.amount)}
+                        </td>
+                        <td className="px-4 py-3.5 text-center sm:px-5 sm:py-4">
+                          <button
+                            type="button"
+                            onClick={() => handleInvoice(bill)}
+                            aria-label={`Open invoice for ${bill.patientName}`}
+                            className="inline-flex cursor-pointer rounded-lg p-1.5 text-primary hover:bg-primary-50"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
               </table>
             </div>
           )}

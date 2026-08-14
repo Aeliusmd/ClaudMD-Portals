@@ -128,6 +128,79 @@ export async function fetchEmployerDashboardSummary(accessToken) {
   };
 }
 
+export async function fetchEmployerBillReview(accessToken) {
+  const data = await employerFetch(
+    "/api/employer/billing/review",
+    accessToken,
+    "Unable to load bill review."
+  );
+
+  return {
+    employerId: data.employer_id ?? null,
+    total: data.total ?? 0,
+    payableCount: data.payable_count ?? 0,
+    outstandingTotal: Number(data.outstanding_total ?? 0),
+    items: (data.items || []).map((row) => ({
+      id: row.id,
+      billingHeaderId: row.billing_header_id,
+      historyId: row.history_id ?? null,
+      dos: row.dos || "—",
+      accountNo: row.account_no || "—",
+      patientName: row.patient_name || "Patient",
+      visit: row.visit || "—",
+      amount: Number(row.amount ?? 0),
+      invoiceNumber: row.invoice_number || null,
+    })),
+  };
+}
+
+export async function fetchEmployerBillInvoice(accessToken, billingHeaderId) {
+  const data = await employerFetch(
+    `/api/employer/billing/review/${encodeURIComponent(billingHeaderId)}/invoice`,
+    accessToken,
+    "Unable to load invoice."
+  );
+
+  return {
+    billingHeaderId: data.billing_header_id,
+    historyId: data.history_id ?? null,
+    title: data.title || "CLIENT SERVICES BILLING",
+    pageLabel: data.page_label || "Page 1 of 1",
+    invoiceDate: data.invoice_date || null,
+    invoiceNumber: data.invoice_number || null,
+    taxId: data.tax_id || null,
+    amountDue: Number(data.amount_due ?? 0),
+    dueDate: data.due_date || null,
+    clinicName: data.clinic_name || null,
+    clinicAddress: data.clinic_address || null,
+    clinicPhone: data.clinic_phone || null,
+    clinicFax: data.clinic_fax || null,
+    employerName: data.employer_name || null,
+    employerAddress: data.employer_address || null,
+    employerPhone: data.employer_phone || null,
+    patientName: data.patient_name || null,
+    patientSsn: data.patient_ssn || null,
+    accountNo: data.account_no || null,
+    occupation: data.occupation || null,
+    diagnosis: data.diagnosis || [],
+    providerName: data.provider_name || null,
+    lines: (data.lines || []).map((line) => ({
+      id: line.id,
+      examDate: line.exam_date || null,
+      code: line.code || null,
+      description: line.description || null,
+      quantity: Number(line.quantity ?? 1),
+      unitPrice: Number(line.unit_price ?? 0),
+      charges: Number(line.charges ?? 0),
+      payment: Number(line.payment ?? 0),
+      adjust: Number(line.adjust ?? 0),
+      balance: Number(line.balance ?? 0),
+    })),
+    totalDue: Number(data.total_due ?? 0),
+    employerId: data.employer_id ?? null,
+  };
+}
+
 export async function fetchEmployerNotifications(
   accessToken,
   { page = 1, pageSize = 10 } = {}

@@ -195,6 +195,14 @@ function InsuranceDashboardContent() {
   const effectiveAppliedFrom = appliedFromDate ?? defaultFrom;
   const effectiveAppliedTo = appliedToDate ?? defaultTo;
 
+  // Nothing to clear while the range is still the default and no search is set.
+  const canClearFilters =
+    Boolean(draftQuery.trim() || appliedQuery) ||
+    effectiveDraftFrom !== defaultFrom ||
+    effectiveDraftTo !== defaultTo ||
+    effectiveAppliedFrom !== defaultFrom ||
+    effectiveAppliedTo !== defaultTo;
+
   const activeTabDef =
     tabDefs.find((item) => item.key === activeTab) || tabDefs[0];
   const isLiveTab = Boolean(activeTabDef.live);
@@ -538,6 +546,7 @@ function InsuranceDashboardContent() {
             type="button"
             variant="outline"
             onClick={clearDateRange}
+            disabled={!canClearFilters}
             className="h-[2.625rem] shrink-0 rounded-xl px-3.5 py-0 text-sm"
             aria-label="Clear date range"
           >

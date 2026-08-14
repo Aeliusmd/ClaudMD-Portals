@@ -160,6 +160,14 @@ function PatientDashboardContent() {
   const effectiveAppliedTo = appliedToDate ?? defaultTo;
   const rangeReady = Boolean(defaultFrom && defaultTo);
 
+  // Nothing to clear while the range is still the default and no search is set.
+  const canClearFilters =
+    Boolean(draftQuery.trim() || appliedQuery) ||
+    effectiveDraftFrom !== defaultFrom ||
+    effectiveDraftTo !== defaultTo ||
+    effectiveAppliedFrom !== defaultFrom ||
+    effectiveAppliedTo !== defaultTo;
+
   const [visitPage, setVisitPage] = useState(1);
   const [appointmentPage, setAppointmentPage] = useState(1);
   const [createdAppointments, setCreatedAppointments] = useState([]);
@@ -614,6 +622,7 @@ function PatientDashboardContent() {
             type="button"
             variant="outline"
             onClick={clearDateRange}
+            disabled={!canClearFilters}
             className="h-[2.625rem] shrink-0 rounded-xl px-3.5 py-0 text-sm"
             aria-label="Clear date range"
           >

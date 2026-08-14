@@ -246,3 +246,53 @@ class PatientAppointmentBookRequest(BaseModel):
     appointment_status_id: int | None = 1
     schedule_type_id: int | None = 1
     note: str | None = None
+
+
+class PatientBillReviewRow(BaseModel):
+    id: str
+    billing_header_id: int
+    history_id: int | None = None
+    incident_no: str | None = None
+    incident: str | None = None
+    provider: str | None = None
+    insurance: str | None = None
+    visit: str = "—"
+    category: str
+    category_label: str
+    doi: str | None = None
+    amount: float = 0
+    invoice_number: str | None = None
+
+
+class PatientBillReviewResponse(BaseModel):
+    items: list[PatientBillReviewRow] = Field(default_factory=list)
+    total: int = 0
+    payable_count: int = 0
+    outstanding_total: float = 0
+    urgent_care_count: int = 0
+    urgent_care_total: float = 0
+    personal_injury_count: int = 0
+    personal_injury_total: float = 0
+    patient_id: int | None = None
+
+
+class PatientPaidBillRow(BaseModel):
+    id: str
+    billing_header_id: int
+    history_id: int
+    invoice_no: str
+    provider: str | None = None
+    incident: str | None = None
+    type: str
+    doi: str | None = None
+    amount: float = 0
+
+
+class PatientPaidBillsResponse(BaseModel):
+    items: list[PatientPaidBillRow] = Field(default_factory=list)
+    total: int = 0
+    total_paid: float = 0
+    patient_id: int | None = None
+    page: int = 1
+    page_size: int = 10
+    total_pages: int = 1

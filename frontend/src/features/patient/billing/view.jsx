@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckSquare, CreditCard, Download, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,13 +9,15 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchInput } from "@/components/ui/search-input";
-import {
-  patientPaidBills,
-  patientReviewBills,
-  summarizePatientReviewBills,
-} from "@/data/patient-billing";
+import { SkeletonBlock, TableSkeleton } from "@/components/ui/skeleton";
 import { MakePaymentModal } from "@/features/employer/billing/make-payment-modal";
 import { usePatientProfile } from "@/hooks/use-patient-profile";
+import {
+  fetchPatientBillReview,
+  fetchPatientPaidBills,
+} from "@/lib/api/patient";
+import { getAccessToken } from "@/lib/auth-session";
+import { patientPaths } from "@/lib/portal-paths";
 import { displayFullName } from "@/lib/profile-display";
 import { cn } from "@/lib/utils";
 
@@ -39,20 +42,8 @@ function matchesReviewQuery(bill, query) {
   return haystack.includes(query);
 }
 
-function matchesPaidQuery(bill, query) {
-  const haystack = [
-    bill.invoiceNo,
-    bill.provider,
-    bill.incident,
-    bill.type,
-    bill.doi,
-  ]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(query);
-}
-
 export function PatientBillingView() {
+  const router = useRouter();
   const { profile } = usePatientProfile();
   const [tab, setTab] = useState("review");
   const [query, setQuery] = useState("");
@@ -60,31 +51,112 @@ export function PatientBillingView() {
   const [message, setMessage] = useState("");
   const [paymentOpen, setPaymentOpen] = useState(false);
 
+  const [reviewBills, setReviewBills] = useState([]);
+  const [summary, setSummary] = useState({
+    urgentCareCount: 0,
+    urgentCareTotal: 0,
+    personalInjuryCount: 0,
+    personalInjuryTotal: 0,
+    outstandingTotal: 0,
+  });
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewError, setReviewError] = useState(null);
+
+  const [paidBills, setPaidBills] = useState([]);
+  const [paidTotal, setPaidTotal] = useState(0);
+  const [paidLoading, setPaidLoading] = useState(false);
+  const [paidError, setPaidError] = useState(null);
+
   const patientName = displayFullName(profile) || "there";
 
-  const summary = useMemo(
-    () => summarizePatientReviewBills(patientReviewBills),
-    []
-  );
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReview() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(patientPaths.login);
+        return;
+      }
+      setReviewLoading(true);
+      setReviewError(null);
+      try {
+        const data = await fetchPatientBillReview(token);
+        if (cancelled) return;
+        setReviewBills(data.items);
+        setSummary({
+          urgentCareCount: data.urgentCareCount,
+          urgentCareTotal: data.urgentCareTotal,
+          personalInjuryCount: data.personalInjuryCount,
+          personalInjuryTotal: data.personalInjuryTotal,
+          outstandingTotal: data.outstandingTotal,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(patientPaths.login);
+          return;
+        }
+        setReviewError(err?.message || "Unable to load bill review.");
+        setReviewBills([]);
+      } finally {
+        if (!cancelled) setReviewLoading(false);
+      }
+    }
+
+    loadReview();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (tab !== "paid") return undefined;
+    let cancelled = false;
+
+    async function loadPaid() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace(patientPaths.login);
+        return;
+      }
+      setPaidLoading(true);
+      setPaidError(null);
+      try {
+        const data = await fetchPatientPaidBills(token, {
+          page: 1,
+          pageSize: 50,
+          search: query,
+        });
+        if (cancelled) return;
+        setPaidBills(data.items);
+        setPaidTotal(data.totalPaid);
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          router.replace(patientPaths.login);
+          return;
+        }
+        setPaidError(err?.message || "Unable to load paid bills.");
+        setPaidBills([]);
+        setPaidTotal(0);
+      } finally {
+        if (!cancelled) setPaidLoading(false);
+      }
+    }
+
+    const timer = window.setTimeout(loadPaid, query.trim() ? 250 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [tab, query, router]);
 
   const filteredReview = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return patientReviewBills;
-    return patientReviewBills.filter((bill) =>
-      matchesReviewQuery(bill, normalized)
-    );
-  }, [query]);
-
-  const filteredPaid = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return patientPaidBills;
-    return patientPaidBills.filter((bill) => matchesPaidQuery(bill, normalized));
-  }, [query]);
-
-  const paidTotal = useMemo(
-    () => patientPaidBills.reduce((sum, bill) => sum + bill.amount, 0),
-    []
-  );
+    if (!normalized) return reviewBills;
+    return reviewBills.filter((bill) => matchesReviewQuery(bill, normalized));
+  }, [reviewBills, query]);
 
   const selectedBills = filteredReview.filter((bill) => selectedIds.has(bill.id));
   const selectedTotal = selectedBills.reduce((sum, bill) => sum + bill.amount, 0);
@@ -139,16 +211,19 @@ export function PatientBillingView() {
   }
 
   function handleInvoice(bill) {
+    const invoicePart = bill.invoiceNumber
+      ? `Invoice ${bill.invoiceNumber}`
+      : "No invoice number yet";
     setMessage(
-      `Invoice for ${bill.incidentNo || bill.invoiceNo} · ${bill.provider} · ${formatMoney(
+      `${invoicePart} · ${bill.incidentNo} · ${bill.provider} · ${formatMoney(
         bill.amount
-      )}. (Demo UI — invoice detail coming soon.)`
+      )}.`
     );
   }
 
   function handleDownload(bill) {
     setMessage(
-      `Download started for ${bill.invoiceNo}. (Demo UI — file not generated yet.)`
+      `Invoice ${bill.invoiceNo} · ${bill.provider} · ${formatMoney(bill.amount)}.`
     );
   }
 
@@ -195,41 +270,55 @@ export function PatientBillingView() {
       />
 
       {tab === "review" ? (
-        <div className="overflow-hidden rounded-2xl bg-primary-800 text-white shadow-sm">
-          <div className="grid grid-cols-1 divide-y divide-white/15 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <div className="px-5 py-5 sm:px-6 sm:py-6">
-              <p className="text-[11px] font-semibold tracking-[0.14em] text-white/70 uppercase">
-                Urgent Care
-              </p>
-              <p className="mt-2 font-sans text-4xl font-semibold tabular-nums leading-none">
-                {summary.urgentCareCount}
-              </p>
-              <p className="mt-2 text-sm text-white/80">
-                {formatMoney(summary.urgentCareTotal)}
-              </p>
-            </div>
-            <div className="px-5 py-5 sm:px-6 sm:py-6">
-              <p className="text-[11px] font-semibold tracking-[0.14em] text-white/70 uppercase">
-                Personal Injury
-              </p>
-              <p className="mt-2 font-sans text-4xl font-semibold tabular-nums leading-none">
-                {summary.personalInjuryCount}
-              </p>
-              <p className="mt-2 text-sm text-white/80">
-                {formatMoney(summary.personalInjuryTotal)}
-              </p>
-            </div>
-            <div className="px-5 py-5 sm:px-6 sm:py-6">
-              <p className="text-[11px] font-semibold tracking-[0.14em] text-white/70 uppercase">
-                Outstanding
-              </p>
-              <p className="mt-2 font-sans text-4xl font-semibold tabular-nums leading-none">
-                {formatMoney(summary.outstandingTotal)}
-              </p>
-              <p className="mt-2 text-sm text-white/80">Total due</p>
+        reviewLoading ? (
+          <div className="overflow-hidden rounded-2xl border border-border/70 bg-white p-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index}>
+                  <SkeletonBlock className="h-3 w-24" />
+                  <SkeletonBlock className="mt-3 h-9 w-28" />
+                  <SkeletonBlock className="mt-3 h-3 w-20" />
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl bg-primary-800 text-white shadow-sm">
+            <div className="grid grid-cols-1 divide-y divide-white/15 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              <div className="px-5 py-5 sm:px-6 sm:py-6">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-white/70 uppercase">
+                  Urgent Care
+                </p>
+                <p className="mt-2 font-sans text-4xl font-semibold tabular-nums leading-none">
+                  {summary.urgentCareCount}
+                </p>
+                <p className="mt-2 text-sm text-white/80">
+                  {formatMoney(summary.urgentCareTotal)}
+                </p>
+              </div>
+              <div className="px-5 py-5 sm:px-6 sm:py-6">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-white/70 uppercase">
+                  Personal Injury
+                </p>
+                <p className="mt-2 font-sans text-4xl font-semibold tabular-nums leading-none">
+                  {summary.personalInjuryCount}
+                </p>
+                <p className="mt-2 text-sm text-white/80">
+                  {formatMoney(summary.personalInjuryTotal)}
+                </p>
+              </div>
+              <div className="px-5 py-5 sm:px-6 sm:py-6">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-white/70 uppercase">
+                  Outstanding
+                </p>
+                <p className="mt-2 font-sans text-4xl font-semibold tabular-nums leading-none">
+                  {formatMoney(summary.outstandingTotal)}
+                </p>
+                <p className="mt-2 text-sm text-white/80">Total due</p>
+              </div>
+            </div>
+          </div>
+        )
       ) : (
         <div>
           <h2 className="text-lg font-semibold text-ink">Paid Bills</h2>
@@ -277,13 +366,21 @@ export function PatientBillingView() {
             </p>
           </div>
 
-          {filteredReview.length === 0 ? (
+          {reviewLoading ? (
+            <div className="px-5 py-5">
+              <TableSkeleton rows={5} columns={8} />
+            </div>
+          ) : reviewError ? (
+            <div className="px-5 py-8 text-sm font-medium text-rose-700">
+              {reviewError}
+            </div>
+          ) : filteredReview.length === 0 ? (
             <EmptyState
               title="No bills found"
               description={
                 query.trim()
                   ? "Try another search or clear the filter."
-                  : "You have no outstanding medical bills right now."
+                  : "No Urgent Care or Personal Injury bills with an open balance."
               }
               className="min-h-64 rounded-none border-0"
             />
@@ -392,13 +489,33 @@ export function PatientBillingView() {
         </Card>
       ) : (
         <Card className="overflow-hidden p-0">
-          {filteredPaid.length === 0 ? (
+          {paidLoading ? (
+            <TableSkeleton
+              columns={6}
+              rows={5}
+              minWidthClass="min-w-[48rem]"
+              headers={[
+                "Invoice #",
+                "Provider",
+                "Incident",
+                "Type",
+                "DOI",
+                "Amount",
+              ]}
+            />
+          ) : paidError ? (
+            <EmptyState
+              title="Unable to load paid bills"
+              description={paidError}
+              className="min-h-64 rounded-none border-0"
+            />
+          ) : paidBills.length === 0 ? (
             <EmptyState
               title="No paid bills found"
               description={
                 query.trim()
                   ? "Try another search, or switch back to Bill Review."
-                  : "No payment history is available yet."
+                  : "No Urgent Care or Personal Injury payments on file yet."
               }
               className="min-h-64 rounded-none border-0"
             />
@@ -417,7 +534,7 @@ export function PatientBillingView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filteredPaid.map((bill) => (
+                  {paidBills.map((bill) => (
                     <tr
                       key={bill.id}
                       className="bg-white transition hover:bg-cream/40"
@@ -446,7 +563,7 @@ export function PatientBillingView() {
                         <button
                           type="button"
                           onClick={() => handleDownload(bill)}
-                          aria-label={`Download invoice ${bill.invoiceNo}`}
+                          aria-label={`Open invoice ${bill.invoiceNo}`}
                           className="inline-flex cursor-pointer rounded-lg p-1.5 text-primary hover:bg-primary-50"
                         >
                           <Download className="h-4 w-4" />

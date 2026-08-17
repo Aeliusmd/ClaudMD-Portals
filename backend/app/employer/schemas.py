@@ -542,7 +542,7 @@ class PaidBillsResponse(BaseModel):
 
 class BillReviewRow(BaseModel):
     id: str
-    billing_header_id: int
+    billing_header_id: int | None = None
     history_id: int | None = None
     dos: str | None = None
     account_no: str | None = None

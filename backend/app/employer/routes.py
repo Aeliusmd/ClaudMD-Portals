@@ -220,12 +220,20 @@ def employer_dashboard_summary_endpoint(
 @router.get("/billing/review", response_model=BillReviewResponse)
 def employer_billing_review_endpoint(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(alias="pageSize", ge=1, le=50)] = 10,
+    search: Annotated[str | None, Query(max_length=100)] = None,
 ):
     """
     Bill Review queue: Physical-category visit bills for the logged-in employer.
-    SELECT-only. No schema changes.
+    Paged and searched in SQL. SELECT-only. No schema changes.
     """
-    return list_bill_review(current_user)
+    return list_bill_review(
+        current_user,
+        page=page,
+        page_size=page_size,
+        search=(search or "").strip(),
+    )
 
 
 @router.get(

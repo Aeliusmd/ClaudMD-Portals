@@ -26,7 +26,13 @@ from app.employer.schemas import (
 PHYSICAL_VISIT_CATEGORY_ID = 2
 
 
-def list_bill_review(current_user: CurrentUser) -> BillReviewResponse:
+def list_bill_review(
+    current_user: CurrentUser,
+    *,
+    page: int = 1,
+    page_size: int = 10,
+    search: str = "",
+) -> BillReviewResponse:
     clinic = get_clinic_by_activation_key(current_user.activation_key)
     if not clinic:
         raise HTTPException(
@@ -41,120 +47,204 @@ def list_bill_review(current_user: CurrentUser) -> BillReviewResponse:
             detail="Employer organization not found for this user.",
         )
 
-    items = _fetch_physical_employer_bills(clinic, int(profile.employer_id))
-    payable = [row for row in items if row.amount > 0]
-    outstanding = sum((float(row.amount) for row in payable), 0.0)
+    employer_id = int(profile.employer_id)
+    total, outstanding = _bill_review_summary(clinic, employer_id, search=search)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
+    items = _fetch_bill_review_rows(
+        clinic,
+        employer_id,
+        search=search,
+        offset=(page - 1) * page_size,
+        limit=page_size,
+    )
 
     return BillReviewResponse(
-        items=payable,
-        total=len(payable),
-        payable_count=len(payable),
-        outstanding_total=outstanding,
+        items=items,
+        total=total,
+        payable_count=total,
+        outstanding_total=round(outstanding, 2),
         employer_id=profile.employer_id,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
     )
 
 
-def _fetch_physical_employer_bills(clinic, employer_id: int) -> list[BillReviewRow]:
-    """
-    One row per BillingHeaders.Id (latest history snapshot when present).
+# One row per BillingHeaders.Id (latest history snapshot when present).
+# Physical filter: VisitTypes.CategoryId = 2, or header VisitTypeCategoryId = 2
+# when the visit type row is missing.
+_BILL_REVIEW_CTE = """
+WITH Bills AS (
+    SELECT
+        bh.Id AS BillingHeaderId,
+        hist.Id AS HistoryId,
+        hist.InvoiceNumber AS InvoiceNumber,
+        COALESCE(ch.CheckInDate, hist.CheckinDate) AS SortDate,
+        CONVERT(varchar(10), COALESCE(ch.CheckInDate, hist.CheckinDate), 101) AS Dos,
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(CAST(p.AccountNumber AS nvarchar(50)))), ''),
+            NULLIF(LTRIM(RTRIM(hist.PatientAccountNumber)), '')
+        ) AS AccountNo,
+        LTRIM(RTRIM(
+            COALESCE(
+                NULLIF(
+                    LTRIM(RTRIM(ISNULL(p.FirstName, '') + ' ' + ISNULL(p.LastName, ''))),
+                    ''
+                ),
+                NULLIF(
+                    LTRIM(RTRIM(
+                        ISNULL(hist.PatientFirstName, '')
+                        + ' '
+                        + ISNULL(hist.PatientLastName, '')
+                    )),
+                    ''
+                ),
+                'Patient'
+            )
+        )) AS PatientName,
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(vt.Code)), ''),
+            NULLIF(LTRIM(RTRIM(vt.Description)), ''),
+            '—'
+        ) AS VisitCode,
+        CASE
+            WHEN hist.Id IS NOT NULL THEN
+                COALESCE(
+                    bal.SumBalance,
+                    CASE
+                        WHEN ISNULL(hist.TotalCharge, 0) > ISNULL(hist.PaidAmount, 0)
+                        THEN ISNULL(hist.TotalCharge, 0) - ISNULL(hist.PaidAmount, 0)
+                        ELSE CAST(0 AS decimal(18, 3))
+                    END
+                )
+            ELSE
+                CASE
+                    WHEN ISNULL(bh.TotalCharge, 0) > ISNULL(bh.PaidAmount, 0)
+                    THEN ISNULL(bh.TotalCharge, 0) - ISNULL(bh.PaidAmount, 0)
+                    ELSE CAST(0 AS decimal(18, 3))
+                END
+        END AS AmountDue
+    FROM dbo.BillingHeaders bh
+    LEFT JOIN dbo.VisitTypes vt
+        ON vt.Id = bh.VisitTypeId
+       AND (vt.IsDeleted = 0 OR vt.IsDeleted IS NULL)
+    LEFT JOIN dbo.Patients p
+        ON p.Id = bh.PatientId
+       AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
+    LEFT JOIN dbo.CheckInsHeader ch
+        ON ch.Id = bh.CheckinId
+       AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+    OUTER APPLY (
+        SELECT TOP 1
+            h.Id,
+            h.InvoiceNumber,
+            h.CheckinDate,
+            h.PatientAccountNumber,
+            h.PatientFirstName,
+            h.PatientLastName,
+            h.TotalCharge,
+            h.PaidAmount
+        FROM dbo.BillingHeadersHistory h
+        WHERE h.BillingHeaderId = bh.Id
+          AND (h.IsDeleted = 0 OR h.IsDeleted IS NULL)
+        ORDER BY h.Id DESC
+    ) hist
+    OUTER APPLY (
+        SELECT SUM(ISNULL(boh.BalanceDue, 0)) AS SumBalance
+        FROM dbo.BillingOrdersHistory boh
+        WHERE boh.BillingHeaderHistoryId = hist.Id
+          AND (boh.IsDeleted = 0 OR boh.IsDeleted IS NULL)
+    ) bal
+    WHERE (bh.IsDeleted = 0 OR bh.IsDeleted IS NULL)
+      AND bh.EmployerId = ?
+      AND (
+            vt.CategoryId = ?
+         OR (vt.Id IS NULL AND bh.VisitTypeCategoryId = ?)
+      )
+)
+"""
 
-    Physical filter: VisitTypes.CategoryId = 2, or header VisitTypeCategoryId = 2
-    when visit type is missing.
-    """
+_BILL_REVIEW_SEARCH_SQL = """
+      AND (
+            PatientName LIKE ?
+         OR AccountNo LIKE ?
+         OR VisitCode LIKE ?
+         OR Dos LIKE ?
+      )
+"""
+
+
+def _bill_review_filters(employer_id: int, search: str) -> tuple[str, tuple]:
+    """Extra WHERE fragment applied to the Bills CTE plus its parameters."""
+    params: tuple = (
+        employer_id,
+        PHYSICAL_VISIT_CATEGORY_ID,
+        PHYSICAL_VISIT_CATEGORY_ID,
+    )
+    if not search:
+        return "", params
+    term = f"%{search}%"
+    return _BILL_REVIEW_SEARCH_SQL, params + (term, term, term, term)
+
+
+def _bill_review_summary(
+    clinic,
+    employer_id: int,
+    *,
+    search: str,
+) -> tuple[int, float]:
+    search_sql, params = _bill_review_filters(employer_id, search)
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """
+            f"""
+            {_BILL_REVIEW_CTE}
             SELECT
-                bh.Id AS BillingHeaderId,
-                hist.Id AS HistoryId,
-                hist.InvoiceNumber AS InvoiceNumber,
-                CONVERT(varchar(10), COALESCE(ch.CheckInDate, hist.CheckinDate), 101) AS Dos,
-                COALESCE(
-                    NULLIF(LTRIM(RTRIM(CAST(p.AccountNumber AS nvarchar(50)))), ''),
-                    NULLIF(LTRIM(RTRIM(hist.PatientAccountNumber)), '')
-                ) AS AccountNo,
-                LTRIM(RTRIM(
-                    COALESCE(
-                        NULLIF(
-                            LTRIM(RTRIM(ISNULL(p.FirstName, '') + ' ' + ISNULL(p.LastName, ''))),
-                            ''
-                        ),
-                        NULLIF(
-                            LTRIM(RTRIM(
-                                ISNULL(hist.PatientFirstName, '')
-                                + ' '
-                                + ISNULL(hist.PatientLastName, '')
-                            )),
-                            ''
-                        ),
-                        'Patient'
-                    )
-                )) AS PatientName,
-                COALESCE(
-                    NULLIF(LTRIM(RTRIM(vt.Code)), ''),
-                    NULLIF(LTRIM(RTRIM(vt.Description)), ''),
-                    '—'
-                ) AS VisitCode,
-                CASE
-                    WHEN hist.Id IS NOT NULL THEN
-                        COALESCE(
-                            bal.SumBalance,
-                            CASE
-                                WHEN ISNULL(hist.TotalCharge, 0) > ISNULL(hist.PaidAmount, 0)
-                                THEN ISNULL(hist.TotalCharge, 0) - ISNULL(hist.PaidAmount, 0)
-                                ELSE CAST(0 AS decimal(18, 3))
-                            END
-                        )
-                    ELSE
-                        CASE
-                            WHEN ISNULL(bh.TotalCharge, 0) > ISNULL(bh.PaidAmount, 0)
-                            THEN ISNULL(bh.TotalCharge, 0) - ISNULL(bh.PaidAmount, 0)
-                            ELSE CAST(0 AS decimal(18, 3))
-                        END
-                END AS AmountDue
-            FROM dbo.BillingHeaders bh
-            LEFT JOIN dbo.VisitTypes vt
-                ON vt.Id = bh.VisitTypeId
-               AND (vt.IsDeleted = 0 OR vt.IsDeleted IS NULL)
-            LEFT JOIN dbo.Patients p
-                ON p.Id = bh.PatientId
-               AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
-            LEFT JOIN dbo.CheckInsHeader ch
-                ON ch.Id = bh.CheckinId
-               AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
-            OUTER APPLY (
-                SELECT TOP 1
-                    h.Id,
-                    h.InvoiceNumber,
-                    h.CheckinDate,
-                    h.PatientAccountNumber,
-                    h.PatientFirstName,
-                    h.PatientLastName,
-                    h.TotalCharge,
-                    h.PaidAmount
-                FROM dbo.BillingHeadersHistory h
-                WHERE h.BillingHeaderId = bh.Id
-                  AND (h.IsDeleted = 0 OR h.IsDeleted IS NULL)
-                ORDER BY h.Id DESC
-            ) hist
-            OUTER APPLY (
-                SELECT SUM(ISNULL(boh.BalanceDue, 0)) AS SumBalance
-                FROM dbo.BillingOrdersHistory boh
-                WHERE boh.BillingHeaderHistoryId = hist.Id
-                  AND (boh.IsDeleted = 0 OR boh.IsDeleted IS NULL)
-            ) bal
-            WHERE (bh.IsDeleted = 0 OR bh.IsDeleted IS NULL)
-              AND bh.EmployerId = ?
-              AND (
-                    vt.CategoryId = ?
-                 OR (vt.Id IS NULL AND bh.VisitTypeCategoryId = ?)
-              )
-            ORDER BY
-                COALESCE(ch.CheckInDate, hist.CheckinDate) DESC,
-                bh.Id DESC
+                COUNT_BIG(*) AS Total,
+                ISNULL(SUM(AmountDue), 0) AS Outstanding
+            FROM Bills
+            WHERE AmountDue > 0
+            {search_sql}
             """,
-            (employer_id, PHYSICAL_VISIT_CATEGORY_ID, PHYSICAL_VISIT_CATEGORY_ID),
+            params,
+        )
+        row = cursor.fetchone()
+    return int(row.Total or 0), _as_float(row.Outstanding)
+
+
+def _fetch_bill_review_rows(
+    clinic,
+    employer_id: int,
+    *,
+    search: str,
+    offset: int,
+    limit: int,
+) -> list[BillReviewRow]:
+    search_sql, params = _bill_review_filters(employer_id, search)
+    params += (offset, limit)
+
+    with get_clinic_connection(clinic) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            {_BILL_REVIEW_CTE}
+            SELECT
+                BillingHeaderId,
+                HistoryId,
+                InvoiceNumber,
+                Dos,
+                AccountNo,
+                PatientName,
+                VisitCode,
+                AmountDue
+            FROM Bills
+            WHERE AmountDue > 0
+            {search_sql}
+            ORDER BY SortDate DESC, BillingHeaderId DESC
+            OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+            """,
+            params,
         )
         rows = cursor.fetchall()
 
@@ -571,6 +661,7 @@ def list_paid_bills(
             search=search,
         )
     total_pages = max(1, (total + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
     items = _fetch_paid_bill_rows(
         clinic,
         employer_id,

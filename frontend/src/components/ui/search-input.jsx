@@ -20,7 +20,8 @@ export function SearchInput({
       <span className="sr-only">{ariaLabel}</span>
       <Search className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-muted" />
       <input
-        type="search"
+        type="text"
+        role="searchbox"
         value={value}
         onChange={onChange}
         onKeyDown={onKeyDown}

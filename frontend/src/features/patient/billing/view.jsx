@@ -2,17 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckSquare, CreditCard, Download, FileText } from "lucide-react";
+import { CheckSquare, CreditCard, Download, FileText, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import {
+  PAGE_SIZE,
+  Pagination,
+  paginateItems,
+} from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
 import { SkeletonBlock, TableSkeleton } from "@/components/ui/skeleton";
 import { MakePaymentModal } from "@/features/employer/billing/make-payment-modal";
+import { ClientServicesInvoiceModal } from "@/features/employer/billing/client-services-invoice-modal";
 import { usePatientProfile } from "@/hooks/use-patient-profile";
 import {
+  fetchPatientBillInvoice,
   fetchPatientBillReview,
   fetchPatientPaidBills,
 } from "@/lib/api/patient";
@@ -47,9 +54,17 @@ export function PatientBillingView() {
   const { profile } = usePatientProfile();
   const [tab, setTab] = useState("review");
   const [query, setQuery] = useState("");
+  const [appliedReviewSearch, setAppliedReviewSearch] = useState("");
+  const [reviewPage, setReviewPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [message, setMessage] = useState("");
+  const [transientMessageId, setTransientMessageId] = useState(0);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState(null);
+  const [invoice, setInvoice] = useState(null);
+  const [invoiceDownloadRequested, setInvoiceDownloadRequested] = useState(false);
 
   const [reviewBills, setReviewBills] = useState([]);
   const [summary, setSummary] = useState({
@@ -68,6 +83,12 @@ export function PatientBillingView() {
   const [paidError, setPaidError] = useState(null);
 
   const patientName = displayFullName(profile) || "there";
+
+  useEffect(() => {
+    if (!transientMessageId) return undefined;
+    const timer = window.setTimeout(() => setMessage(""), 10000);
+    return () => window.clearTimeout(timer);
+  }, [transientMessageId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,23 +174,39 @@ export function PatientBillingView() {
   }, [tab, query, router]);
 
   const filteredReview = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
+    const normalized = appliedReviewSearch.trim().toLowerCase();
     if (!normalized) return reviewBills;
     return reviewBills.filter((bill) => matchesReviewQuery(bill, normalized));
-  }, [reviewBills, query]);
+  }, [reviewBills, appliedReviewSearch]);
+
+  const pagedReview = useMemo(
+    () => paginateItems(filteredReview, reviewPage, PAGE_SIZE),
+    [filteredReview, reviewPage]
+  );
 
   const selectedBills = filteredReview.filter((bill) => selectedIds.has(bill.id));
   const selectedTotal = selectedBills.reduce((sum, bill) => sum + bill.amount, 0);
   const allVisibleSelected =
-    filteredReview.length > 0 &&
-    filteredReview.every((bill) => selectedIds.has(bill.id));
+    pagedReview.items.length > 0 &&
+    pagedReview.items.every((bill) => selectedIds.has(bill.id));
 
   function switchTab(nextTab) {
     setTab(nextTab);
     setQuery("");
+    setAppliedReviewSearch("");
+    setReviewPage(1);
     setSelectedIds(new Set());
     setMessage("");
     setPaymentOpen(false);
+    setInvoiceOpen(false);
+    setInvoice(null);
+    setInvoiceError(null);
+    setInvoiceDownloadRequested(false);
+  }
+
+  function applyReviewSearch() {
+    setAppliedReviewSearch(query);
+    setReviewPage(1);
   }
 
   function toggleRow(id) {
@@ -185,9 +222,9 @@ export function PatientBillingView() {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (allVisibleSelected) {
-        filteredReview.forEach((bill) => next.delete(bill.id));
+        pagedReview.items.forEach((bill) => next.delete(bill.id));
       } else {
-        filteredReview.forEach((bill) => next.add(bill.id));
+        pagedReview.items.forEach((bill) => next.add(bill.id));
       }
       return next;
     });
@@ -210,21 +247,41 @@ export function PatientBillingView() {
     );
   }
 
-  function handleInvoice(bill) {
-    const invoicePart = bill.invoiceNumber
-      ? `Invoice ${bill.invoiceNumber}`
-      : "No invoice number yet";
-    setMessage(
-      `${invoicePart} · ${bill.incidentNo} · ${bill.provider} · ${formatMoney(
-        bill.amount
-      )}.`
-    );
-  }
+  async function handleInvoice(bill, { download = false } = {}) {
+    if (!bill?.billingHeaderId) return;
+    const token = getAccessToken();
+    if (!token) {
+      router.replace(patientPaths.login);
+      return;
+    }
 
-  function handleDownload(bill) {
-    setMessage(
-      `Invoice ${bill.invoiceNo} · ${bill.provider} · ${formatMoney(bill.amount)}.`
-    );
+    setMessage("");
+    setInvoiceOpen(!download);
+    setInvoiceLoading(true);
+    setInvoiceError(null);
+    setInvoice(null);
+    setInvoiceDownloadRequested(download);
+    try {
+      const detail = await fetchPatientBillInvoice(
+        token,
+        bill.billingHeaderId,
+        download ? bill.historyId : null
+      );
+      setInvoice(detail);
+    } catch (err) {
+      if (err?.status === 401) {
+        router.replace(patientPaths.login);
+        return;
+      }
+      const errorMessage = err?.message || "Unable to load invoice.";
+      setInvoiceError(errorMessage);
+      if (download) {
+        setInvoiceDownloadRequested(false);
+        setMessage(errorMessage);
+      }
+    } finally {
+      setInvoiceLoading(false);
+    }
   }
 
   return (
@@ -234,6 +291,29 @@ export function PatientBillingView() {
         bills={selectedBills}
         onClose={() => setPaymentOpen(false)}
         onSubmit={handlePaymentSubmit}
+      />
+      <ClientServicesInvoiceModal
+        open={invoiceOpen || invoiceDownloadRequested}
+        invoice={invoice}
+        loading={invoiceLoading}
+        error={invoiceError}
+        downloadOnLoad={invoiceDownloadRequested}
+        onDownloadComplete={(downloadError) => {
+          setInvoiceDownloadRequested(false);
+          setInvoice(null);
+          if (downloadError) {
+            setMessage(downloadError.message || "Unable to download invoice.");
+            return;
+          }
+          setMessage("Invoice PDF downloaded.");
+          setTransientMessageId((id) => id + 1);
+        }}
+        onClose={() => {
+          setInvoiceOpen(false);
+          setInvoice(null);
+          setInvoiceError(null);
+          setInvoiceDownloadRequested(false);
+        }}
       />
       <PageHeader
         title="Billing"
@@ -338,17 +418,42 @@ export function PatientBillingView() {
             Total paid {formatMoney(paidTotal)}
           </span>
         ) : null}
-        <SearchInput
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={
-            tab === "paid"
-              ? "Search by provider, incident, or invoice..."
-              : "Search by provider, insurance, incident, or incident #..."
-          }
-          ariaLabel={tab === "paid" ? "Search paid bills" : "Search bills"}
-          className="min-w-0 flex-1"
-        />
+        <form
+          className="flex min-w-0 flex-1 items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (tab === "review") applyReviewSearch();
+          }}
+        >
+          <SearchInput
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onClear={
+              tab === "review"
+                ? () => {
+                    setAppliedReviewSearch("");
+                    setReviewPage(1);
+                  }
+                : undefined
+            }
+            placeholder={
+              tab === "paid"
+                ? "Search by provider, incident, or invoice..."
+                : "Search by provider, insurance, incident, or incident #..."
+            }
+            ariaLabel={tab === "paid" ? "Search paid bills" : "Search bills"}
+            className="min-w-0 flex-1"
+          />
+          {tab === "review" ? (
+            <Button
+              type="submit"
+              className="h-[3.15rem] shrink-0 rounded-2xl px-5"
+            >
+              <Search className="h-4 w-4" />
+              Search
+            </Button>
+          ) : null}
+        </form>
       </div>
 
       {message ? (
@@ -378,7 +483,7 @@ export function PatientBillingView() {
             <EmptyState
               title="No bills found"
               description={
-                query.trim()
+                appliedReviewSearch.trim()
                   ? "Try another search or clear the filter."
                   : "No Urgent Care or Personal Injury bills with an open balance."
               }
@@ -409,7 +514,7 @@ export function PatientBillingView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filteredReview.map((bill) => {
+                  {pagedReview.items.map((bill) => {
                     const checked = selectedIds.has(bill.id);
                     return (
                       <tr
@@ -468,6 +573,18 @@ export function PatientBillingView() {
               </table>
             </div>
           )}
+
+          {!reviewLoading && !reviewError && filteredReview.length > 0 ? (
+            <Pagination
+              page={pagedReview.currentPage}
+              totalPages={pagedReview.totalPages}
+              total={pagedReview.total}
+              start={pagedReview.start}
+              end={pagedReview.end}
+              onChange={setReviewPage}
+              alwaysShow
+            />
+          ) : null}
 
           <div className="flex flex-col gap-3 border-t border-border/70 bg-cream/40 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <p className="inline-flex items-center gap-2 text-sm font-medium text-ink">
@@ -562,7 +679,7 @@ export function PatientBillingView() {
                       <td className="px-4 py-3.5 text-center sm:px-5 sm:py-4">
                         <button
                           type="button"
-                          onClick={() => handleDownload(bill)}
+                          onClick={() => handleInvoice(bill, { download: true })}
                           aria-label={`Open invoice ${bill.invoiceNo}`}
                           className="inline-flex cursor-pointer rounded-lg p-1.5 text-primary hover:bg-primary-50"
                         >

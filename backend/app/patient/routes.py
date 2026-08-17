@@ -14,6 +14,7 @@ from app.employer.schemas import (
     AppointmentProviderOption,
     AppointmentSlotsResponse,
     AppointmentVisitTypeOption,
+    BillInvoiceDetail,
     SharedDocumentDetailResponse,
     SupportClinicInfoResponse,
     SupportMessageDetail,
@@ -27,7 +28,7 @@ from app.patient.appointments import (
     list_appointments,
     list_upcoming_appointments,
 )
-from app.patient.billing import list_bill_review, list_paid_bills
+from app.patient.billing import get_bill_invoice, list_bill_review, list_paid_bills
 from app.patient.booking import (
     book_appointment,
     list_available_slots,
@@ -124,6 +125,22 @@ def patient_billing_review_endpoint(
     bills for the logged-in patient. SELECT-only.
     """
     return list_bill_review(current_user)
+
+
+@router.get(
+    "/billing/review/{billing_header_id}/invoice",
+    response_model=BillInvoiceDetail,
+)
+def patient_billing_invoice_endpoint(
+    billing_header_id: int,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    history_id: Annotated[int | None, Query(alias="historyId", gt=0)] = None,
+):
+    """
+    Client Services invoice detail for one bill (SELECT-only).
+    Same template as employer billing. Scoped to the logged-in patient.
+    """
+    return get_bill_invoice(current_user, billing_header_id, history_id=history_id)
 
 
 @router.get("/billing/paid", response_model=PatientPaidBillsResponse)

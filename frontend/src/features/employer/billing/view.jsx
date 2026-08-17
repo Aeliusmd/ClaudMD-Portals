@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   Receipt,
+  Search,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,10 @@ import {
 } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { EMPLOYER_LOGIN_PATH } from "@/lib/portal-paths";
+import { searchQueryError } from "@/lib/text-validation";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE = 10;
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("en-US", {
@@ -35,11 +39,49 @@ function formatMoney(amount) {
   }).format(amount);
 }
 
-function matchesReviewQuery(bill, query) {
-  const haystack = [bill.patientName, bill.accountNo, bill.visit, bill.dos]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(query);
+function PaginationFooter({
+  page,
+  totalPages,
+  totalCount,
+  label,
+  onPrevious,
+  onNext,
+}) {
+  const start = (page - 1) * PAGE_SIZE + 1;
+  const end = Math.min(page * PAGE_SIZE, totalCount);
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border/70 bg-cream/40 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <p className="text-sm text-muted">
+        Showing {start}–{end} of {totalCount} {label}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={page <= 1}
+          onClick={onPrevious}
+          className="gap-1.5 px-3.5 py-2"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Previous
+        </Button>
+        <span className="min-w-20 text-center text-sm font-medium text-ink">
+          Page {page} of {totalPages}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={page >= totalPages}
+          onClick={onNext}
+          className="gap-1.5 px-3.5 py-2"
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function OverviewCard({ label, value, detail, icon, iconWrap, featured = false }) {
@@ -89,6 +131,8 @@ export function EmployerBillingView() {
   const router = useRouter();
   const [tab, setTab] = useState("review");
   const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [searchError, setSearchError] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [message, setMessage] = useState("");
   const [transientMessageId, setTransientMessageId] = useState(0);
@@ -110,6 +154,9 @@ export function EmployerBillingView() {
   const [reviewBills, setReviewBills] = useState([]);
   const [payableCount, setPayableCount] = useState(0);
   const [outstandingTotal, setOutstandingTotal] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [reviewPage, setReviewPage] = useState(1);
+  const [reviewTotalPages, setReviewTotalPages] = useState(1);
   const [reviewLoading, setReviewLoading] = useState(true);
   const [reviewError, setReviewError] = useState(null);
 
@@ -123,7 +170,8 @@ export function EmployerBillingView() {
     if (tab !== "paid") return undefined;
 
     let cancelled = false;
-    const timer = window.setTimeout(async () => {
+
+    async function loadPaid() {
       const token = getAccessToken();
       if (!token) {
         router.replace(EMPLOYER_LOGIN_PATH);
@@ -134,14 +182,15 @@ export function EmployerBillingView() {
       try {
         const data = await fetchEmployerPaidBills(token, {
           page: paidPage,
-          pageSize: 10,
-          search: query,
+          pageSize: PAGE_SIZE,
+          search: appliedQuery,
         });
         if (cancelled) return;
         setPaidBills(data.items);
         setPaidTotal(data.totalPaid);
         setPaidCount(data.total);
         setPaidTotalPages(data.totalPages);
+        setPaidPage(data.page);
         setPaidPhysicalOnly(data.physicalOnly);
         setPaidError(null);
       } catch (err) {
@@ -159,13 +208,13 @@ export function EmployerBillingView() {
       } finally {
         if (!cancelled) setPaidLoading(false);
       }
-    }, 300);
+    }
 
+    loadPaid();
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
     };
-  }, [paidPage, query, router, tab]);
+  }, [appliedQuery, paidPage, router, tab]);
 
   useEffect(() => {
     if (tab !== "review") return undefined;
@@ -181,11 +230,18 @@ export function EmployerBillingView() {
 
       setReviewLoading(true);
       try {
-        const data = await fetchEmployerBillReview(token);
+        const data = await fetchEmployerBillReview(token, {
+          page: reviewPage,
+          pageSize: PAGE_SIZE,
+          search: appliedQuery,
+        });
         if (cancelled) return;
         setReviewBills(data.items);
         setPayableCount(data.payableCount);
         setOutstandingTotal(data.outstandingTotal);
+        setReviewCount(data.total);
+        setReviewTotalPages(data.totalPages);
+        setReviewPage(data.page);
         setReviewError(null);
         setSelectedIds(new Set());
       } catch (err) {
@@ -198,6 +254,8 @@ export function EmployerBillingView() {
         setReviewBills([]);
         setPayableCount(0);
         setOutstandingTotal(0);
+        setReviewCount(0);
+        setReviewTotalPages(1);
       } finally {
         if (!cancelled) setReviewLoading(false);
       }
@@ -207,27 +265,24 @@ export function EmployerBillingView() {
     return () => {
       cancelled = true;
     };
-  }, [router, tab]);
+  }, [appliedQuery, reviewPage, router, tab]);
 
-  const filteredReview = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return reviewBills;
-    return reviewBills.filter((bill) => matchesReviewQuery(bill, normalized));
-  }, [reviewBills, query]);
-
-  const selectedBills = filteredReview.filter((bill) => selectedIds.has(bill.id));
+  const selectedBills = useMemo(
+    () => reviewBills.filter((bill) => selectedIds.has(bill.id)),
+    [reviewBills, selectedIds]
+  );
   const selectedTotal = selectedBills.reduce((sum, bill) => sum + bill.amount, 0);
   const allVisibleSelected =
-    filteredReview.length > 0 &&
-    filteredReview.every((bill) => selectedIds.has(bill.id));
+    reviewBills.length > 0 &&
+    reviewBills.every((bill) => selectedIds.has(bill.id));
 
   function toggleAllVisible() {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (allVisibleSelected) {
-        filteredReview.forEach((bill) => next.delete(bill.id));
+        reviewBills.forEach((bill) => next.delete(bill.id));
       } else {
-        filteredReview.forEach((bill) => next.add(bill.id));
+        reviewBills.forEach((bill) => next.add(bill.id));
       }
       return next;
     });
@@ -242,11 +297,50 @@ export function EmployerBillingView() {
     });
   }
 
+  function resetPaging() {
+    setPaidPage(1);
+    setReviewPage(1);
+  }
+
+  function applySearch() {
+    const next = query.trim();
+    if (!next) return;
+    const invalid = searchQueryError(next);
+    if (invalid) {
+      setSearchError(invalid);
+      return;
+    }
+    setSearchError(null);
+    resetPaging();
+    setAppliedQuery(next);
+  }
+
+  function clearSearch() {
+    setQuery("");
+    setSearchError(null);
+    resetPaging();
+    setAppliedQuery("");
+  }
+
+  function handleQueryChange(event) {
+    const next = event.target.value;
+    setQuery(next);
+    setSearchError(searchQueryError(next));
+    // Emptying the box drops the applied filter so results never look stale.
+    if (!next.trim() && appliedQuery) {
+      resetPaging();
+      setAppliedQuery("");
+    }
+  }
+
   function switchTab(nextTab) {
     setTab(nextTab);
     setQuery("");
+    setAppliedQuery("");
+    setSearchError(null);
     setSelectedIds(new Set());
     setPaidPage(1);
+    setReviewPage(1);
     setMessage("");
     setPaymentOpen(false);
     setInvoiceOpen(false);
@@ -427,7 +521,7 @@ export function EmployerBillingView() {
               />
               <OverviewCard
                 label="Total bills"
-                value={reviewBills.length}
+                value={reviewCount}
                 detail="In bill review"
                 iconWrap="bg-cream-deep text-foreground-700"
                 icon={<Clock3 className="h-5 w-5" />}
@@ -446,19 +540,48 @@ export function EmployerBillingView() {
         </div>
       )}
 
-      <SearchInput
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          if (tab === "paid") setPaidPage(1);
-        }}
-        placeholder={
-          tab === "paid"
-            ? "Search by name, acct #, visit, or invoice..."
-            : "Search by name, acct #, or visit..."
-        }
-        ariaLabel={tab === "paid" ? "Search paid bills" : "Search bills"}
-      />
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+        <SearchInput
+          className="flex-1"
+          value={query}
+          onChange={handleQueryChange}
+          onClear={clearSearch}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              applySearch();
+            }
+          }}
+          placeholder={
+            tab === "paid"
+              ? "Search by name, acct #, visit, or invoice..."
+              : "Search by name, acct #, visit, or DOS..."
+          }
+          ariaLabel={tab === "paid" ? "Search paid bills" : "Search bills"}
+        />
+        <Button
+          type="button"
+          onClick={applySearch}
+          disabled={!query.trim() || Boolean(searchError)}
+          className="h-[3.15rem] shrink-0 rounded-2xl px-6 sm:w-auto"
+        >
+          <Search className="h-4 w-4" strokeWidth={2.25} />
+          Search
+        </Button>
+      </div>
+
+      {searchError ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {searchError}
+        </p>
+      ) : null}
+
+      {appliedQuery && !searchError ? (
+        <p className="text-sm text-muted">
+          Showing results for{" "}
+          <span className="font-semibold text-ink">“{appliedQuery}”</span>
+        </p>
+      ) : null}
 
       {message ? (
         <p className="rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-sm text-primary-800">
@@ -476,11 +599,11 @@ export function EmployerBillingView() {
             <div className="px-5 py-8 text-sm font-medium text-rose-700">
               {reviewError}
             </div>
-          ) : filteredReview.length === 0 ? (
+          ) : reviewBills.length === 0 ? (
             <EmptyState
               title="No bills found"
               description={
-                query.trim()
+                appliedQuery
                   ? "Try another search or clear the filter."
                   : "No Physical-category bills with an open balance for your organization."
               }
@@ -509,7 +632,7 @@ export function EmployerBillingView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filteredReview.map((bill) => {
+                  {reviewBills.map((bill) => {
                     const checked = selectedIds.has(bill.id);
                     return (
                       <tr
@@ -563,6 +686,19 @@ export function EmployerBillingView() {
             </div>
           )}
 
+          {!reviewLoading && !reviewError && reviewCount > 0 ? (
+            <PaginationFooter
+              page={reviewPage}
+              totalPages={reviewTotalPages}
+              totalCount={reviewCount}
+              label="bills"
+              onPrevious={() => setReviewPage((page) => Math.max(1, page - 1))}
+              onNext={() =>
+                setReviewPage((page) => Math.min(reviewTotalPages, page + 1))
+              }
+            />
+          ) : null}
+
           <div className="flex flex-col gap-3 border-t border-border/70 bg-cream/40 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <p className="text-sm font-medium text-ink">
               {selectedBills.length} selected
@@ -599,7 +735,7 @@ export function EmployerBillingView() {
             <EmptyState
               title="No paid bills found"
               description={
-                query.trim()
+                appliedQuery
                   ? "Try another search, or switch back to Bill Review."
                   : "No payments are on file for your organization yet."
               }
@@ -657,39 +793,16 @@ export function EmployerBillingView() {
             </div>
           )}
           {!paidLoading && !paidError && paidCount > 0 ? (
-            <div className="flex flex-col gap-3 border-t border-border/70 bg-cream/40 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <p className="text-sm text-muted">
-                Showing {(paidPage - 1) * 10 + 1}–
-                {Math.min(paidPage * 10, paidCount)} of {paidCount}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={paidPage <= 1}
-                  onClick={() => setPaidPage((page) => Math.max(1, page - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <span className="min-w-20 text-center text-sm font-medium text-ink">
-                  Page {paidPage} of {paidTotalPages}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={paidPage >= paidTotalPages}
-                  onClick={() =>
-                    setPaidPage((page) => Math.min(paidTotalPages, page + 1))
-                  }
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <PaginationFooter
+              page={paidPage}
+              totalPages={paidTotalPages}
+              totalCount={paidCount}
+              label="payments"
+              onPrevious={() => setPaidPage((page) => Math.max(1, page - 1))}
+              onNext={() =>
+                setPaidPage((page) => Math.min(paidTotalPages, page + 1))
+              }
+            />
           ) : null}
         </Card>
       )}

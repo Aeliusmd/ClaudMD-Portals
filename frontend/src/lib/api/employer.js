@@ -172,9 +172,17 @@ export async function fetchEmployerDashboardSummary(accessToken) {
   };
 }
 
-export async function fetchEmployerBillReview(accessToken) {
+export async function fetchEmployerBillReview(
+  accessToken,
+  { page = 1, pageSize = 10, search = "" } = {}
+) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  if (search.trim()) params.set("search", search.trim());
   const data = await employerFetch(
-    "/api/employer/billing/review",
+    `/api/employer/billing/review?${params.toString()}`,
     accessToken,
     "Unable to load bill review."
   );
@@ -184,6 +192,9 @@ export async function fetchEmployerBillReview(accessToken) {
     total: data.total ?? 0,
     payableCount: data.payable_count ?? 0,
     outstandingTotal: Number(data.outstanding_total ?? 0),
+    page: data.page ?? page,
+    pageSize: data.page_size ?? pageSize,
+    totalPages: data.total_pages ?? 1,
     items: (data.items || []).map((row) => ({
       id: row.id,
       billingHeaderId: row.billing_header_id,

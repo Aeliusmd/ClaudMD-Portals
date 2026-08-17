@@ -558,6 +558,9 @@ class BillReviewResponse(BaseModel):
     payable_count: int = 0
     outstanding_total: float = 0
     employer_id: int | None = None
+    page: int = 1
+    page_size: int = 10
+    total_pages: int = 1
 
 
 class BillInvoiceLine(BaseModel):

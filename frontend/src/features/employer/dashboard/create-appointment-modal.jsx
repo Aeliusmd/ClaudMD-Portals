@@ -42,7 +42,7 @@ function isAllSameDigit(value) {
   return digits.length > 0 && /^(\d)\1+$/.test(digits);
 }
 
-/** Names may include letters, spaces, hyphen, apostrophe, period — not digits. */
+/** City: letters and punctuation allowed; digits are stripped. */
 function sanitizePersonName(value) {
   return String(value || "").replace(/\d/g, "");
 }
@@ -52,6 +52,23 @@ function personNameError(value, label) {
   if (!trimmed) return `Enter ${label}.`;
   if (/\d/.test(trimmed)) {
     return `${label.charAt(0).toUpperCase()}${label.slice(1)} cannot contain numbers.`;
+  }
+  return null;
+}
+
+/** First/last name: letters and spaces only — no digits or special characters. */
+function sanitizePatientGivenName(value) {
+  return String(value || "").replace(/[^\p{L}\s]/gu, "");
+}
+
+function patientGivenNameError(value, label) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return `Enter ${label}.`;
+  if (/\d/.test(trimmed)) {
+    return `${label.charAt(0).toUpperCase()}${label.slice(1)} cannot contain numbers.`;
+  }
+  if (/[^\p{L}\s]/u.test(trimmed)) {
+    return `${label.charAt(0).toUpperCase()}${label.slice(1)} cannot contain special characters.`;
   }
   return null;
 }
@@ -532,9 +549,9 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
 
   function validateNewPatient() {
     const next = {};
-    const firstNameErr = personNameError(newPatient.firstName, "first name");
+    const firstNameErr = patientGivenNameError(newPatient.firstName, "first name");
     if (firstNameErr) next.firstName = firstNameErr;
-    const lastNameErr = personNameError(newPatient.lastName, "last name");
+    const lastNameErr = patientGivenNameError(newPatient.lastName, "last name");
     if (lastNameErr) next.lastName = lastNameErr;
     if (!newPatient.dateOfBirth) {
       next.dateOfBirth = "Enter date of birth.";
@@ -879,6 +896,8 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                   onChange={applyPatient}
                   options={patientOptions}
                   placeholder="Select patient (employee)..."
+                  searchPlaceholder="Search patient..."
+                  searchable
                   error={Boolean(errors.patientId)}
                   disabled={showAddPatient}
                 />
@@ -902,7 +921,10 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                       autoComplete="given-name"
                       value={newPatient.firstName}
                       onChange={(e) =>
-                        setPatientField("firstName", sanitizePersonName(e.target.value))
+                        setPatientField(
+                          "firstName",
+                          sanitizePatientGivenName(e.target.value)
+                        )
                       }
                       className={cn(
                         controlClass,
@@ -921,7 +943,10 @@ export function CreateAppointmentModal({ open, onClose, onCreate }) {
                       autoComplete="family-name"
                       value={newPatient.lastName}
                       onChange={(e) =>
-                        setPatientField("lastName", sanitizePersonName(e.target.value))
+                        setPatientField(
+                          "lastName",
+                          sanitizePatientGivenName(e.target.value)
+                        )
                       }
                       className={cn(
                         controlClass,

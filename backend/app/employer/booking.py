@@ -990,12 +990,22 @@ def _validate_new_patient_payload(new_patient: NewPatientPayload) -> None:
             status_code=400,
             detail="First name cannot contain numbers.",
         )
+    if any(not (ch.isalpha() or ch.isspace()) for ch in first_name):
+        raise HTTPException(
+            status_code=400,
+            detail="First name cannot contain special characters.",
+        )
     if not last_name:
         raise HTTPException(status_code=400, detail="Last name is required.")
     if any(ch.isdigit() for ch in last_name):
         raise HTTPException(
             status_code=400,
             detail="Last name cannot contain numbers.",
+        )
+    if any(not (ch.isalpha() or ch.isspace()) for ch in last_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Last name cannot contain special characters.",
         )
     if not new_patient.date_of_birth:
         raise HTTPException(status_code=400, detail="Date of birth is required.")

@@ -199,7 +199,7 @@ def employer_paid_bills_endpoint(
         current_user,
         page=page,
         page_size=page_size,
-        search=(search or "").strip(),
+        search=sanitize_search_query(search) or "",
     )
 
 
@@ -232,7 +232,7 @@ def employer_billing_review_endpoint(
         current_user,
         page=page,
         page_size=page_size,
-        search=(search or "").strip(),
+        search=sanitize_search_query(search) or "",
     )
 
 

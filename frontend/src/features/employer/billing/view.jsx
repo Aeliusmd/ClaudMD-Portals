@@ -27,6 +27,7 @@ import {
 } from "@/lib/api/employer";
 import { getAccessToken } from "@/lib/auth-session";
 import { EMPLOYER_LOGIN_PATH } from "@/lib/portal-paths";
+import { searchQueryError } from "@/lib/text-validation";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -131,6 +132,7 @@ export function EmployerBillingView() {
   const [tab, setTab] = useState("review");
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
+  const [searchError, setSearchError] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [message, setMessage] = useState("");
   const [transientMessageId, setTransientMessageId] = useState(0);
@@ -303,12 +305,19 @@ export function EmployerBillingView() {
   function applySearch() {
     const next = query.trim();
     if (!next) return;
+    const invalid = searchQueryError(next);
+    if (invalid) {
+      setSearchError(invalid);
+      return;
+    }
+    setSearchError(null);
     resetPaging();
     setAppliedQuery(next);
   }
 
   function clearSearch() {
     setQuery("");
+    setSearchError(null);
     resetPaging();
     setAppliedQuery("");
   }
@@ -316,6 +325,7 @@ export function EmployerBillingView() {
   function handleQueryChange(event) {
     const next = event.target.value;
     setQuery(next);
+    setSearchError(searchQueryError(next));
     // Emptying the box drops the applied filter so results never look stale.
     if (!next.trim() && appliedQuery) {
       resetPaging();
@@ -327,6 +337,7 @@ export function EmployerBillingView() {
     setTab(nextTab);
     setQuery("");
     setAppliedQuery("");
+    setSearchError(null);
     setSelectedIds(new Set());
     setPaidPage(1);
     setReviewPage(1);
@@ -551,7 +562,7 @@ export function EmployerBillingView() {
         <Button
           type="button"
           onClick={applySearch}
-          disabled={!query.trim()}
+          disabled={!query.trim() || Boolean(searchError)}
           className="h-[3.15rem] shrink-0 rounded-2xl px-6 sm:w-auto"
         >
           <Search className="h-4 w-4" strokeWidth={2.25} />
@@ -559,7 +570,13 @@ export function EmployerBillingView() {
         </Button>
       </div>
 
-      {appliedQuery ? (
+      {searchError ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {searchError}
+        </p>
+      ) : null}
+
+      {appliedQuery && !searchError ? (
         <p className="text-sm text-muted">
           Showing results for{" "}
           <span className="font-semibold text-ink">“{appliedQuery}”</span>

@@ -551,6 +551,39 @@ export async function bookAppointment(accessToken, payload) {
   };
 }
 
+export async function bookBulkAppointments(accessToken, { items } = {}) {
+  const data = await employerFetch(
+    "/api/employer/appointments/book-bulk",
+    accessToken,
+    "Unable to book bulk appointments.",
+    {
+      method: "POST",
+      body: { items: items || [] },
+    }
+  );
+
+  return {
+    bookedCount: data.booked_count ?? 0,
+    failedCount: data.failed_count ?? 0,
+    message: data.message || "",
+    items: (data.items || []).map((row) => ({
+      clientId: row.client_id,
+      ok: row.ok === true,
+      error: row.error || null,
+      booking: row.booking
+        ? {
+            executed: row.booking.executed === true,
+            message: row.booking.message,
+            patientId: row.booking.patient_id,
+            patientSsn: row.booking.patient_ssn ?? null,
+            appointmentId: row.booking.appointment_id,
+            scheduleId: row.booking.schedule_id,
+          }
+        : null,
+    })),
+  };
+}
+
 /** @deprecated Use bookAppointment — still points at the booking endpoint. */
 export async function prepareAppointmentInsert(accessToken, payload) {
   return bookAppointment(accessToken, payload);

@@ -12,6 +12,7 @@ from app.employer.appointments import (
 )
 from app.employer.booking import (
     book_appointment,
+    book_bulk_appointments,
     list_available_slots,
     list_booking_locations,
     list_booking_patients,
@@ -45,6 +46,8 @@ from app.employer.schemas import (
     AppointmentProviderOption,
     AppointmentSlotsResponse,
     AppointmentVisitTypeOption,
+    BulkAppointmentBookRequest,
+    BulkAppointmentBookResponse,
     BillInvoiceDetail,
     BillReviewResponse,
     DashboardSummaryResponse,
@@ -493,6 +496,21 @@ def employer_appointment_book_endpoint(
     No schema changes.
     """
     return book_appointment(current_user, payload)
+
+
+@router.post(
+    "/appointments/book-bulk",
+    response_model=BulkAppointmentBookResponse,
+)
+def employer_appointment_book_bulk_endpoint(
+    payload: BulkAppointmentBookRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    Book every appointment in the employer bulk list using the same INSERT path
+    as POST /appointments/book. Does not change single-appointment booking.
+    """
+    return book_bulk_appointments(current_user, payload)
 
 
 @router.get("/support/clinic", response_model=SupportClinicInfoResponse)

@@ -1,7 +1,8 @@
 """Employer billing: paid bills and Physical-category Bill Review (SELECT only).
 
-Paid bills use BillingOrderPayments. Bill Review uses BillingHeaders /
-BillingHeadersHistory / BillingOrdersHistory / Patients / CheckInsHeader / VisitTypes.
+Paid bills use BillingOrderPayments. Bill Review follows mother
+Get_DailyBillingDashboard_Client: CheckInsHeader + VisitTypes (Physical) +
+this employer's CheckInsHeader.EmployerId, with BillingHeaders attached when present.
 """
 
 from __future__ import annotations
@@ -26,6 +27,82 @@ from app.employer.schemas import (
 PHYSICAL_VISIT_CATEGORY_ID = 2
 
 
+def _load_live_ehr_invoice_lines(
+    cursor,
+    *,
+    billing_header_id: int,
+    checkin_id: int | None,
+    exam_date: str | None,
+) -> list[BillInvoiceLine]:
+    """Live visit services from EHROrderServices when billed history lines are absent."""
+    params: list = [int(billing_header_id)]
+    checkin_sql = ""
+    if checkin_id is not None:
+        checkin_sql = " OR o.CheckInId = ?"
+        params.append(int(checkin_id))
+
+    cursor.execute(
+        f"""
+        SELECT
+            s.Id,
+            sc.Code AS CPTCode,
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(sc.Description)), ''),
+                NULLIF(LTRIM(RTRIM(s.AdditionalInformation)), '')
+            ) AS Description,
+            s.Quantity,
+            s.UnitPrice,
+            s.TotalAmount,
+            s.PaymentAmount,
+            s.AdjustAmount
+        FROM dbo.EHROrders o
+        INNER JOIN dbo.EHROrderServices s
+            ON s.OrderId = o.Id
+           AND (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
+        LEFT JOIN dbo.ServiceCodes sc
+            ON sc.Id = s.ServiceCodeId
+           AND (sc.IsDeleted = 0 OR sc.IsDeleted IS NULL)
+        WHERE (o.IsDeleted = 0 OR o.IsDeleted IS NULL)
+          AND (
+                o.BillingHeaderId = ?
+                {checkin_sql}
+              )
+        ORDER BY
+            CASE WHEN s.SortOrder IS NULL THEN 1 ELSE 0 END,
+            s.SortOrder,
+            s.Id
+        """,
+        tuple(params),
+    )
+    lines: list[BillInvoiceLine] = []
+    exam = (exam_date or "").strip() or None
+    for row in cursor.fetchall():
+        qty = float(row.Quantity or 1)
+        unit = float(row.UnitPrice or 0)
+        charges = float(
+            row.TotalAmount
+            if row.TotalAmount is not None
+            else (unit * (qty if qty else 1))
+        )
+        payment = float(row.PaymentAmount or 0)
+        adjust = float(row.AdjustAmount or 0)
+        lines.append(
+            BillInvoiceLine(
+                id=int(row.Id),
+                exam_date=exam,
+                code=(row.CPTCode or "").strip() or None,
+                description=(row.Description or "").strip() or None,
+                quantity=qty if qty else 1,
+                unit_price=unit,
+                charges=charges,
+                payment=payment,
+                adjust=adjust,
+                balance=max(0.0, charges - payment - adjust),
+            )
+        )
+    return lines
+
+
 def list_bill_review(
     current_user: CurrentUser,
     *,
@@ -48,7 +125,9 @@ def list_bill_review(
         )
 
     employer_id = int(profile.employer_id)
-    total, outstanding = _bill_review_summary(clinic, employer_id, search=search)
+    total, payable_count, outstanding = _bill_review_summary(
+        clinic, employer_id, search=search
+    )
     total_pages = max(1, (total + page_size - 1) // page_size)
     page = max(1, min(page, total_pages))
     items = _fetch_bill_review_rows(
@@ -62,7 +141,7 @@ def list_bill_review(
     return BillReviewResponse(
         items=items,
         total=total,
-        payable_count=total,
+        payable_count=payable_count,
         outstanding_total=round(outstanding, 2),
         employer_id=profile.employer_id,
         page=page,
@@ -71,17 +150,19 @@ def list_bill_review(
     )
 
 
-# One row per BillingHeaders.Id (latest history snapshot when present).
-# Physical filter: VisitTypes.CategoryId = 2, or header VisitTypeCategoryId = 2
-# when the visit type row is missing.
+# One row per Physical check-in for this employer (mother daily client billing).
+# Employer comes from CheckInsHeader.EmployerId. BillingHeaders is attached when present.
+# Amount prefers unbilled EHROrderServices.UnitPrice (same as the SP); falls back to
+# header / history balance so Pay still has an amount when unit price is 0.
 _BILL_REVIEW_CTE = """
 WITH Bills AS (
     SELECT
+        ch.Id AS CheckInId,
         bh.Id AS BillingHeaderId,
         hist.Id AS HistoryId,
         hist.InvoiceNumber AS InvoiceNumber,
-        COALESCE(ch.CheckInDate, hist.CheckinDate) AS SortDate,
-        CONVERT(varchar(10), COALESCE(ch.CheckInDate, hist.CheckinDate), 101) AS Dos,
+        ch.CheckInDate AS SortDate,
+        CONVERT(varchar(10), ch.CheckInDate, 101) AS Dos,
         COALESCE(
             NULLIF(LTRIM(RTRIM(CAST(p.AccountNumber AS nvarchar(50)))), ''),
             NULLIF(LTRIM(RTRIM(hist.PatientAccountNumber)), '')
@@ -109,6 +190,7 @@ WITH Bills AS (
             '—'
         ) AS VisitCode,
         CASE
+            WHEN ISNULL(unbilled.UnbilledCharge, 0) > 0 THEN unbilled.UnbilledCharge
             WHEN hist.Id IS NOT NULL THEN
                 COALESCE(
                     bal.SumBalance,
@@ -125,21 +207,34 @@ WITH Bills AS (
                     ELSE CAST(0 AS decimal(18, 3))
                 END
         END AS AmountDue
-    FROM dbo.BillingHeaders bh
-    LEFT JOIN dbo.VisitTypes vt
-        ON vt.Id = bh.VisitTypeId
-       AND (vt.IsDeleted = 0 OR vt.IsDeleted IS NULL)
+    FROM dbo.CheckInsHeader ch
+    INNER JOIN dbo.VisitTypes vt
+        ON vt.Id = ch.VisitTypeId
+    OUTER APPLY (
+        SELECT TOP 1 b.IsDeleted
+        FROM dbo.BillingBatchVisitTypes b
+        WHERE b.VisitTypeId = ch.VisitTypeId
+        ORDER BY
+            CASE WHEN b.IsDeleted = 1 THEN 1 ELSE 0 END,
+            b.Id
+    ) bbvt
     LEFT JOIN dbo.Patients p
-        ON p.Id = bh.PatientId
+        ON p.Id = ch.PatientId
        AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
-    LEFT JOIN dbo.CheckInsHeader ch
-        ON ch.Id = bh.CheckinId
-       AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+    OUTER APPLY (
+        SELECT TOP 1
+            h.Id,
+            h.TotalCharge,
+            h.PaidAmount
+        FROM dbo.BillingHeaders h
+        WHERE h.CheckinId = ch.Id
+          AND (h.IsDeleted = 0 OR h.IsDeleted IS NULL)
+        ORDER BY h.Id DESC
+    ) bh
     OUTER APPLY (
         SELECT TOP 1
             h.Id,
             h.InvoiceNumber,
-            h.CheckinDate,
             h.PatientAccountNumber,
             h.PatientFirstName,
             h.PatientLastName,
@@ -156,12 +251,22 @@ WITH Bills AS (
         WHERE boh.BillingHeaderHistoryId = hist.Id
           AND (boh.IsDeleted = 0 OR boh.IsDeleted IS NULL)
     ) bal
-    WHERE (bh.IsDeleted = 0 OR bh.IsDeleted IS NULL)
-      AND bh.EmployerId = ?
-      AND (
-            vt.CategoryId = ?
-         OR (vt.Id IS NULL AND bh.VisitTypeCategoryId = ?)
-      )
+    OUTER APPLY (
+        SELECT ISNULL(SUM(os.UnitPrice), 0) AS UnbilledCharge
+        FROM dbo.EHROrders o
+        INNER JOIN dbo.EHROrderServices os
+            ON os.OrderId = o.Id
+        WHERE o.CheckInId = ch.Id
+          AND (o.IsDeleted = 0 OR o.IsDeleted IS NULL)
+          AND (os.IsDeleted = 0 OR os.IsDeleted IS NULL)
+          AND (os.IsBilled = 0 OR os.IsBilled IS NULL)
+    ) unbilled
+    WHERE ch.CheckInDate IS NOT NULL
+      AND (ch.IsDeleted = 0 OR ch.IsDeleted IS NULL)
+      AND (ch.IsCompleteBill = 0 OR ch.IsCompleteBill IS NULL)
+      AND (bbvt.IsDeleted = 0 OR bbvt.IsDeleted IS NULL)
+      AND ch.EmployerId = ?
+      AND vt.CategoryId = ?
 )
 """
 
@@ -180,7 +285,6 @@ def _bill_review_filters(employer_id: int, search: str) -> tuple[str, tuple]:
     params: tuple = (
         employer_id,
         PHYSICAL_VISIT_CATEGORY_ID,
-        PHYSICAL_VISIT_CATEGORY_ID,
     )
     if not search:
         return "", params
@@ -193,7 +297,7 @@ def _bill_review_summary(
     employer_id: int,
     *,
     search: str,
-) -> tuple[int, float]:
+) -> tuple[int, int, float]:
     search_sql, params = _bill_review_filters(employer_id, search)
     with get_clinic_connection(clinic) as conn:
         cursor = conn.cursor()
@@ -210,7 +314,7 @@ def _bill_review_summary(
             params,
         )
         row = cursor.fetchone()
-    return int(row.Total or 0), _as_float(row.Outstanding)
+    return int(row.Total or 0), int(row.Total or 0), _as_float(row.Outstanding)
 
 
 def _fetch_bill_review_rows(
@@ -230,6 +334,7 @@ def _fetch_bill_review_rows(
             f"""
             {_BILL_REVIEW_CTE}
             SELECT
+                CheckInId,
                 BillingHeaderId,
                 HistoryId,
                 InvoiceNumber,
@@ -241,7 +346,7 @@ def _fetch_bill_review_rows(
             FROM Bills
             WHERE AmountDue > 0
             {search_sql}
-            ORDER BY SortDate DESC, BillingHeaderId DESC
+            ORDER BY SortDate DESC, CheckInId DESC
             OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
             """,
             params,
@@ -253,13 +358,19 @@ def _fetch_bill_review_rows(
         amount = Decimal(str(row.AmountDue or 0))
         if amount < 0:
             amount = Decimal("0")
-        header_id = int(row.BillingHeaderId)
+        header_id = int(row.BillingHeaderId) if row.BillingHeaderId is not None else None
         history_id = int(row.HistoryId) if row.HistoryId is not None else None
+        checkin_id = int(row.CheckInId)
         invoice = None
         if row.InvoiceNumber is not None:
             invoice = str(row.InvoiceNumber).strip() or None
 
-        row_id = f"bh-{header_id}" if history_id is None else f"bhh-{history_id}"
+        if history_id is not None:
+            row_id = f"bhh-{history_id}"
+        elif header_id is not None:
+            row_id = f"bh-{header_id}"
+        else:
+            row_id = f"ch-{checkin_id}"
         items.append(
             BillReviewRow(
                 id=row_id,
@@ -383,11 +494,15 @@ def get_bill_invoice(
             ) hist
             WHERE (bh.IsDeleted = 0 OR bh.IsDeleted IS NULL)
               AND bh.Id = ?
-              AND bh.EmployerId = ?
+              AND (
+                    bh.EmployerId = ?
+                 OR ch.EmployerId = ?
+              )
             """,
             (
                 *((invoice_history_id,) if invoice_history_id is not None else ()),
                 header_id,
+                employer_id,
                 employer_id,
             ),
         )
@@ -471,6 +586,19 @@ def get_bill_invoice(
                 code = (row.ICD10Code or "").strip()
                 if code:
                     diagnosis.append(code)
+
+        if not lines:
+            checkin_id = (
+                int(header.CheckinId) if header.CheckinId is not None else None
+            )
+            lines.extend(
+                _load_live_ehr_invoice_lines(
+                    cursor,
+                    billing_header_id=header_id,
+                    checkin_id=checkin_id,
+                    exam_date=(header.ExamDate or "").strip() or None,
+                )
+            )
 
         provider_id = header.HistProviderId or header.HeaderProviderId
         provider_name = None
@@ -557,8 +685,9 @@ def get_bill_invoice(
         header.EmployerZip or header.EmployerZipLive,
     )
 
-    if lines:
-        total_due = sum((line.balance for line in lines), 0.0)
+    line_total = sum((line.balance for line in lines), 0.0) if lines else 0.0
+    if line_total > 0:
+        total_due = line_total
     else:
         total_charge = float(
             header.HistTotalCharge

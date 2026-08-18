@@ -21,6 +21,7 @@ export const employerPaths = {
   dashboard: `${EMPLOYER_PORTAL_BASE}/dashboard`,
   employeeSearch: `${EMPLOYER_PORTAL_BASE}/employee-search`,
   appointments: `${EMPLOYER_PORTAL_BASE}/appointments`,
+  bulkAppointments: `${EMPLOYER_PORTAL_BASE}/bulk-appointments`,
   authorizations: `${EMPLOYER_PORTAL_BASE}/authorizations`,
   billing: `${EMPLOYER_PORTAL_BASE}/billing`,
   profile: `${EMPLOYER_PORTAL_BASE}/profile`,

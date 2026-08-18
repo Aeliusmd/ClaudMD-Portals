@@ -15,6 +15,7 @@ from math import ceil
 from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
+from app.auth.user_profile_type import is_employer_admin
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
 from app.employer.profile import fetch_profile_from_clinic
 from app.employer.schemas import (
@@ -26,6 +27,10 @@ from app.employer.schemas import (
     AppointmentSlotOption,
     AppointmentSlotsResponse,
     AppointmentVisitTypeOption,
+    BulkAppointmentBookRequest,
+    BulkAppointmentBookResponse,
+    BulkAppointmentItem,
+    BulkAppointmentItemResult,
     NewPatientPayload,
 )
 
@@ -34,6 +39,9 @@ CANCELLED_STATUS_IDS = {6, 7}
 
 # Employer portal booking durations (minutes).
 ALLOWED_DURATION_MINUTES = {15, 30, 45, 60}
+
+# Cap a single bulk submit so one request cannot flood clinic INSERTs.
+MAX_BULK_APPOINTMENTS = 50
 
 
 def _clinic_and_employer(current_user: CurrentUser):
@@ -623,6 +631,144 @@ def book_appointment(
         appointment_id=appointment_id,
         schedule_id=schedule_id,
     )
+
+
+def book_bulk_appointments(
+    current_user: CurrentUser,
+    payload: BulkAppointmentBookRequest,
+) -> BulkAppointmentBookResponse:
+    """
+    Book each list item with the same employer dashboard booking path.
+    Sequential so later slot checks see earlier INSERTs. New patients that
+    share client_patient_key are created once and reused.
+    """
+    _, profile = _clinic_and_employer(current_user)
+    if not profile.is_admin and not is_employer_admin(profile.user_group_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only employer administrators can book bulk appointments.",
+        )
+
+    items = payload.items or []
+    if not items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Add at least one appointment to the list.",
+        )
+    if len(items) > MAX_BULK_APPOINTMENTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"You can book at most {MAX_BULK_APPOINTMENTS} appointments at once.",
+        )
+
+    created_patient_ids: dict[str, int] = {}
+    results: list[BulkAppointmentItemResult] = []
+
+    for item in items:
+        prepare = _bulk_item_to_prepare_request(item, created_patient_ids)
+        try:
+            booking = book_appointment(current_user, prepare)
+        except HTTPException as exc:
+            results.append(
+                BulkAppointmentItemResult(
+                    client_id=item.client_id,
+                    ok=False,
+                    error=_http_exc_message(exc),
+                )
+            )
+            continue
+        except Exception as exc:
+            results.append(
+                BulkAppointmentItemResult(
+                    client_id=item.client_id,
+                    ok=False,
+                    error=f"Unable to save appointment: {exc}",
+                )
+            )
+            continue
+
+        key = _normalize_client_patient_key(item.client_patient_key)
+        if key and booking.patient_id is not None:
+            created_patient_ids[key] = int(booking.patient_id)
+        results.append(
+            BulkAppointmentItemResult(
+                client_id=item.client_id,
+                ok=True,
+                booking=booking,
+            )
+        )
+
+    booked_count = sum(1 for row in results if row.ok)
+    failed_count = len(results) - booked_count
+    if booked_count and not failed_count:
+        message = (
+            f"{booked_count} appointment"
+            f"{'' if booked_count == 1 else 's'} booked successfully."
+        )
+    elif booked_count:
+        message = (
+            f"{booked_count} booked. {failed_count} could not be saved. "
+            "Fix the remaining visits and try again."
+        )
+    else:
+        message = "None of the appointments could be saved."
+
+    return BulkAppointmentBookResponse(
+        booked_count=booked_count,
+        failed_count=failed_count,
+        message=message,
+        items=results,
+    )
+
+
+def _normalize_client_patient_key(value: str | None) -> str | None:
+    key = (value or "").strip()
+    return key or None
+
+
+def _bulk_item_to_prepare_request(
+    item: BulkAppointmentItem,
+    created_patient_ids: dict[str, int],
+) -> AppointmentPrepareRequest:
+    key = _normalize_client_patient_key(item.client_patient_key)
+    reused_patient_id = created_patient_ids.get(key) if key else None
+    if reused_patient_id is not None:
+        patient_id = reused_patient_id
+        new_patient = None
+    else:
+        patient_id = item.patient_id
+        new_patient = item.new_patient
+    return AppointmentPrepareRequest(
+        patient_id=patient_id,
+        new_patient=new_patient,
+        location_id=item.location_id,
+        resource_id=item.resource_id,
+        visit_type_id=item.visit_type_id,
+        date=item.date,
+        start_time=item.start_time,
+        duration_minutes=item.duration_minutes,
+        appointment_status_id=item.appointment_status_id,
+        schedule_type_id=item.schedule_type_id,
+        note=item.note,
+    )
+
+
+def _http_exc_message(exc: HTTPException) -> str:
+    detail = exc.detail
+    if isinstance(detail, str) and detail.strip():
+        return detail.strip()
+    if isinstance(detail, list):
+        parts: list[str] = []
+        for entry in detail:
+            if isinstance(entry, dict) and entry.get("msg"):
+                parts.append(str(entry["msg"]))
+            elif entry:
+                parts.append(str(entry))
+        if parts:
+            return "; ".join(parts)
+    if detail:
+        return str(detail)
+    return "Unable to book appointment."
 
 
 # --- internals -----------------------------------------------------------------

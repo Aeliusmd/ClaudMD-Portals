@@ -38,6 +38,12 @@ export const employerNavItems = [
     label: "Billing",
     icon: "Receipt",
   },
+  {
+    href: employerPaths.bulkAppointments,
+    label: "Bulk Appointments",
+    icon: "CalendarPlus",
+    adminOnly: true,
+  },
   // TEMP: hide Authorizations tab for all employer portal users.
   // {
   //   href: employerPaths.authorizations,

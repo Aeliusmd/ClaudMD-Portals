@@ -23,7 +23,7 @@ import {
 import { portalAccessRedirect } from "@/lib/portal-access";
 import { employerPaths } from "@/lib/portal-paths";
 import { displayFullName } from "@/lib/profile-display";
-import { userTypeLabel } from "@/lib/user-type";
+import { isEmployerAdmin, userTypeLabel } from "@/lib/user-type";
 
 const emptySubscribe = () => () => {};
 
@@ -143,10 +143,15 @@ export function EmployerShell({ children }) {
     };
   }, [navOpen]);
 
-  const navItems = useMemo(
-    () => (scopedSession ? employerScopedShareNavItems : employerNavItems),
-    [scopedSession]
+  const isAdmin = Boolean(
+    profile?.isAdmin || isEmployerAdmin(profile?.userGroupId)
   );
+
+  const navItems = useMemo(() => {
+    if (scopedSession) return employerScopedShareNavItems;
+    if (isAdmin) return employerNavItems;
+    return employerNavItems.filter((item) => !item.adminOnly);
+  }, [scopedSession, isAdmin]);
 
   return (
     <div

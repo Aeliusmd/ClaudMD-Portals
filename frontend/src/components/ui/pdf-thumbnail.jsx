@@ -75,11 +75,10 @@ function loadThumbnailObjectUrl(thumbUrl) {
 /**
  * Shows page-1 content as a static image (no scrollbar).
  * Click opens the full PDF preview modal.
- * When content is unavailable the white page + badge still render (pile UI stays visible).
+ * When content is unavailable the white page still renders (pile UI stays visible).
  */
 export function PdfThumbnail({
   url,
-  badge,
   title,
   onOpen,
   onLoadStatusChange,
@@ -186,12 +185,6 @@ export function PdfThumbnail({
             {errorMessage || "Document does not exist."}
           </span>
         </div>
-      ) : null}
-
-      {status === "ready" && badge ? (
-        <span className="pointer-events-none absolute top-2.5 left-2.5 z-10 rounded-md bg-foreground-900/75 px-2 py-1 text-xs font-bold tracking-wide text-white">
-          {badge}
-        </span>
       ) : null}
 
       <button

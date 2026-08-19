@@ -10,10 +10,7 @@ import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { SharedAtStamp } from "@/components/ui/shared-at-stamp";
 import { fetchOutsiderSharedDocumentBySharedId } from "@/lib/api/outsider";
 import { getAccessToken } from "@/lib/auth-session";
-import {
-  documentDisplayName,
-  shortDocumentBadge,
-} from "@/lib/document-labels";
+import { documentDisplayName } from "@/lib/document-labels";
 import { formatDateMMDDYY, formatDateOfBirth } from "@/lib/dates";
 import { outsiderPaths } from "@/lib/portal-paths";
 import {
@@ -126,7 +123,6 @@ export function OutsiderScopedSharedDocumentsView() {
     );
   }
 
-  const badge = shortDocumentBadge(document);
   const docName = documentDisplayName(document);
   const dateLabel = formatDateMMDDYY(
     document.publishedAt || livePayload?.publishedAt || visitRow.date
@@ -197,14 +193,8 @@ export function OutsiderScopedSharedDocumentsView() {
             <div className="w-full">
               <PdfThumbnail
                 url={document.url}
-                badge={badge}
                 title={document.title || document.documentType || "Document"}
-                onOpen={() =>
-                  setPreviewDocument({
-                    ...document,
-                    previewBadge: badge,
-                  })
-                }
+                onOpen={() => setPreviewDocument({ ...document })}
               />
               <div className="mt-3 space-y-1 text-center">
                 <DocumentNameText

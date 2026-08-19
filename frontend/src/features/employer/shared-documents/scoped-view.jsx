@@ -19,10 +19,7 @@ import {
   clearSecureShareSession,
   getSecureShareSession,
 } from "@/lib/secure-share-session";
-import {
-  documentDisplayName,
-  shortDocumentBadge,
-} from "@/lib/document-labels";
+import { documentDisplayName } from "@/lib/document-labels";
 import { SharedAtStamp } from "@/components/ui/shared-at-stamp";
 import { formatDateMMDDYY, formatDateOfBirth } from "@/lib/dates";
 
@@ -168,7 +165,6 @@ export function EmployerScopedSharedDocumentsView() {
     );
   }
 
-  const badge = shortDocumentBadge(document);
   const docName = documentDisplayName(document);
   const dateLabel = formatDateMMDDYY(
     document.publishedAt || livePayload?.publishedAt || visitRow.date
@@ -239,14 +235,8 @@ export function EmployerScopedSharedDocumentsView() {
             <div className="w-full">
               <PdfThumbnail
                 url={document.url}
-                badge={badge}
                 title={document.title || document.documentType || "Document"}
-                onOpen={() =>
-                  setPreviewDocument({
-                    ...document,
-                    previewBadge: badge,
-                  })
-                }
+                onOpen={() => setPreviewDocument({ ...document })}
               />
               <div className="mt-3 space-y-1 text-center">
                 <DocumentNameText

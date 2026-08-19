@@ -18,7 +18,6 @@ const PEEK_HEIGHT_PX = 28;
  */
 export function VisitDocumentPile({
   layers,
-  badge,
   tileLabel,
   reportName,
   onOpenLayer,
@@ -118,7 +117,6 @@ export function VisitDocumentPile({
                   <div className="absolute inset-0" style={{ bottom: PEEK_HEIGHT_PX }}>
                     <PdfThumbnail
                       url={layer.url}
-                      badge={badge}
                       title={reportName || "Document"}
                       onOpen={() =>
                         onOpenLayer(frontLayer, activeIndex !== latestIndex)

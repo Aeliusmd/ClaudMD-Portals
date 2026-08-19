@@ -237,6 +237,7 @@ function mapInsurancePatientRow(row) {
     // Private Insurance table labels this column "Claim #".
     claimNumber: incidentNumber,
     category,
+    visitType: row.visit_type || row.visitType || null,
     lastVisit: row.last_visit || "—",
     lastVisitValue: row.last_visit_value,
     workStatus: row.work_status || "—",

@@ -69,15 +69,15 @@ const tabDefs = [
     coverage: "workers_comp",
     countKey: "workersComp",
     dateKey: "lastVisitValue",
-    searchKeys: ["patient", "employer", "incidentNumber"],
+    searchKeys: ["patient", "employer", "incidentNumber", "visitType"],
     emptyDescription: "Try a different search term or widen the date range.",
     rowsAreLinked: true,
     columns: [
       { key: "employer", label: "Employer" },
       { key: "patient", label: "Patient", variant: "strong" },
       { key: "incidentNumber", label: "Incident #", variant: "mono" },
-      { key: "category", label: "Category", variant: "category" },
-      { key: "lastVisit", label: "Last Visit" },
+      { key: "visitType", label: "Visit Type", variant: "visitType" },
+      { key: "lastVisit", label: "Visit Date" },
       { key: "workStatus", label: "Work Status", variant: "workStatus" },
     ],
   },
@@ -89,14 +89,14 @@ const tabDefs = [
     coverage: "private",
     countKey: "privateInsurance",
     dateKey: "lastVisitValue",
-    searchKeys: ["patient", "claimNumber"],
+    searchKeys: ["patient", "claimNumber", "visitType"],
     emptyDescription: "Try a different search term or widen the date range.",
     rowsAreLinked: true,
     columns: [
       { key: "patient", label: "Patient", variant: "strong" },
       { key: "claimNumber", label: "Claim #", variant: "mono" },
-      { key: "category", label: "Category", variant: "category" },
-      { key: "lastVisit", label: "Last Visit" },
+      { key: "visitType", label: "Visit Type", variant: "visitType" },
+      { key: "lastVisit", label: "Visit Date" },
       { key: "workStatus", label: "Work Status", variant: "workStatus" },
     ],
   },
@@ -129,6 +129,14 @@ const emptySummary = {
 
 function Cell({ column, row }) {
   const value = row[column.key];
+
+  if (column.variant === "visitType") {
+    return (
+      <Badge className={categoryStyles[row.category] || "bg-stone-100 text-stone-600"}>
+        {row.visitType || row.category || "—"}
+      </Badge>
+    );
+  }
 
   if (column.variant === "category") {
     return (

@@ -49,8 +49,8 @@ export function EmployeeDetailPanel({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-semibold text-ink">{employee.name}</h2>
-              <Badge className={categoryStyles[incident.category]}>
-                {incident.category}
+              <Badge className={categoryStyles[incident.category] || "bg-stone-100 text-stone-600"}>
+                {incident.visitType || incident.reportType || incident.category || "—"}
               </Badge>
             </div>
             <p className="mt-0.5 text-sm tabular-nums text-muted">

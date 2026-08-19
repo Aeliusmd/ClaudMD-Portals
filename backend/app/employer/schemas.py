@@ -114,6 +114,7 @@ class EmployeeSearchRow(BaseModel):
     employer_name: str | None = None
     insurance_company: str | None = None
     report_type: str | None = None
+    visit_type: str | None = None
     category: str | None = None
     check_in_date: str | None = None
     check_in_date_value: str | None = None

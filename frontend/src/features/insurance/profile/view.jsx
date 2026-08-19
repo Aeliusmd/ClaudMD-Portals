@@ -14,18 +14,9 @@ import { changePassword } from "@/lib/api/auth";
 import {
   fetchInsuranceOrganizationUsers,
   updateInsuranceOrganizationUserAccess,
-  updateInsuranceProfile,
 } from "@/lib/api/insurance";
 import { getAccessToken } from "@/lib/auth-session";
 import { insurancePaths } from "@/lib/portal-paths";
-import {
-  EMAIL_MAX,
-  PHONE_MAX,
-  emailError,
-  phoneError,
-  sanitizePhoneInput,
-} from "@/lib/contact-validation";
-import { unsafeMarkupError } from "@/lib/text-validation";
 import { isInsuranceAdmin } from "@/lib/user-type";
 import { cn } from "@/lib/utils";
 
@@ -40,8 +31,6 @@ const PORTAL_ACCESS_LEVELS = [
   { value: "Portal Access", label: "Portal Access" },
   { value: "No Access", label: "No Access" },
 ];
-
-const NAME_MAX = 50;
 
 function ProfileTabBar({ value, onChange, tabs }) {
   return (
@@ -192,42 +181,6 @@ function splitFullName(fullName) {
   };
 }
 
-function validateProfile(profile) {
-  const errors = {};
-  const firstName = (profile.firstName || "").trim();
-  const lastName = (profile.lastName || "").trim();
-  const email = (profile.email || "").trim();
-  const phone = (profile.phone || "").trim();
-
-  if (!firstName) errors.firstName = "First name is required.";
-  else if (firstName.length > NAME_MAX) {
-    errors.firstName = `First name must be at most ${NAME_MAX} characters.`;
-  } else {
-    const err = unsafeMarkupError(firstName);
-    if (err) errors.firstName = err;
-  }
-
-  if (lastName.length > NAME_MAX) {
-    errors.lastName = `Last name must be at most ${NAME_MAX} characters.`;
-  } else if (lastName) {
-    const err = unsafeMarkupError(lastName);
-    if (err) errors.lastName = err;
-  }
-
-  if (!email) errors.email = "Email is required.";
-  else {
-    const err = emailError(email);
-    if (err) errors.email = err;
-  }
-
-  if (phone) {
-    const err = phoneError(phone);
-    if (err) errors.phone = err;
-  }
-
-  return errors;
-}
-
 function validatePassword(form) {
   const errors = {};
   if (!form.currentPassword) {
@@ -251,31 +204,6 @@ function validatePassword(form) {
     errors.newPassword = "New password must be different from the current one.";
   }
   return errors;
-}
-
-function normalizeProfileSnapshot(profile) {
-  return {
-    firstName: (profile.firstName || "").trim(),
-    lastName: (profile.lastName || "").trim(),
-    email: (profile.email || "").trim(),
-    phone: (profile.phone || "").trim(),
-  };
-}
-
-function profilesEqual(a, b) {
-  const left = normalizeProfileSnapshot(a);
-  const right = normalizeProfileSnapshot(b);
-  return (
-    left.firstName === right.firstName &&
-    left.lastName === right.lastName &&
-    left.email === right.email &&
-    left.phone === right.phone
-  );
-}
-
-function displayFieldValue(value, editing) {
-  if (editing) return value ?? "";
-  return value || "—";
 }
 
 export function InsuranceProfileView() {
@@ -304,7 +232,6 @@ function InsuranceProfileContent() {
     profile: liveProfile,
     loading: profileLoading,
     error: profileLoadError,
-    setCachedProfile,
   } = useInsuranceProfile();
 
   const isAdmin = Boolean(
@@ -341,11 +268,7 @@ function InsuranceProfileContent() {
     address: "",
     loginId: "",
   });
-  const [profileErrors, setProfileErrors] = useState({});
   const [hydrated, setHydrated] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [savedProfile, setSavedProfile] = useState(null);
 
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -361,11 +284,6 @@ function InsuranceProfileContent() {
   const [canManageAccess, setCanManageAccess] = useState(false);
   const [accessUpdatingContactId, setAccessUpdatingContactId] = useState(null);
 
-  const profileDirty = useMemo(() => {
-    if (!savedProfile) return false;
-    return !profilesEqual(profile, savedProfile);
-  }, [profile, savedProfile]);
-
   const passwordDirty = useMemo(() => {
     return Boolean(
       passwordForm.currentPassword ||
@@ -376,7 +294,6 @@ function InsuranceProfileContent() {
 
   useEffect(() => {
     if (!liveProfile) return;
-    if (isEditing) return;
     let firstName = liveProfile.firstName || "";
     let lastName = liveProfile.lastName || "";
     if (!firstName && !lastName && liveProfile.fullName) {
@@ -384,7 +301,7 @@ function InsuranceProfileContent() {
       firstName = split.firstName;
       lastName = split.lastName;
     }
-    const next = {
+    setProfile({
       firstName,
       lastName,
       title: liveProfile.jobTitle || liveProfile.title || "",
@@ -394,11 +311,9 @@ function InsuranceProfileContent() {
       organization: liveProfile.organization || "",
       address: liveProfile.address || "",
       loginId: liveProfile.loginId || "",
-    };
-    setProfile(next);
-    setSavedProfile(normalizeProfileSnapshot(next));
+    });
     setHydrated(true);
-  }, [liveProfile, isEditing]);
+  }, [liveProfile]);
 
   useEffect(() => {
     if (profileLoadError) {
@@ -531,110 +446,6 @@ function InsuranceProfileContent() {
     }
   }
 
-  function updateProfileField(field, value) {
-    clearFeedback();
-    const nextValue =
-      field === "phone" ? sanitizePhoneInput(value) : value;
-    setProfile((prev) => ({ ...prev, [field]: nextValue }));
-    setProfileErrors((prev) => {
-      if (!prev[field]) return prev;
-      const next = { ...prev };
-      delete next[field];
-      return next;
-    });
-  }
-
-  function startEditProfile() {
-    clearFeedback();
-    setProfileErrors({});
-    setIsEditing(true);
-  }
-
-  function cancelEditProfile() {
-    clearFeedback();
-    setProfileErrors({});
-    if (savedProfile) {
-      setProfile((prev) => ({
-        ...prev,
-        firstName: savedProfile.firstName,
-        lastName: savedProfile.lastName,
-        email: savedProfile.email,
-        phone: savedProfile.phone,
-      }));
-    }
-    setIsEditing(false);
-  }
-
-  async function handleSaveProfile() {
-    if (profileSaving || !profileDirty) return;
-    clearFeedback();
-    const errors = validateProfile(profile);
-    setProfileErrors(errors);
-    if (Object.keys(errors).length > 0) {
-      setErrorMessage("Please fix the highlighted fields before saving.");
-      return;
-    }
-
-    const token = getAccessToken();
-    if (!token) {
-      router.replace(insurancePaths.login);
-      return;
-    }
-
-    setProfileSaving(true);
-    try {
-      const updated = await updateInsuranceProfile(token, {
-        firstName: profile.firstName.trim(),
-        lastName: profile.lastName.trim(),
-        title: (profile.title || "").trim(),
-        email: profile.email.trim(),
-        phone: profile.phone.trim(),
-      });
-      setCachedProfile?.(updated);
-      const next = {
-        firstName: updated.firstName || "",
-        lastName: updated.lastName || "",
-        title: updated.jobTitle || updated.title || "",
-        userType: updated.typeLabel || profile.userType,
-        email: updated.email || "",
-        phone: updated.phone || "",
-        organization: updated.organization || "",
-        address: updated.address || "",
-        loginId: updated.loginId || "",
-      };
-      setProfile(next);
-      setSavedProfile(normalizeProfileSnapshot(next));
-      setProfileErrors({});
-      setIsEditing(false);
-      setMessage("");
-      setSuccessToast({
-        title: "Profile saved",
-        message: "Your profile details were updated successfully.",
-      });
-    } catch (err) {
-      if (err?.status === 401) {
-        router.replace(insurancePaths.login);
-        return;
-      }
-      const detail = err?.detail ?? err?.message;
-      if (detail && typeof detail === "object" && detail.errors) {
-        const mapped = {};
-        for (const [key, value] of Object.entries(detail.errors)) {
-          const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-          mapped[camel] = value;
-        }
-        setProfileErrors(mapped);
-        setErrorMessage(detail.message || "Please fix the highlighted fields.");
-      } else {
-        setErrorMessage(
-          typeof detail === "string" ? detail : "Unable to update profile."
-        );
-      }
-    } finally {
-      setProfileSaving(false);
-    }
-  }
-
   async function handleUpdatePassword() {
     if (passwordSaving || !passwordDirty) return;
     clearFeedback();
@@ -690,9 +501,6 @@ function InsuranceProfileContent() {
 
   function switchTab(nextTab) {
     clearFeedback();
-    if (isEditing) {
-      cancelEditProfile();
-    }
     setTab(nextTab);
     const params = new URLSearchParams(searchParams.toString());
     if (nextTab === "profile") {
@@ -739,52 +547,27 @@ function InsuranceProfileContent() {
           <ProfileInfoSkeleton />
         ) : (
           <Card className="p-5 sm:p-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="mb-5">
               <h2 className="text-lg font-semibold text-ink">Profile Info</h2>
-              {isEditing ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={cancelEditProfile}
-                    disabled={profileSaving}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleSaveProfile}
-                    disabled={profileSaving || !profileDirty}
-                  >
-                    {profileSaving ? "Saving…" : "Save"}
-                  </Button>
-                </div>
-              ) : (
-                <Button type="button" onClick={startEditProfile}>
-                  Edit
-                </Button>
-              )}
+              <p className="mt-1 text-sm text-muted">
+                These details come from ClaudMD and can only be changed in the
+                main system.
+              </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <Field
                 id="insurance-first-name"
                 label="First Name"
-                value={displayFieldValue(profile.firstName, isEditing)}
-                readOnly={!isEditing}
-                maxLength={NAME_MAX}
-                error={profileErrors.firstName}
+                value={profile.firstName || "—"}
+                readOnly
                 autoComplete="given-name"
-                onChange={(value) => updateProfileField("firstName", value)}
               />
               <Field
                 id="insurance-last-name"
                 label="Last Name"
-                value={displayFieldValue(profile.lastName, isEditing)}
-                readOnly={!isEditing}
-                maxLength={NAME_MAX}
-                error={profileErrors.lastName}
+                value={profile.lastName || "—"}
+                readOnly
                 autoComplete="family-name"
-                onChange={(value) => updateProfileField("lastName", value)}
               />
               <Field
                 id="insurance-user-type"
@@ -808,23 +591,17 @@ function InsuranceProfileContent() {
                 id="insurance-email"
                 label="Email"
                 type="email"
-                value={displayFieldValue(profile.email, isEditing)}
-                readOnly={!isEditing}
-                maxLength={EMAIL_MAX}
-                error={profileErrors.email}
+                value={profile.email || "—"}
+                readOnly
                 autoComplete="email"
-                onChange={(value) => updateProfileField("email", value)}
               />
               <Field
                 id="insurance-phone"
                 label="Phone"
                 type="tel"
-                value={displayFieldValue(profile.phone, isEditing)}
-                readOnly={!isEditing}
-                maxLength={PHONE_MAX}
-                error={profileErrors.phone}
+                value={profile.phone || "—"}
+                readOnly
                 autoComplete="tel"
-                onChange={(value) => updateProfileField("phone", value)}
               />
               <div className="md:col-span-2">
                 <Field

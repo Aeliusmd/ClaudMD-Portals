@@ -173,11 +173,13 @@ def _fetch_visit_rows(
                  OR LOWER(ISNULL(prov.FirstName, '') + ' ' + ISNULL(prov.LastName, '')) LIKE ?
                  OR LOWER(ISNULL(ar.Name, '')) LIKE ?
                  OR LOWER(ISNULL(loc.Name, '')) LIKE ?
+                 OR LOWER(ISNULL(vt.Description, '')) LIKE ?
+                 OR LOWER(ISNULL(vt.Code, '')) LIKE ?
                  OR CAST(ch.Id AS varchar(32)) LIKE ?
               )
         """
         like = f"%{q.lower()}%"
-        search_params = [like, like, like, like, like]
+        search_params = [like, like, like, like, like, like, like]
 
     sql = f"""
         SELECT

@@ -152,6 +152,7 @@ class InsurancePatientSearchRow(BaseModel):
     incident_id: int | None = None
     incident_number: str | None = None
     category: str | None = None
+    visit_type: str | None = None
     last_visit: str | None = None
     last_visit_value: str | None = None
     work_status: str | None = None

@@ -138,9 +138,11 @@ def _fetch_patient_rows(
                  OR LOWER(ISNULL(emp.Name, '')) LIKE ?
                  OR LOWER(CAST(ISNULL(inc.IncidentNumber, '') AS NVARCHAR(100))) LIKE ?
                  OR LOWER(CAST(ISNULL(p.AccountNumber, '') AS NVARCHAR(100))) LIKE ?
+                 OR LOWER(ISNULL(vt.Description, '')) LIKE ?
+                 OR LOWER(ISNULL(vt.Code, '')) LIKE ?
               )
         """
-        search_params = [search_like, search_like, search_like, search_like]
+        search_params = [search_like, search_like, search_like, search_like, search_like, search_like]
 
     base_cte = f"""
             WITH FilteredCheckIns AS (
@@ -172,6 +174,7 @@ def _fetch_patient_rows(
             SELECT COUNT(*) AS TotalCount
             FROM FilteredCheckIns r
             INNER JOIN dbo.Patients p ON p.Id = r.PatientId
+            LEFT JOIN dbo.VisitTypes vt ON vt.Id = r.VisitTypeId
             LEFT JOIN dbo.Incidents inc ON inc.Id = r.IncidentId
             LEFT JOIN dbo.Employers emp ON emp.Id = r.EmployerId
             WHERE (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
@@ -233,7 +236,7 @@ def _fetch_patient_rows(
             ) ews
             WHERE (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
               {search_sql}
-            ORDER BY r.CheckInDate DESC, p.LastName, p.FirstName
+            ORDER BY r.CheckInDate DESC, p.LastName, p.FirstName, r.CheckInId DESC
             OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
     """
 
@@ -267,6 +270,11 @@ def _map_patient_row(row: dict, coverage_label: str) -> InsurancePatientSearchRo
     full_name = " ".join(part for part in [first, last] if part).strip() or "Unknown"
 
     category = _visit_category(row.get("VisitCategoryId"), row.get("VisitTypeCode"))
+    visit_type = (
+        (row.get("VisitTypeDescription") or "").strip()
+        or (row.get("VisitTypeCode") or "").strip()
+        or None
+    )
     # Workers Comp injuries are VisitTypes.CategoryId = 1 → "Injury".
     # Never show the private-patient "Personal Injury" label on WC rows.
     if coverage_label == "Workers Comp" and category == "Personal Injury":
@@ -310,6 +318,7 @@ def _map_patient_row(row: dict, coverage_label: str) -> InsurancePatientSearchRo
         incident_id=int(row["IncidentId"]) if row.get("IncidentId") is not None else None,
         incident_number=incident_display,
         category=category,
+        visit_type=visit_type,
         last_visit=_format_display_date(row.get("CheckInDate")),
         last_visit_value=_format_date_iso(row.get("CheckInDate")),
         work_status=shift_type_label(current_shift) or "—",

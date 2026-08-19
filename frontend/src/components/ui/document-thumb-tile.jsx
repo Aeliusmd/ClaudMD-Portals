@@ -4,7 +4,7 @@ import { PdfThumbnail } from "@/components/ui/pdf-thumbnail";
 import { DocumentNameText } from "@/components/ui/document-name-text";
 import { VisitDocumentPile } from "@/components/ui/visit-document-pile";
 import { SharedAtStamp } from "@/components/ui/shared-at-stamp";
-import { documentDisplayName, shortDocumentBadge } from "@/lib/document-labels";
+import { documentDisplayName } from "@/lib/document-labels";
 import { formatDateMMDDYY } from "@/lib/dates";
 import { visitDocumentIdFromUrl } from "@/lib/documents";
 import {
@@ -42,7 +42,6 @@ export function DocumentThumbTile({
   className,
   showSharedAt = false,
 }) {
-  const badge = shortDocumentBadge(doc);
   const url = doc?.url;
   if (!url) return null;
 
@@ -81,7 +80,6 @@ export function DocumentThumbTile({
       publishedAt: layer?.publishedAt ?? doc.publishedAt,
       versionTag: layer?.versionTag ?? doc.versionTag,
       title: name,
-      previewBadge: badge,
       isPreviousVersion,
     });
   }
@@ -91,7 +89,6 @@ export function DocumentThumbTile({
       {hasVersionPile ? (
         <VisitDocumentPile
           layers={pileLayers}
-          badge={badge}
           tileLabel={tileLabel}
           reportName={reportName}
           onOpenLayer={openLayer}
@@ -101,7 +98,6 @@ export function DocumentThumbTile({
         <div className="overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-black/5">
           <PdfThumbnail
             url={url}
-            badge={badge}
             title={name}
             onOpen={() => openLayer(pileLayers[0] || { url }, false)}
             className="rounded-2xl shadow-none"

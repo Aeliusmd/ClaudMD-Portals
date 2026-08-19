@@ -72,7 +72,6 @@ from app.employer.schemas import (
 from app.employer.service import (
     get_dashboard_summary,
     get_employer_profile,
-    update_employer_profile,
 )
 from app.employer.shared_documents import (
     get_shared_document_detail,
@@ -100,15 +99,16 @@ def employer_profile_endpoint(
 
 @router.patch("/me", response_model=EmployerProfileResponse)
 def employer_profile_update_endpoint(
-    payload: EmployerProfileUpdateRequest,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    _payload: EmployerProfileUpdateRequest,
+    _current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ):
-    """
-    Update editable profile fields on UserProfiles + EmployerContacts.
-    LoginId / TypeId / organization / address are not changed.
-    Does not write notifications or AuditLogEntries.
-    """
-    return update_employer_profile(current_user, payload)
+    """Profile fields are read-only in the portal; they are managed in ClaudMD."""
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            "Profile details are managed in ClaudMD and cannot be changed from the portal."
+        ),
+    )
 
 
 @router.get("/organization-users", response_model=OrganizationUsersResponse)
@@ -356,8 +356,9 @@ def employer_employee_search_endpoint(
     patient_id: int | None = Query(default=None, alias="patientId"),
 ):
     """
-    Unique PatientIds from CheckInsHeader for CheckInDate range + employer,
-    joined to Patients. Server-side pagination via page/pageSize.
+    One row per matching CheckInsHeader visit in the date range for this employer.
+    Same employee can appear more than once when they have different visit types.
+    Visit type comes from VisitTypes.Description/Code. Server-side pagination.
     """
     default_from, default_to = default_search_date_range()
     start = from_date or default_from

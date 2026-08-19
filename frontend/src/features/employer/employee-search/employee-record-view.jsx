@@ -46,7 +46,10 @@ function UpcomingAppointmentDetails({ visit }) {
       <dl className="mt-4 space-y-3">
         <VisitInfoRow label="Date" value={formatDateMMDDYY(visit.date) || "—"} />
         <VisitInfoRow label="Time" value={timeRange} />
-        <VisitInfoRow label="Category" value={visit.category} />
+        <VisitInfoRow
+          label="Visit Type"
+          value={visit.label || visit.visitType || visit.category}
+        />
         <VisitInfoRow label="Provider" value={visit.provider} />
         <VisitInfoRow label="Location" value={visit.clinic} />
         <VisitInfoRow label="Status" value={visit.status} />

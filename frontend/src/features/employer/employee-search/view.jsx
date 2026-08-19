@@ -26,8 +26,7 @@ import {
 } from "@/lib/date-range";
 import { employerPaths } from "@/lib/portal-paths";
 import { dashboardHrefFromReturn } from "@/lib/dashboard-return-state";
-import { reportBadgeStyles } from "@/lib/report-badge-styles";
-import { workStatusStyles } from "@/lib/category-styles";
+import { categoryStyles, workStatusStyles } from "@/lib/category-styles";
 
 const emptySubscribe = () => () => {};
 
@@ -62,7 +61,7 @@ const searchTableHeaders = [
   "Account No.",
   "Employer",
   "Insurance",
-  "Report Type",
+  "Visit Type",
   "Checked-in Date",
   "Incident No.",
   "Date of Injury",
@@ -411,11 +410,11 @@ function EmployeeSearchContent() {
                       <td className="px-4 py-3.5">
                         <Badge
                           className={
-                            reportBadgeStyles[row.reportType] ||
+                            categoryStyles[row.category] ||
                             "bg-stone-100 text-stone-700"
                           }
                         >
-                          {row.reportType}
+                          {row.visitType || row.reportType || "—"}
                         </Badge>
                       </td>
                       <td className="px-4 py-3.5 text-ink">{row.date}</td>

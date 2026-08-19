@@ -236,10 +236,17 @@ def _appointment_status_label(status_id: int | None) -> str:
 
 
 def _visit_category(category_id: int | None, code: str | None) -> str | None:
+    normalized = (code or "").strip().upper()
+    if normalized == "PDS":
+        return "Drug Screen"
     if category_id == 1:
         return "Injury"
     if category_id == 2:
         return "Physical"
+    if category_id == 3:
+        return "Urgent Care"
+    if category_id == 4:
+        return "Personal Injury"
     return None
 
 

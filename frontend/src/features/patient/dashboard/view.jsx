@@ -709,9 +709,9 @@ function PatientDashboardContent() {
                               categoryStyles.Other
                             }
                           >
-                            {appointment.category ||
+                            {appointment.type ||
                               appointment.specialty ||
-                              appointment.type ||
+                              appointment.category ||
                               "Appointment"}
                           </Badge>
                         </td>
@@ -756,8 +756,8 @@ function PatientDashboardContent() {
                   <thead className="border-y border-border/70 bg-cream/50 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
                     <tr>
                       <th className="px-4 py-3 sm:px-5">Provider / Location</th>
-                      <th className="px-4 py-3 sm:px-5">Category</th>
-                      <th className="px-4 py-3 sm:px-5">Date</th>
+                      <th className="px-4 py-3 sm:px-5">Visit Type</th>
+                      <th className="px-4 py-3 sm:px-5">Visit Date</th>
                       {showWorkStatus ? (
                         <th className="px-4 py-3 sm:px-5">Work Status</th>
                       ) : null}
@@ -786,7 +786,7 @@ function PatientDashboardContent() {
                               categoryStyles.Other
                             }
                           >
-                            {visit.category}
+                            {visit.visitType || visit.category || "—"}
                           </Badge>
                         </td>
                         <td className="px-4 py-3.5 text-ink sm:px-5 sm:py-4">

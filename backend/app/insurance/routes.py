@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 
 from app.auth.dependencies import CurrentUser, get_current_user
@@ -48,7 +48,6 @@ from app.employer.schemas import (
 from app.insurance.service import (
     get_dashboard_summary,
     get_insurance_profile,
-    update_insurance_profile,
 )
 from app.insurance.shared_documents import (
     get_shared_document_detail,
@@ -76,14 +75,16 @@ def insurance_profile_endpoint(
 
 @router.patch("/me", response_model=InsuranceProfileResponse)
 def insurance_profile_update_endpoint(
-    payload: InsuranceProfileUpdateRequest,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    _payload: InsuranceProfileUpdateRequest,
+    _current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ):
-    """
-    Update editable profile fields on UserProfiles + InsuranceContacts.
-    LoginId / TypeId / organization / address are not changed.
-    """
-    return update_insurance_profile(current_user, payload)
+    """Profile fields are read-only in the portal; they are managed in ClaudMD."""
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            "Profile details are managed in ClaudMD and cannot be changed from the portal."
+        ),
+    )
 
 
 @router.get("/dashboard/summary", response_model=InsuranceDashboardSummaryResponse)
@@ -176,10 +177,10 @@ def insurance_patient_search_endpoint(
     ),
 ):
     """
-    Unique patients from CheckInsHeader for this insurer + coverage type.
+    One row per matching check-in for this insurer + coverage type.
     Workers Comp: InsuranceId match AND EmployerId IS NOT NULL.
     Private: InsuranceId match AND EmployerId IS NULL.
-    SELECT only; server-side pagination.
+    Visit type comes from VisitTypes.Description/Code. SELECT only; server-side pagination.
     """
     default_from, default_to = default_search_date_range()
     start = from_date or default_from

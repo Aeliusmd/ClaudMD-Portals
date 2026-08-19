@@ -70,7 +70,7 @@ export function PatientVisitDetailView({
               categoryStyles[visit.category] || "bg-stone-100 text-stone-600"
             )}
           >
-            {visit.category}
+            {visit.visitType || visit.category}
           </Badge>
         </div>
       </Card>

@@ -124,7 +124,7 @@ def _fetch_employee_rows(
     user_id: int | None = None,
     email: str | None = None,
 ) -> tuple[int, list[EmployeeSearchRow]]:
-    """Read-only: unique patients (one row each) with latest matching check-in in range."""
+    """Read-only: one row per matching check-in (same employee can appear more than once)."""
     from app.employer.notifications import unread_shared_report_counts_by_patient
 
     q = (search or "").strip()
@@ -147,9 +147,11 @@ def _fetch_employee_rows(
                  OR LOWER(CAST(ISNULL(p.AccountNumber, '') AS NVARCHAR(100))) LIKE ?
                  OR LOWER(CAST(ISNULL(inc.IncidentNumber, '') AS NVARCHAR(100))) LIKE ?
                  OR LOWER(CAST(ISNULL(p.SSN, '') AS NVARCHAR(100))) LIKE ?
+                 OR LOWER(ISNULL(vt.Description, '')) LIKE ?
+                 OR LOWER(ISNULL(vt.Code, '')) LIKE ?
               )
         """
-        search_params = [search_like, search_like, search_like, search_like]
+        search_params = [search_like, search_like, search_like, search_like, search_like, search_like]
 
     base_cte = f"""
             WITH FilteredCheckIns AS (
@@ -172,26 +174,17 @@ def _fetch_employee_rows(
                   AND ch.CheckInDate >= ?
                   AND ch.CheckInDate <= ?
                   {category_sql}
-            ),
-            Ranked AS (
-                SELECT *,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY PatientId
-                        ORDER BY CheckInDate DESC, CheckInId DESC
-                    ) AS rn
-                FROM FilteredCheckIns
             )
     """
 
     count_sql = f"""
             {base_cte}
             SELECT COUNT(*) AS TotalCount
-            FROM Ranked r
+            FROM FilteredCheckIns r
             INNER JOIN dbo.Patients p ON p.Id = r.PatientId
             LEFT JOIN dbo.VisitTypes vt ON vt.Id = r.VisitTypeId
             LEFT JOIN dbo.Incidents inc ON inc.Id = r.IncidentId
-            WHERE r.rn = 1
-              AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
+            WHERE (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
               {patient_filter_sql}
               {search_sql}
     """
@@ -230,7 +223,7 @@ def _fetch_employee_rows(
                 inc.IncidentNumber,
                 ins.Name AS InsuranceName,
                 emp.Name AS EmployerName
-            FROM Ranked r
+            FROM FilteredCheckIns r
             INNER JOIN dbo.Patients p ON p.Id = r.PatientId
             LEFT JOIN dbo.VisitTypes vt ON vt.Id = r.VisitTypeId
             LEFT JOIN dbo.Incidents inc ON inc.Id = r.IncidentId
@@ -251,11 +244,10 @@ def _fetch_employee_rows(
                     ch.CheckInDate DESC,
                     ws.Id DESC
             ) ews
-            WHERE r.rn = 1
-              AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
+            WHERE (p.IsDeleted = 0 OR p.IsDeleted IS NULL)
               {patient_filter_sql}
               {search_sql}
-            ORDER BY r.CheckInDate DESC, p.LastName, p.FirstName
+            ORDER BY r.CheckInDate DESC, p.LastName, p.FirstName, r.CheckInId DESC
             OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
     """
 
@@ -366,12 +358,10 @@ def _fetch_appointment_only_patient(
     ssn_last4 = ssn_digits[-4:] if len(ssn_digits) >= 4 else None
 
     category = _visit_category(data.get("VisitCategoryId"), data.get("VisitTypeCode"))
-    report_type = (
-        data.get("VisitTypeDescription")
-        or data.get("VisitTypeCode")
-        or category
-        or "Appointment"
+    visit_type = _visit_type_label(
+        data.get("VisitTypeDescription"), data.get("VisitTypeCode")
     )
+    report_type = visit_type or category or "Appointment"
 
     phone = (
         (data.get("CellPhone") or "").strip()
@@ -401,6 +391,7 @@ def _fetch_appointment_only_patient(
         employer_name=data.get("EmployerName") or organization,
         insurance_company=None,
         report_type=report_type,
+        visit_type=visit_type,
         category=category,
         check_in_date=None,
         check_in_date_value=None,
@@ -444,7 +435,10 @@ def _map_employee_row(
     ssn_last4 = ssn_digits[-4:] if len(ssn_digits) >= 4 else None
 
     category = _visit_category(row.get("VisitCategoryId"), row.get("VisitTypeCode"))
-    report_type = row.get("VisitTypeDescription") or row.get("VisitTypeCode") or "Status Report"
+    visit_type = _visit_type_label(
+        row.get("VisitTypeDescription"), row.get("VisitTypeCode")
+    )
+    report_type = visit_type
 
     incident_number = row.get("IncidentNumber")
     incident_display = (
@@ -487,6 +481,7 @@ def _map_employee_row(
         employer_name=row.get("EmployerName") or organization,
         insurance_company=row.get("InsuranceName"),
         report_type=report_type,
+        visit_type=visit_type,
         category=category,
         check_in_date=_format_display_date(row.get("CheckInDate")),
         check_in_date_value=check_in_iso,
@@ -508,6 +503,12 @@ def _map_employee_row(
         state=(row.get("State") or "").strip() or None,
         zip_code=(row.get("ZipCode") or "").strip() or None,
     )
+
+
+def _visit_type_label(description: str | None, code: str | None) -> str | None:
+    """Live VisitTypes.Description, falling back to Code. Never a hardcoded bucket."""
+    text = (description or "").strip() or (code or "").strip()
+    return text or None
 
 
 def _visit_category(category_id: int | None, code: str | None) -> str | None:

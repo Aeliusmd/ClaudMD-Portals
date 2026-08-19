@@ -78,7 +78,8 @@ function mapAppointmentToEmployeeRow(appt) {
     employeeId: String(appt.patientId || appt.employeeId || ""),
     patientId: appt.patientId,
     incidentNumber: "—",
-    category: appt.category || "Injury",
+    category: appt.category || null,
+    visitType: appt.visitType || appt.type || null,
     lastVisit: appt.date,
     lastVisitValue: appt.dateValue,
     workStatus: appt.status || "Scheduled",
@@ -96,8 +97,8 @@ const emptyCounts = {
 const employeeTableHeaders = [
   "Employee",
   "Incident #",
-  "Category",
-  "Last Visit",
+  "Visit Type",
+  "Visit Date",
   "Work Status",
 ];
 
@@ -736,8 +737,8 @@ function EmployerDashboardContent() {
                     <tr>
                       <th className="px-4 py-3 sm:px-5">Employee</th>
                       <th className="px-4 py-3 sm:px-5">Incident #</th>
-                      <th className="px-4 py-3 sm:px-5">Category</th>
-                      <th className="px-4 py-3 sm:px-5">Last Visit</th>
+                      <th className="px-4 py-3 sm:px-5">Visit Type</th>
+                      <th className="px-4 py-3 sm:px-5">Visit Date</th>
                       <th className="px-4 py-3 sm:px-5">Work Status</th>
                     </tr>
                   </thead>
@@ -761,7 +762,7 @@ function EmployerDashboardContent() {
                               "bg-stone-100 text-stone-600"
                             }
                           >
-                            {row.category}
+                            {row.visitType || row.reportType || "—"}
                           </Badge>
                         </td>
                         <td className="px-4 py-3.5 text-ink sm:px-5 sm:py-4">
@@ -835,13 +836,15 @@ function EmployerDashboardContent() {
                           <p className="font-semibold text-ink">
                             {appt.employee}
                           </p>
-                          <Badge className={categoryStyles[appt.category]}>
-                            {appt.category}
+                          <Badge
+                            className={
+                              categoryStyles[appt.category] ||
+                              "bg-stone-100 text-stone-600"
+                            }
+                          >
+                            {appt.visitType || appt.type || "—"}
                           </Badge>
                         </div>
-                        <p className="mt-1 text-sm text-ink">
-                          {appt.visitType || appt.type}
-                        </p>
                         <p className="mt-1 text-sm text-muted">
                           {appt.date} · {appt.time}
                         </p>

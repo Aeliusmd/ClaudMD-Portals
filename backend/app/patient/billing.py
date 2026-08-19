@@ -12,6 +12,7 @@ from fastapi import HTTPException, status
 
 from app.auth.dependencies import CurrentUser
 from app.db.clinic import get_clinic_by_activation_key, get_clinic_connection
+from app.employer.billing import _load_live_ehr_invoice_lines
 from app.employer.schemas import BillInvoiceDetail, BillInvoiceLine
 from app.patient.profile import fetch_profile_from_clinic
 from app.patient.schemas import (
@@ -271,6 +272,19 @@ def get_bill_invoice(
                 if code:
                     diagnosis.append(code)
 
+        if not lines:
+            checkin_id = (
+                int(header.CheckinId) if header.CheckinId is not None else None
+            )
+            lines.extend(
+                _load_live_ehr_invoice_lines(
+                    cursor,
+                    billing_header_id=header_id,
+                    checkin_id=checkin_id,
+                    exam_date=(header.ExamDate or "").strip() or None,
+                )
+            )
+
         provider_id = header.HistProviderId or header.HeaderProviderId
         provider_name = None
         if provider_id is not None:
@@ -354,8 +368,9 @@ def get_bill_invoice(
         header.EmployerZip or header.EmployerZipLive,
     )
 
-    if lines:
-        total_due = sum((line.balance for line in lines), 0.0)
+    line_total = sum((line.balance for line in lines), 0.0) if lines else 0.0
+    if line_total > 0:
+        total_due = line_total
     else:
         total_charge = float(
             header.HistTotalCharge

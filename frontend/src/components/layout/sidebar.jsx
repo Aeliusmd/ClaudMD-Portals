@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  CalendarPlus,
   ClipboardCheck,
   ClipboardList,
   FileText,
@@ -29,6 +30,7 @@ const icons = {
   ClipboardList,
   ClipboardCheck,
   CalendarDays,
+  CalendarPlus,
   Share2,
   FileText,
   Receipt,

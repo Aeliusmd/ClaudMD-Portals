@@ -334,6 +334,42 @@ class AppointmentPrepareResponse(BaseModel):
     schedule_id: int | None = None
 
 
+class BulkAppointmentItem(BaseModel):
+    """One row from the employer bulk-appointment list (same fields as a single book)."""
+
+    client_id: str
+    client_patient_key: str | None = None
+    patient_id: int | None = None
+    new_patient: NewPatientPayload | None = None
+    location_id: int
+    resource_id: int
+    visit_type_id: int
+    date: str
+    start_time: str
+    duration_minutes: int
+    appointment_status_id: int | None = 1
+    schedule_type_id: int | None = 1
+    note: str | None = None
+
+
+class BulkAppointmentBookRequest(BaseModel):
+    items: list[BulkAppointmentItem]
+
+
+class BulkAppointmentItemResult(BaseModel):
+    client_id: str
+    ok: bool
+    error: str | None = None
+    booking: AppointmentPrepareResponse | None = None
+
+
+class BulkAppointmentBookResponse(BaseModel):
+    booked_count: int
+    failed_count: int
+    message: str
+    items: list[BulkAppointmentItemResult] = []
+
+
 class OrganizationUserRow(BaseModel):
     id: str
     contact_id: int
@@ -543,7 +579,7 @@ class PaidBillsResponse(BaseModel):
 
 class BillReviewRow(BaseModel):
     id: str
-    billing_header_id: int
+    billing_header_id: int | None = None
     history_id: int | None = None
     dos: str | None = None
     account_no: str | None = None
